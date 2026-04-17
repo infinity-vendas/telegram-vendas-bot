@@ -3,21 +3,46 @@ const TelegramBot = require("node-telegram-bot-api");
 
 const app = express();
 
-// TOKEN DO BOT
+// TOKEN DO BOT (coloque o seu aqui)
 const bot = new TelegramBot("8605240230:AAHAR9SeSNXqJAFr62EP_BbzsOIMikNsNek", { polling: true });
 
-// COMANDO TESTE
+// LOGO (sua imagem do GitHub)
+const logo = "https://raw.githubusercontent.com/infinity-vendas/telegram-vendas-bot/main/Screenshot_20260416-141951-1.png";
+
+// START COM LOGO
 bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id, "🤖 Bot online com Web Service!");
+    bot.sendPhoto(msg.chat.id, logo, {
+        caption:
+`🛒 *INFINITY VENDAS*
+
+🔥 Bem-vindo ao sistema de vendas
+📦 Produtos disponíveis
+💰 Pagamentos via PIX
+
+👉 Use /menu para começar`
+    });
 });
 
-// ROTA OBRIGATÓRIA PARA RENDER
+// MENU SIMPLES
+bot.onText(/\/menu/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`📦 MENU PRINCIPAL
+
+🛍 Produtos
+💰 Comprar
+📞 Suporte
+
+Digite o comando desejado.`);
+});
+
+// WEB SERVER (OBRIGATÓRIO pro Render)
 app.get("/", (req, res) => {
-    res.send("Bot rodando 24h 🚀");
+    res.send("Bot online 🚀");
 });
 
-// PORTA DO RENDER
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log("Servidor rodando na porta " + PORT);
 });
+
+console.log("Bot iniciado...");
