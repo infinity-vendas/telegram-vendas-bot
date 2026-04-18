@@ -13,289 +13,238 @@ admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 
+const db = admin.firestore();
 const bot = new TelegramBot(TOKEN);
 const app = express();
 
 app.use(express.json());
 
-const WEBHOOK_PATH = "/webhook";
-
-app.post(WEBHOOK_PATH, (req, res) => {
+app.post("/webhook", (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
 
-// 📦 SISTEMA
-const users = {};
-const pendingRegister = {};
-const pending2FA = {};
-const pendingPayments = {};
-const productFiles = {};
+// ================= SISTEMA =================
+const sessions = {};
 
 
-// 🤖 START (LAYOUT ORIGINAL MANTIDO)
-bot.onText(/\/start/, (msg) => {
+// ================= START (SEU LAYOUT ANTIGO MANTIDO) =================
+bot.onText(/\/start (.+)?/, async (msg, match) => {
+
+    const vendedorId = match[1];
+
+    if (vendedorId) {
+        sessions[msg.from.id] = vendedorId;
+
+        return bot.sendMessage(msg.chat.id,
+`🛒 LOJA ATIVADA
+
+Vendedor UID: ${vendedorId}
+
+Use /produtos para ver itens`);
+    }
+
     bot.sendMessage(msg.chat.id,
 `⚡Dono: Infinity Vendas e divulgações Ultra
 ⚡Validity: 01.05.2026
 Type: Free / VIP
 ⚡Developed by: Faelzin
-Brasileiro programação
 
-📱 Redes sociais
-
+📱 Redes sociais:
 ⚡Instagram @Infinity_cliente_oficial
 ⚡WhatsApp suporte: 51981528372
 
 📌 Comandos:
 /menu
 /produtos
+/lojas
+/rank
 /status`);
 });
 
 
-// 🛒 PRODUTOS ATUALIZADOS COMPLETOS
-bot.onText(/\/produtos/, (msg) => {
-
-    bot.sendMessage(msg.chat.id,
-`🔥 PRODUTOS DISPONÍVEIS
-
-━━━━━━━━━━━━━━
-📧 GMAIL / CONTAS GOOGLE
-━━━━━━━━━━━━━━
-📌 Conta Google — $1,65
-
-━━━━━━━━━━━━━━
-📘 FACEBOOK
-━━━━━━━━━━━━━━
-📌 Conta Facebook — $2,80
-
-━━━━━━━━━━━━━━
-🐦 TWITTER
-━━━━━━━━━━━━━━
-📌 Conta Twitter — $3,20
-
-━━━━━━━━━━━━━━
-👤 GUEST ACCOUNTS
-━━━━━━━━━━━━━━
-📌 Guest NVL 0 — $0,97
-📌 Guest NVL 5 — $1,20
-📌 Guest NVL 12 — $2,60
-📌 Guest NVL 15 — $3,85
-
-━━━━━━━━━━━━━━
-🆔 LIKES END ID
-⚠️ Entrega em até 24h
-━━━━━━━━━━━━━━
-🆔 100 — $15,00
-🆔 200 — $25,00
-🆔 300 — $35,00
-🆔 400 — $45,00
-🆔 500 — $55,00
-🆔 1K — $65,00
-🆔 2K — $75,00
-🆔 5K — $90,00
-
-━━━━━━━━━━━━━━
-🤖 ALUGAR BOT TELEGRAM
-━━━━━━━━━━━━━━
-💸 1 Day — $15,00
-💸 7 Days — $30,00
-💸 14 Days — $60,00
-💸 21 Days — $90,00
-💸 31 Days — $120,00
-💸 1 Ano — $150,00
-
-━━━━━━━━━━━━━━
-💰 PLANO BÁSICO
-━━━━━━━━━━━━━━
-📌 $1,99
-
-━━━━━━━━━━━━━━
-🤖 ALUGAR BOT DISCORD
-━━━━━━━━━━━━━━
-💸 30 Days — $100,00
-💸 60 Days — $150,00
-💸 90 Days — $300,00
-
-━━━━━━━━━━━━━━
-📱 ALUGAR BOT WHATSAPP
-━━━━━━━━━━━━━━
-💸 7 Days — $100,00
-💸 14 Days — $150,00
-💸 21 Days — $300,00
-💸 31 Days — $500,00
-
-⚡ Todos os produtos são entregues após aprovação do admin.`);
-});
-
-
-// 👤 CADASTRO
-bot.on("message", (msg) => {
-
-    const userId = msg.from.id;
-    const text = msg.text;
-
-    if (pendingRegister[userId]) {
-
-        const parts = text.split(" ");
-
-        users[userId] = {
-            nome: parts[0],
-            uid: userId
-        };
-
-        delete pendingRegister[userId];
-
-        return bot.sendMessage(msg.chat.id, "✅ Cadastro concluído");
-    }
-
-    // 📦 UPLOAD ADMIN
-    if (msg.document || msg.video || msg.photo) {
-
-        if (ADMINS.includes(String(userId))) {
-
-            const fileId =
-                msg.document?.file_id ||
-                msg.video?.file_id ||
-                msg.photo?.slice(-1)[0]?.file_id;
-
-            const fileName = msg.document?.file_name || "produto";
-
-            productFiles[fileName] = fileId;
-
-            return bot.sendMessage(msg.chat.id,
-`📦 PRODUTO SALVO
-
-Nome: ${fileName}`);
-        }
-    }
-
-    // 2FA
-    if (pending2FA[userId]) {
-
-        const session = pending2FA[userId];
-
-        if (text == session.code) {
-
-            pendingPayments[userId] = {
-                productId: session.productId
-            };
-
-            delete pending2FA[userId];
-
-            return bot.sendMessage(msg.chat.id,
-`✅ VERIFICAÇÃO OK
-
-Envie comprovante`);
-        }
-    }
-});
-
-
-// 📤 ADMIN COMPRA
-bot.on("message", (msg) => {
-
-    const userId = msg.from.id;
-
-    if (msg.photo && pendingPayments[userId]) {
-
-        ADMINS.forEach(adminId => {
-
-            bot.sendMessage(adminId,
-`💳 NOVA COMPRA
-
-👤 UID: ${userId}
-📦 Produto: ${pendingPayments[userId].productId}`, {
-                reply_markup: {
-                    inline_keyboard: [
-                        [
-                            { text: "✅ Entregar", callback_data: `deliver_${userId}` },
-                            { text: "❌ Reprovar", callback_data: `reject_${userId}` }
-                        ]
-                    ]
-                }
-            });
-        });
-    }
-});
-
-
-// 🚀 ENTREGA AUTOMÁTICA
-bot.on("callback_query", (callback) => {
-
-    const data = callback.data;
-
-    if (data.startsWith("deliver_")) {
-
-        const userId = data.split("_")[1];
-
-        const fileId = Object.values(productFiles)[0];
-
-        if (fileId) {
-            bot.sendDocument(userId, fileId, {
-                caption: "🎉 Produto entregue com sucesso!"
-            });
-        }
-    }
-
-    if (data.startsWith("reject_")) {
-
-        const userId = data.split("_")[1];
-
-        bot.sendMessage(userId, "❌ Pedido reprovado");
-    }
-});
-
-
-// 📌 MENU (MANTIDO SIMPLES)
+// ================= MENU =================
 bot.onText(/\/menu/, (msg) => {
-
     bot.sendMessage(msg.chat.id,
-`📌 MENU
+`📌 MENU COMPLETO
 
 🛒 /produtos
-👤 /cadastro
-📡 /status
-🚨 /denunciar
-👥 /clientes`);
+🏪 /lojas
+🔎 /ver UID
+🛍 /carrinho
+⭐ /avaliar UID|nota
+🏆 /rank
+➕ /addproduto nome|valor
+🗑 /deletar ID
+🔗 /minhaloja nome
+📡 /status`);
 });
 
 
-// 🚨 DENÚNCIA
-bot.onText(/\/denunciar (.+)/, (msg, match) => {
+// ================= LOJAS (MANUAL + LINK) =================
+bot.onText(/\/lojas/, async (msg) => {
 
-    ADMINS.forEach(a => {
-        bot.sendMessage(a,
-`🚨 DENÚNCIA
+    const snap = await db.collection("users").get();
 
-👤 ${msg.from.id}
-📌 ${match[1]}`);
+    let text = "🏪 LOJAS DISPONÍVEIS:\n\n";
+
+    snap.forEach(doc => {
+        const u = doc.data();
+
+        text += `🏪 ${u.nomeLoja || "Sem nome"}\nUID: ${doc.id}\n⭐ ${u.rating?.toFixed(1) || 5}\n\n`;
     });
 
-    bot.sendMessage(msg.chat.id, "✅ enviado");
+    bot.sendMessage(msg.chat.id, text);
 });
 
 
-// 📡 STATUS
+// ================= SELEÇÃO MANUAL =================
+bot.onText(/\/ver (.+)/, (msg, match) => {
+
+    sessions[msg.from.id] = match[1];
+
+    bot.sendMessage(msg.chat.id,
+`🛒 Loja ativada:
+
+UID: ${match[1]}
+
+Use /produtos`);
+});
+
+
+// ================= PRODUTOS =================
+bot.onText(/\/produtos/, async (msg) => {
+
+    const vendedor = sessions[msg.from.id];
+
+    if (!vendedor) {
+        return bot.sendMessage(msg.chat.id,
+`❌ Nenhuma loja selecionada
+
+Use /lojas ou /ver UID`);
+    }
+
+    const snap = await db.collection("produtos")
+        .where("vendedor", "==", vendedor)
+        .get();
+
+    if (snap.empty) {
+        return bot.sendMessage(msg.chat.id, "Sem produtos.");
+    }
+
+    let text = "🛒 PRODUTOS:\n\n";
+
+    snap.forEach(doc => {
+        const p = doc.data();
+        text += `📦 ${p.nome} - R$${p.valor}\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= CRIAR LOJA =================
+bot.onText(/\/minhaloja (.+)/, async (msg, match) => {
+
+    await db.collection("users").doc(String(msg.from.id)).set({
+        nomeLoja: match[1],
+        uid: msg.from.id,
+        rating: 5,
+        votos: 1
+    });
+
+    bot.sendMessage(msg.chat.id,
+`🏪 Loja criada:
+
+Nome: ${match[1]}
+UID: ${msg.from.id}`);
+});
+
+
+// ================= RANKING =================
+bot.onText(/\/rank/, async (msg) => {
+
+    const snap = await db.collection("users").get();
+
+    let list = [];
+
+    snap.forEach(doc => {
+        list.push({
+            nome: doc.data().nomeLoja,
+            rating: doc.data().rating || 5
+        });
+    });
+
+    list.sort((a, b) => b.rating - a.rating);
+
+    let text = "🏆 RANKING:\n\n";
+
+    list.forEach((v, i) => {
+        text += `${i + 1}º ${v.nome} ⭐${v.rating.toFixed(1)}\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= AVALIAR =================
+bot.onText(/\/avaliar (.+)/, async (msg, match) => {
+
+    const [uid, nota] = match[1].split("|");
+
+    const ref = db.collection("users").doc(uid);
+    const doc = await ref.get();
+
+    if (!doc.exists) return;
+
+    const data = doc.data();
+
+    const votos = (data.votos || 1) + 1;
+    const rating = ((data.rating || 5) + Number(nota)) / votos;
+
+    await ref.update({ rating, votos });
+
+    bot.sendMessage(msg.chat.id, "⭐ Avaliação enviada");
+});
+
+
+// ================= PRODUTO =================
+bot.onText(/\/addproduto (.+)/, async (msg, match) => {
+
+    await db.collection("produtos").add({
+        nome: match[1].split("|")[0],
+        valor: match[1].split("|")[1],
+        vendedor: String(msg.from.id)
+    });
+
+    bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
+});
+
+
+// ================= DELETAR =================
+bot.onText(/\/deletar (.+)/, async (msg, match) => {
+
+    const doc = await db.collection("produtos").doc(match[1]).get();
+
+    if (!doc.exists) return;
+
+    if (doc.data().vendedor !== String(msg.from.id)) return;
+
+    await db.collection("produtos").doc(match[1]).delete();
+
+    bot.sendMessage(msg.chat.id, "🗑 Removido");
+});
+
+
+// ================= STATUS =================
 bot.onText(/\/status/, (msg) => {
     bot.sendMessage(msg.chat.id, "Bot online ⚡");
 });
 
 
-// 👥 CLIENTES
-bot.onText(/\/clientes/, (msg) => {
-
-    if (!ADMINS.includes(String(msg.from.id))) return;
-
-    bot.sendMessage(msg.chat.id,
-`👥 CLIENTES: ${Object.keys(users).length}`);
-});
-
-
-// 🚀 SERVER
+// ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
-    console.log("Rodando");
     await bot.setWebHook(`${URL}/webhook`);
+    console.log("Marketplace rodando");
 });
