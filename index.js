@@ -1,11 +1,21 @@
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
+const admin = require("firebase-admin");
 
 // 🔐 TOKEN DO BOT
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 
 // 🌐 URL DO RENDER
 const URL = "https://telegram-vendas-bot-1.onrender.com";
+
+// 🔥 FIREBASE
+const serviceAccount = require("./firebase.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
 
 const bot = new TelegramBot(TOKEN);
 const app = express();
@@ -14,18 +24,23 @@ app.use(express.json());
 
 const WEBHOOK_PATH = "/webhook";
 
-// 📦 banco em memória
-let produtos = [];
-
 // 📩 webhook
 app.post(WEBHOOK_PATH, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// 🤖 START (SEM IMAGEM EXTERNA)
-bot.onText(/\/start/, (msg) => {
+
+// 🤖 START (SEU LAYOUT ORIGINAL MANTIDO)
+bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
+
+    let vendedorId = match && match[1] ? match[1] : msg.from.id;
+
+    // salva cliente vinculado ao vendedor
+    await db.collection("clientes").doc(String(chatId)).set({
+        vendedorId: String(vendedorId)
+    });
 
     bot.sendMessage(chatId,
 `⚡Dono: Infinity Vendas e divulgações Ultra
@@ -34,34 +49,47 @@ Type: Free / VIP
 ⚡Developed by: Faelzin
 Brasileiro programação
 
-📱 Redes sociais:
+📱 Redes sociais
+
 ⚡Instagram @Infinity_cliente_oficial
-⚡Youtube: em breve
+⚡Youtube : em breve
 ⚡TikTok: em breve
-⚡WhatsApp: 5198152-8372 - suporte
+⚡whatsapp 5198152-8372 - suporte
 ⚡Kwai: em breve
 
 📌 Comandos:
 /produtos
+/publicar
 /status
 /plano
-/publicar
-/botinfo`);
+/botinfo
+/meulink`);
 });
+
 
 // 📦 PUBLICAR PRODUTO
 bot.onText(/\/publicar/, (msg) => {
+    const userId = msg.from.id;
+
     bot.sendMessage(msg.chat.id,
 `📦 Envie:
 
 nome|descricao|valor|whatsapp|pix`);
 
-    const listener = (ctx) => {
+    const listener = async (ctx) => {
         if (!ctx.text || !ctx.text.includes("|")) return;
 
         const [nome, descricao, valor, whatsapp, pix] = ctx.text.split("|");
 
-        produtos.push({ nome, descricao, valor, whatsapp, pix });
+        await db.collection("produtos").add({
+            userId: String(userId),
+            nome,
+            descricao,
+            valor,
+            whatsapp,
+            pix,
+            createdAt: Date.now()
+        });
 
         bot.sendMessage(ctx.chat.id, "produto publicado ✔️");
 
@@ -71,25 +99,40 @@ nome|descricao|valor|whatsapp|pix`);
     bot.on("message", listener);
 });
 
-// 📦 PRODUTOS
-bot.onText(/\/produtos/, (msg) => {
-    const chatId = msg.chat.id;
 
-    if (produtos.length === 0) {
-        return bot.sendMessage(chatId, "⚠️ Nenhum produto disponível.");
+// 📦 PRODUTOS (por vendedor)
+bot.onText(/\/produtos/, async (msg) => {
+    const chatId = String(msg.chat.id);
+
+    const cliente = await db.collection("clientes").doc(chatId).get();
+
+    let vendedorId = chatId;
+
+    if (cliente.exists) {
+        vendedorId = cliente.data().vendedorId;
     }
 
-    produtos.forEach((p) => {
-        bot.sendMessage(chatId,
-`🛒 Nome: ${p.nome}
-📄 Descrição: ${p.descricao}
-💰 Valor: ${p.valor}
-📲 WhatsApp: ${p.whatsapp}
-💳 PIX: ${p.pix}
+    const snapshot = await db.collection("produtos")
+        .where("userId", "==", vendedorId)
+        .get();
 
-👉 Adquirir: https://wa.me/${p.whatsapp}`);
+    if (snapshot.empty) {
+        return bot.sendMessage(msg.chat.id, "⚠️ Nenhum produto disponível.");
+    }
+
+    snapshot.forEach(doc => {
+        const p = doc.data();
+
+        bot.sendMessage(msg.chat.id,
+`🛒 Nome: ${p.nome}
+📄 ${p.descricao}
+💰 ${p.valor}
+📲 WhatsApp: ${p.whatsapp}
+
+👉 Comprar: https://wa.me/${p.whatsapp}`);
     });
 });
+
 
 // ⚡ STATUS
 bot.onText(/\/status/, (msg) => {
@@ -101,27 +144,51 @@ bot.onText(/\/status/, (msg) => {
     });
 });
 
+
 // 📊 PLANO
 bot.onText(/\/plano/, (msg) => {
-    bot.sendMessage(msg.chat.id, "⚡ Plano atual: FREE\n🚀 VIP ainda não disponível");
+    bot.sendMessage(msg.chat.id, "⚡ Plano atual: FREE / VIP em breve");
 });
+
 
 // ℹ️ BOT INFO
 bot.onText(/\/botinfo/, (msg) => {
     bot.sendMessage(msg.chat.id,
-`🤖 Bot Infinity Vendas
-📌 Versão: V1.2
-📅 Atualização: 21.04.2026
-
-⚡ Sistema estável sem imagem externa`);
+`🤖 Infinity Bot
+🔥 Firebase ativo
+👥 Multi-vendedor
+📌 Versão V4`);
 });
+
+
+// 🔗 MEU LINK (AUTOMÁTICO E BONITO)
+bot.onText(/\/meulink/, (msg) => {
+    const userId = msg.from.id;
+    const nome = msg.from.first_name || "vendedor";
+
+    const nomeFormatado = nome
+        .toLowerCase()
+        .replace(/\s/g, "")
+        .replace(/[^a-z0-9]/g, "");
+
+    const link = `https://t.me/SEU_BOT?start=${nomeFormatado}-${userId}`;
+
+    bot.sendMessage(msg.chat.id,
+`🔗 Seu link de vendas:
+
+${link}
+
+👤 Vendedor: ${nome}`);
+});
+
 
 // 🌐 HEALTH CHECK
 app.get("/", (req, res) => {
     res.send("Bot rodando 🚀");
 });
 
-// 🚀 WEBHOOK INIT
+
+// 🚀 START WEBHOOK
 app.listen(process.env.PORT || 3000, async () => {
     console.log("Servidor rodando");
 
