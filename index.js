@@ -1,48 +1,49 @@
-const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
+const express = require("express");
 
 const app = express();
 
-// TOKEN DO BOT (coloque o seu aqui)
-const bot = new TelegramBot("8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE", { polling: true });
+// 🔐 COLE SEU TOKEN ENTRE AS ASPAS
+const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 
-// LOGO (sua imagem do GitHub)
+// 🖼️ SUA IMAGEM (link RAW do GitHub)
 const logo = "https://raw.githubusercontent.com/infinity-vendas/telegram-vendas-bot/main/Screenshot_20260416-141951-1.png";
 
-// START COM LOGO
+// 🔥 remove webhook + inicia polling corretamente
+const bot = new TelegramBot(TOKEN);
+
+bot.deleteWebHook().then(() => {
+    bot.startPolling();
+});
+
+// 📲 COMANDO /start COM LOGO
 bot.onText(/\/start/, (msg) => {
     bot.sendPhoto(msg.chat.id, logo, {
-        caption:
-`🛒 *INFINITY VENDAS*
+        caption: `🛒 *INFINITY VENDAS*
 
-🔥 Bem-vindo ao sistema de vendas
+🔥 Bem-vindo ao sistema
 📦 Produtos disponíveis
-💰 Pagamentos via PIX
+💰 Pagamento via PIX
 
-👉 Use /menu para começar`
+👉 Use /menu para acessar`
     });
 });
 
-// MENU SIMPLES
+// 📦 MENU
 bot.onText(/\/menu/, (msg) => {
     bot.sendMessage(msg.chat.id,
 `📦 MENU PRINCIPAL
 
 🛍 Produtos
 💰 Comprar
-📞 Suporte
-
-Digite o comando desejado.`);
+📞 Suporte`);
 });
 
-// WEB SERVER (OBRIGATÓRIO pro Render)
+// 🌐 servidor obrigatório pro Render
 app.get("/", (req, res) => {
-    res.send("Bot online 🚀");
+    res.send("Bot rodando 🚀");
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log("Servidor rodando na porta " + PORT);
+app.listen(process.env.PORT || 3000, () => {
+    console.log("Servidor ativo");
 });
-
-console.log("Bot iniciado...");
