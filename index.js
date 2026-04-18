@@ -14,18 +14,20 @@ app.use(express.json());
 
 const WEBHOOK_PATH = "/webhook";
 
-// 📦 banco em memória (MVP - perde ao reiniciar)
+// 📦 banco em memória
 let produtos = [];
 
-// 📩 webhook receiver
+// 📩 webhook
 app.post(WEBHOOK_PATH, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// 🤖 START
+// 🤖 START (SEM IMAGEM EXTERNA)
 bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id,
+    const chatId = msg.chat.id;
+
+    bot.sendMessage(chatId,
 `⚡Dono: Infinity Vendas e divulgações Ultra
 ⚡Validity: 01.05.2026
 Type: Free / VIP
@@ -47,10 +49,10 @@ Brasileiro programação
 /botinfo`);
 });
 
-// 📦 PUBLICAR PRODUTO (modo seguro)
+// 📦 PUBLICAR PRODUTO
 bot.onText(/\/publicar/, (msg) => {
     bot.sendMessage(msg.chat.id,
-`📦 Envie o produto assim:
+`📦 Envie:
 
 nome|descricao|valor|whatsapp|pix`);
 
@@ -69,7 +71,7 @@ nome|descricao|valor|whatsapp|pix`);
     bot.on("message", listener);
 });
 
-// 📦 LISTAR PRODUTOS
+// 📦 PRODUTOS
 bot.onText(/\/produtos/, (msg) => {
     const chatId = msg.chat.id;
 
@@ -108,18 +110,18 @@ bot.onText(/\/plano/, (msg) => {
 bot.onText(/\/botinfo/, (msg) => {
     bot.sendMessage(msg.chat.id,
 `🤖 Bot Infinity Vendas
-📌 Versão: V1.1
+📌 Versão: V1.2
 📅 Atualização: 21.04.2026
 
-⚡ Sistema em evolução`);
+⚡ Sistema estável sem imagem externa`);
 });
 
-// 🌐 HEALTH CHECK (Render)
+// 🌐 HEALTH CHECK
 app.get("/", (req, res) => {
     res.send("Bot rodando 🚀");
 });
 
-// 🚀 START WEBHOOK
+// 🚀 WEBHOOK INIT
 app.listen(process.env.PORT || 3000, async () => {
     console.log("Servidor rodando");
 
