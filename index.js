@@ -2,12 +2,13 @@ const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
 
-// 🔐 TOKEN
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
 
-// 👑 ADMINS
-const ADMINS = ["6863505946"];
+// 👑 SOMENTE VOCÊ
+const ADMINS = [
+    "6863505946"
+];
 
 // 🔥 FIREBASE
 const serviceAccount = require("./firebase.json");
@@ -25,58 +26,44 @@ app.use(express.json());
 
 const WEBHOOK_PATH = "/webhook";
 
-// 📩 webhook
 app.post(WEBHOOK_PATH, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
 
-// 🆔 START (MANTIDO)
-bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
-    const chatId = msg.chat.id;
+// 🤖 START
+bot.onText(/\/start/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`⚡ Infinity Vendas Ultra Private
 
-    let vendedorId = match && match[1] ? match[1] : msg.from.id;
-
-    await db.collection("clientes").doc(String(chatId)).set({
-        vendedorId: String(vendedorId)
-    });
-
-    bot.sendMessage(chatId,
-`⚡ Infinity Vendas Ultra
-
-🆔 Comandos:
+📌 Comandos:
 /produtos
 /publicar
 /deletar
-/status
-/plano
-/botinfo
-/meulink`);
+/status`);
 });
 
 
-// 🆔 PUBLICAR PRODUTO + LOG
+// 📦 PUBLICAR (SOMENTE VOCÊ)
 bot.onText(/\/publicar/, (msg) => {
 
-    const userId = msg.from.id;
+    const userId = String(msg.from.id);
+
+    if (!ADMINS.includes(userId)) {
+        return bot.sendMessage(msg.chat.id, "⛔ Sem permissão.");
+    }
 
     bot.sendMessage(msg.chat.id,
-`🆔 Envie:
+`📦 Envie:
 
--vendedor: nome
--idade: 25
 -produto: nome
 -valor: 10,00
 -descricao: texto
--instagram: @perfil
--youtube: link
--facebook: link
--cupom: CODE
--desconto: 10%
 -whatsapp: 5198xxxx`);
 
     const listener = async (ctx) => {
+        if (ctx.chat.id !== msg.chat.id) return;
         if (!ctx.text || !ctx.text.includes("-produto")) return;
 
         const get = (key) => {
@@ -85,26 +72,11 @@ bot.onText(/\/publicar/, (msg) => {
         };
 
         const docRef = await db.collection("produtos").add({
-            vendedor: get("vendedor"),
-            idade: get("idade"),
             produto: get("produto"),
             valor: get("valor"),
             descricao: get("descricao"),
-            instagram: get("instagram"),
-            youtube: get("youtube"),
-            facebook: get("facebook"),
-            cupom: get("cupom"),
-            desconto: get("desconto"),
             whatsapp: get("whatsapp"),
             createdAt: Date.now()
-        });
-
-        // 📊 LOG
-        await db.collection("logs").add({
-            tipo: "CREATE",
-            userId,
-            produtoId: docRef.id,
-            time: Date.now()
         });
 
         bot.sendMessage(ctx.chat.id,
@@ -119,21 +91,10 @@ bot.onText(/\/publicar/, (msg) => {
 });
 
 
-// 📢 LISTAR PRODUTOS
+// 📦 PRODUTOS (CATÁLOGO LIMPO - 1 POR VEZ)
 bot.onText(/\/produtos/, async (msg) => {
-    const chatId = String(msg.chat.id);
 
-    const cliente = await db.collection("clientes").doc(chatId).get();
-
-    let vendedorId = chatId;
-
-    if (cliente.exists) {
-        vendedorId = cliente.data().vendedorId;
-    }
-
-    const snapshot = await db.collection("produtos")
-        .where("vendedor", "==", vendedorId)
-        .get();
+    const snapshot = await db.collection("produtos").get();
 
     if (snapshot.empty) {
         return bot.sendMessage(msg.chat.id, "⚠️ Nenhum produto disponível.");
@@ -142,35 +103,31 @@ bot.onText(/\/produtos/, async (msg) => {
     snapshot.forEach(doc => {
         const p = doc.data();
 
+        const buyLink = `https://wa.me/${p.whatsapp}?text=Olá%20quero%20comprar:%20${encodeURIComponent(p.produto)}`;
+
         bot.sendMessage(msg.chat.id,
-`🆔 ID: ${doc.id}
+`🛒 Produto:
 
-🆔 Produto: ${p.produto}
-🆔 Vendedor: ${p.vendedor}
-🆔 Idade: ${p.idade}
-
+📌 ${p.produto}
+💰 ${p.valor}
 📄 ${p.descricao}
-💰 Valor: ${p.valor}
-🏷 Cupom: ${p.cupom}
-📉 Desconto: ${p.desconto}
 
-📱 Instagram: ${p.instagram}
-▶️ YouTube: ${p.youtube}
-🔥 Facebook: ${p.facebook}
-
-📢 WhatsApp: https://wa.me/${p.whatsapp}`);
+👉 Comprar:
+${buyLink}`);
     });
 });
 
 
-// 🗑️ DELETE COM CONFIRMAÇÃO
-const pendingDelete = {};
-
+// 🗑️ DELETE COM BOTÃO (SOMENTE VOCÊ)
 bot.onText(/\/deletar (.+)/, async (msg, match) => {
-    const userId = String(msg.from.id);
-    const productId = match[1];
 
-    const isAdmin = ADMINS.includes(userId);
+    const userId = String(msg.from.id);
+
+    if (!ADMINS.includes(userId)) {
+        return bot.sendMessage(msg.chat.id, "⛔ Sem permissão.");
+    }
+
+    const productId = match[1];
 
     const doc = await db.collection("produtos").doc(productId).get();
 
@@ -180,48 +137,52 @@ bot.onText(/\/deletar (.+)/, async (msg, match) => {
 
     const data = doc.data();
 
-    if (!isAdmin && data.vendedor !== userId) {
-        return bot.sendMessage(msg.chat.id, "⛔ Sem permissão.");
-    }
-
-    pendingDelete[userId] = productId;
-
     bot.sendMessage(msg.chat.id,
-`⚠️ CONFIRMAR DELETE
+`🗑 Produto encontrado:
 
-Produto: ${data.produto}
+📌 ${data.produto}
+💰 ${data.valor}
 
-Digite:
-/confirmardelete`);
+Confirmar exclusão?`,
+{
+    reply_markup: {
+        inline_keyboard: [
+            [
+                {
+                    text: "🗑 Já li e deletar produto",
+                    callback_data: `delete_${productId}`
+                }
+            ]
+        ]
+    }
+});
 });
 
 
-// ✔ CONFIRMAR DELETE
-bot.onText(/\/confirmardelete/, async (msg) => {
-    const userId = String(msg.from.id);
-    const productId = pendingDelete[userId];
+// ✔ CALLBACK DELETE
+bot.on("callback_query", async (callback) => {
 
-    if (!productId) {
-        return bot.sendMessage(msg.chat.id, "❌ Nenhuma ação pendente.");
+    const userId = String(callback.from.id);
+
+    if (!ADMINS.includes(userId)) {
+        return bot.answerCallbackQuery(callback.id, {
+            text: "⛔ Sem permissão"
+        });
     }
 
-    const doc = await db.collection("produtos").doc(productId).get();
+    if (callback.data.startsWith("delete_")) {
 
-    if (doc.exists) {
+        const productId = callback.data.split("_")[1];
+
         await db.collection("produtos").doc(productId).delete();
 
-        // 📊 LOG
-        await db.collection("logs").add({
-            tipo: "DELETE",
-            userId,
-            produtoId: productId,
-            time: Date.now()
-        });
-
-        bot.sendMessage(msg.chat.id, "🗑 Produto deletado com sucesso.");
+        bot.editMessageText(
+`🗑 Produto deletado com sucesso.`,
+{
+    chat_id: callback.message.chat.id,
+    message_id: callback.message.message_id
+});
     }
-
-    delete pendingDelete[userId];
 });
 
 
@@ -231,40 +192,14 @@ bot.onText(/\/status/, (msg) => {
 
     bot.sendMessage(msg.chat.id, "⏳ verificando...").then(() => {
         const latency = Date.now() - start;
-        bot.sendMessage(msg.chat.id, `⚡ Bot online\n📡 Latência: ${latency}ms`);
+        bot.sendMessage(msg.chat.id, `⚡ Online\n📡 ${latency}ms`);
     });
 });
 
 
-// 📊 PLANO
-bot.onText(/\/plano/, (msg) => {
-    bot.sendMessage(msg.chat.id, "⚡ Plano atual: FREE");
-});
-
-
-// ℹ️ BOT INFO
-bot.onText(/\/botinfo/, (msg) => {
-    bot.sendMessage(msg.chat.id,
-`🤖 Infinity Bot
-🔥 Firebase ativo
-🛡 Segurança V10
-📌 Logs ativos`);
-});
-
-
-// 🔗 MEU LINK
-bot.onText(/\/meulink/, (msg) => {
-    const userId = msg.from.id;
-
-    const link = `https://t.me/SEU_BOT?start=${userId}`;
-
-    bot.sendMessage(msg.chat.id, `🔗 Seu link:\n\n${link}`);
-});
-
-
-// 🌐 HEALTH
+// 🌐 SERVER
 app.get("/", (req, res) => {
-    res.send("Bot rodando 🚀");
+    res.send("Bot PRIVATE ULTRA rodando 🚀");
 });
 
 
