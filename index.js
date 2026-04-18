@@ -29,21 +29,8 @@ app.post("/webhook", (req, res) => {
 const sessions = {};
 
 
-// ================= START (SEU LAYOUT ANTIGO MANTIDO) =================
-bot.onText(/\/start (.+)?/, async (msg, match) => {
-
-    const vendedorId = match[1];
-
-    if (vendedorId) {
-        sessions[msg.from.id] = vendedorId;
-
-        return bot.sendMessage(msg.chat.id,
-`🛒 LOJA ATIVADA
-
-Vendedor UID: ${vendedorId}
-
-Use /produtos para ver itens`);
-    }
+// ================= START NORMAL (CORRIGIDO) =================
+bot.onText(/\/start$/, (msg) => {
 
     bot.sendMessage(msg.chat.id,
 `⚡Dono: Infinity Vendas e divulgações Ultra
@@ -55,7 +42,7 @@ Type: Free / VIP
 ⚡Instagram @Infinity_cliente_oficial
 ⚡WhatsApp suporte: 51981528372
 
-📌 Comandos:
+📌 COMANDOS:
 /menu
 /produtos
 /lojas
@@ -64,10 +51,26 @@ Type: Free / VIP
 });
 
 
+// ================= START COM VENDEDOR =================
+bot.onText(/\/start (.+)/, async (msg, match) => {
+
+    const vendedorId = match[1];
+
+    sessions[msg.from.id] = vendedorId;
+
+    bot.sendMessage(msg.chat.id,
+`🛒 LOJA ATIVADA
+
+Vendedor UID: ${vendedorId}
+
+Use /produtos`);
+});
+
+
 // ================= MENU =================
 bot.onText(/\/menu/, (msg) => {
     bot.sendMessage(msg.chat.id,
-`📌 MENU COMPLETO
+`📌 MENU
 
 🛒 /produtos
 🏪 /lojas
@@ -82,7 +85,7 @@ bot.onText(/\/menu/, (msg) => {
 });
 
 
-// ================= LOJAS (MANUAL + LINK) =================
+// ================= LOJAS =================
 bot.onText(/\/lojas/, async (msg) => {
 
     const snap = await db.collection("users").get();
@@ -122,7 +125,7 @@ bot.onText(/\/produtos/, async (msg) => {
         return bot.sendMessage(msg.chat.id,
 `❌ Nenhuma loja selecionada
 
-Use /lojas ou /ver UID`);
+Use /lojas ou /start UID`);
     }
 
     const snap = await db.collection("produtos")
@@ -209,7 +212,7 @@ bot.onText(/\/avaliar (.+)/, async (msg, match) => {
 });
 
 
-// ================= PRODUTO =================
+// ================= ADD PRODUTO =================
 bot.onText(/\/addproduto (.+)/, async (msg, match) => {
 
     await db.collection("produtos").add({
@@ -246,5 +249,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
     await bot.setWebHook(`${URL}/webhook`);
-    console.log("Marketplace rodando");
+    console.log("Marketplace rodando corrigido");
 });
