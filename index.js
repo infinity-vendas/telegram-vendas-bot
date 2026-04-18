@@ -7,9 +7,6 @@ const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 // 🌐 URL DO RENDER
 const URL = "https://telegram-vendas-bot-1.onrender.com";
 
-// 🖼️ LOGO (CORRETO AGORA)
-const LOGO = "https://raw.githubusercontent.com/infinity-vendas/telegram-vendas-bot/main/logo.png";
-
 const bot = new TelegramBot(TOKEN);
 const app = express();
 
@@ -23,28 +20,42 @@ app.post(WEBHOOK_PATH, (req, res) => {
     res.sendStatus(200);
 });
 
-// 🤖 START
+// 🤖 /start (VERSÃO 100% ESTÁVEL)
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
 
-    bot.sendPhoto(chatId, LOGO, {
-        caption: `🛒 INFINITY VENDAS
+    console.log("START recebido:", chatId);
 
-🤖 Bot online
+    bot.sendMessage(chatId, "🛒 INFINITY VENDAS\n🤖 Bot online");
+
+    // 📦 ENVIA COMO DOCUMENTO (SEM ERRO 400)
+    bot.sendDocument(
+        chatId,
+        "https://raw.githubusercontent.com/infinity-vendas/telegram-vendas-bot/main/logo.png",
+        {
+            caption: `🚀 Bem-vindo ao sistema!
+
 💰 Produtos disponíveis
-🚀 Bem-vindo!`
-    }).catch((err) => {
+📦 Pedidos rápidos
+👥 Suporte ativo`
+        }
+    ).catch((err) => {
         console.log("Erro imagem:", err.message);
-        bot.sendMessage(chatId, "⚠️ Imagem não carregou.");
+        bot.sendMessage(chatId, "⚠️ Imagem não carregou no momento.");
     });
 });
 
-// 🌐 health check
+// 📡 log de mensagens
+bot.on("message", (msg) => {
+    console.log("Mensagem:", msg.text);
+});
+
+// 🌐 health check Render
 app.get("/", (req, res) => {
     res.send("Bot rodando 🚀");
 });
 
-// 🚀 start webhook
+// 🚀 inicia servidor + webhook
 app.listen(process.env.PORT || 3000, async () => {
     console.log("Servidor rodando");
 
