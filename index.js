@@ -27,9 +27,44 @@ app.post("/webhook", (req, res) => {
 
 // ================= SISTEMA =================
 const sessions = {};
+const adv = {};
+const lastMsg = {};
+const banned = {};
+const cart = {};
 
 
-// ================= START NORMAL (CORRIGIDO) =================
+// ================= PALAVRÕES =================
+const blockedWords = [
+    "foda", "merda", "puta", "bosta", "scam", "fraude", "hack", "roubo"
+];
+
+
+// ================= 🤖 IA INFINITY =================
+function infinityAI(text) {
+
+    text = text.toLowerCase();
+
+    if (text.includes("oi") || text.includes("olá")) {
+        return "👋 Olá! Bem-vindo à Infinity Vendas. Digite /menu para começar.";
+    }
+
+    if (text.includes("produto")) {
+        return "🛒 Use /produtos para ver os itens disponíveis.";
+    }
+
+    if (text.includes("loja")) {
+        return "🆔 Use /lojas para ver vendedores.";
+    }
+
+    if (text.includes("ajuda")) {
+        return "🆘 Suporte: 51981528372";
+    }
+
+    return "🤖 Não entendi, use /menu.";
+}
+
+
+// ================= START =================
 bot.onText(/\/start$/, (msg) => {
 
     bot.sendMessage(msg.chat.id,
@@ -51,99 +86,27 @@ Type: Free / VIP
 });
 
 
-// ================= START COM VENDEDOR =================
-bot.onText(/\/start (.+)/, async (msg, match) => {
-
-    const vendedorId = match[1];
-
-    sessions[msg.from.id] = vendedorId;
-
-    bot.sendMessage(msg.chat.id,
-`🛒 LOJA ATIVADA
-
-Vendedor UID: ${vendedorId}
-
-Use /produtos`);
-});
-
-
 // ================= MENU =================
 bot.onText(/\/menu/, (msg) => {
+
     bot.sendMessage(msg.chat.id,
-`📌 MENU
+`📌 MENU COMPLETO
 
 🛒 /produtos
-🏪 /lojas
-🔎 /ver UID
-🛍 /carrinho
-⭐ /avaliar UID|nota
-🏆 /rank
 ➕ /addproduto nome|valor
 🗑 /deletar ID
+
+🏪 /lojas
+🔎 /ver UID
 🔗 /minhaloja nome
+
+🛍 /carrinho
+➕ /addcarrinho ID
+
+⭐ /avaliar UID|nota
+🏆 /rank
+🚨 /listadv (admin)
 📡 /status`);
-});
-
-
-// ================= LOJAS =================
-bot.onText(/\/lojas/, async (msg) => {
-
-    const snap = await db.collection("users").get();
-
-    let text = "🏪 LOJAS DISPONÍVEIS:\n\n";
-
-    snap.forEach(doc => {
-        const u = doc.data();
-
-        text += `🏪 ${u.nomeLoja || "Sem nome"}\nUID: ${doc.id}\n⭐ ${u.rating?.toFixed(1) || 5}\n\n`;
-    });
-
-    bot.sendMessage(msg.chat.id, text);
-});
-
-
-// ================= SELEÇÃO MANUAL =================
-bot.onText(/\/ver (.+)/, (msg, match) => {
-
-    sessions[msg.from.id] = match[1];
-
-    bot.sendMessage(msg.chat.id,
-`🛒 Loja ativada:
-
-UID: ${match[1]}
-
-Use /produtos`);
-});
-
-
-// ================= PRODUTOS =================
-bot.onText(/\/produtos/, async (msg) => {
-
-    const vendedor = sessions[msg.from.id];
-
-    if (!vendedor) {
-        return bot.sendMessage(msg.chat.id,
-`❌ Nenhuma loja selecionada
-
-Use /lojas ou /start UID`);
-    }
-
-    const snap = await db.collection("produtos")
-        .where("vendedor", "==", vendedor)
-        .get();
-
-    if (snap.empty) {
-        return bot.sendMessage(msg.chat.id, "Sem produtos.");
-    }
-
-    let text = "🛒 PRODUTOS:\n\n";
-
-    snap.forEach(doc => {
-        const p = doc.data();
-        text += `📦 ${p.nome} - R$${p.valor}\n`;
-    });
-
-    bot.sendMessage(msg.chat.id, text);
 });
 
 
@@ -165,7 +128,131 @@ UID: ${msg.from.id}`);
 });
 
 
-// ================= RANKING =================
+// ================= SELECIONAR LOJA =================
+bot.onText(/\/ver (.+)/, (msg, match) => {
+
+    sessions[msg.from.id] = match[1];
+
+    bot.sendMessage(msg.chat.id,
+`🛒 Loja ativada
+
+UID: ${match[1]}
+
+Use /produtos`);
+});
+
+
+// ================= ADD PRODUTO =================
+bot.onText(/\/addproduto (.+)/, async (msg, match) => {
+
+    const [nome, valor] = match[1].split("|");
+
+    await db.collection("produtos").add({
+        nome,
+        valor,
+        vendedor: String(msg.from.id)
+    });
+
+    bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
+});
+
+
+// ================= DELETAR PRODUTO =================
+bot.onText(/\/deletar (.+)/, async (msg, match) => {
+
+    const id = match[1];
+
+    const doc = await db.collection("produtos").doc(id).get();
+
+    if (!doc.exists) return;
+
+    if (doc.data().vendedor !== String(msg.from.id)) return;
+
+    await db.collection("produtos").doc(id).delete();
+
+    bot.sendMessage(msg.chat.id, "🗑 Produto removido");
+});
+
+
+// ================= PRODUTOS =================
+bot.onText(/\/produtos/, async (msg) => {
+
+    const snap = await db.collection("produtos").get();
+
+    let text = "🛒 PRODUTOS DISPONÍVEIS:\n\n";
+
+    snap.forEach(doc => {
+        const p = doc.data();
+
+        text += `⚡produto - ${p.nome}
+⚡vendedor - ${p.vendedor}
+💰 R$ ${p.valor}
+🆔 ${doc.id}
+
+━━━━━━━━━━━\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= LOJAS =================
+bot.onText(/\/lojas/, async (msg) => {
+
+    const snap = await db.collection("users").get();
+
+    let text = "🏪 LOJAS:\n\n";
+
+    snap.forEach(doc => {
+        const u = doc.data();
+
+        text += `🏪 ${u.nomeLoja || "Sem nome"}
+UID: ${doc.id}
+⭐ ${u.rating?.toFixed(1) || 5}
+
+━━━━━━━━━━━\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= CARRINHO =================
+bot.onText(/\/carrinho/, (msg) => {
+
+    const items = cart[msg.from.id] || [];
+
+    if (!items.length) {
+        return bot.sendMessage(msg.chat.id, "🛒 Carrinho vazio.");
+    }
+
+    let text = "🛍 SEU CARRINHO:\n\n";
+
+    items.forEach((i, idx) => {
+        text += `${idx + 1}. ${i.nome} - R$${i.valor}\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= ADD CARRINHO =================
+bot.onText(/\/addcarrinho (.+)/, async (msg, match) => {
+
+    const id = match[1];
+
+    const doc = await db.collection("produtos").doc(id).get();
+    if (!doc.exists) return;
+
+    if (!cart[msg.from.id]) cart[msg.from.id] = [];
+
+    cart[msg.from.id].push(doc.data());
+
+    bot.sendMessage(msg.chat.id, "✅ Adicionado ao carrinho");
+});
+
+
+// ================= RANK =================
 bot.onText(/\/rank/, async (msg) => {
 
     const snap = await db.collection("users").get();
@@ -191,52 +278,96 @@ bot.onText(/\/rank/, async (msg) => {
 });
 
 
-// ================= AVALIAR =================
-bot.onText(/\/avaliar (.+)/, async (msg, match) => {
+// ================= ADV + BAN + ANTI SPAM =================
+bot.on("message", async (msg) => {
 
-    const [uid, nota] = match[1].split("|");
+    if (!msg.text) return;
+    const userId = msg.from.id;
+    const text = msg.text.toLowerCase();
 
-    const ref = db.collection("users").doc(uid);
-    const doc = await ref.get();
+    if (text.startsWith("/")) return;
 
-    if (!doc.exists) return;
+    if (banned[userId] && Date.now() < banned[userId]) {
+        return bot.sendMessage(msg.chat.id, "⚠️ Conta suspensa temporariamente");
+    }
 
-    const data = doc.data();
+    const now = Date.now();
 
-    const votos = (data.votos || 1) + 1;
-    const rating = ((data.rating || 5) + Number(nota)) / votos;
+    if (lastMsg[userId] && now - lastMsg[userId] < 2000) {
+        const c = await addAdv(userId, msg.from.first_name, "Spam");
+        if (c >= 15) return applyBan(userId, msg);
+        return bot.sendMessage(msg.chat.id, "🚨 Spam detectado");
+    }
 
-    await ref.update({ rating, votos });
+    lastMsg[userId] = now;
 
-    bot.sendMessage(msg.chat.id, "⭐ Avaliação enviada");
+    if (blockedWords.some(w => text.includes(w))) {
+        const c = await addAdv(userId, msg.from.first_name, "Ofensa");
+        if (c >= 15) return applyBan(userId, msg);
+        return bot.sendMessage(msg.chat.id, "⚠️ Linguagem proibida");
+    }
+
+    bot.sendMessage(msg.chat.id, infinityAI(text));
 });
 
 
-// ================= ADD PRODUTO =================
-bot.onText(/\/addproduto (.+)/, async (msg, match) => {
+// ================= ADV =================
+async function addAdv(userId, name, reason) {
 
-    await db.collection("produtos").add({
-        nome: match[1].split("|")[0],
-        valor: match[1].split("|")[1],
-        vendedor: String(msg.from.id)
+    if (!adv[userId]) adv[userId] = { count: 0, name };
+
+    adv[userId].count++;
+
+    await db.collection("advertencias").doc(String(userId)).set({
+        userId,
+        name,
+        reason,
+        count: adv[userId].count
     });
 
-    bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
-});
+    return adv[userId].count;
+}
 
 
-// ================= DELETAR =================
-bot.onText(/\/deletar (.+)/, async (msg, match) => {
+// ================= BAN =================
+async function applyBan(userId, msg) {
 
-    const doc = await db.collection("produtos").doc(match[1]).get();
+    const until = Date.now() + 24 * 60 * 60 * 1000;
 
-    if (!doc.exists) return;
+    banned[userId] = until;
 
-    if (doc.data().vendedor !== String(msg.from.id)) return;
+    await db.collection("banned").doc(String(userId)).set({
+        userId,
+        name: msg.from.first_name,
+        bannedUntil: until
+    });
 
-    await db.collection("produtos").doc(match[1]).delete();
+    return bot.sendMessage(msg.chat.id,
+`⚠️ Aviso crítico ⚠️
 
-    bot.sendMessage(msg.chat.id, "🗑 Removido");
+Conta suspensa por 24h.`);
+}
+
+
+// ================= LIST ADV =================
+bot.onText(/\/listadv/, async (msg) => {
+
+    if (!ADMINS.includes(String(msg.from.id))) return;
+
+    const snap = await db.collection("advertencias").get();
+
+    let text = "🚨 ADV LISTA:\n\n";
+
+    snap.forEach(doc => {
+        const d = doc.data();
+
+        text += `👤 ${d.name}
+🆔 ${d.userId}
+⚠️ ${d.count}
+━━━━━━━━━━\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
 });
 
 
@@ -249,5 +380,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
     await bot.setWebHook(`${URL}/webhook`);
-    console.log("Marketplace rodando corrigido");
+    console.log("🔥 INFINITY FULL MARKETPLACE V4 COMPLETO ONLINE");
 });
