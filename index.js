@@ -14,48 +14,112 @@ app.use(express.json());
 
 const WEBHOOK_PATH = "/webhook";
 
+// 📦 banco em memória (MVP - perde ao reiniciar)
+let produtos = [];
+
 // 📩 webhook receiver
 app.post(WEBHOOK_PATH, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// 🤖 /start (VERSÃO 100% ESTÁVEL)
+// 🤖 START
 bot.onText(/\/start/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`⚡Dono: Infinity Vendas e divulgações Ultra
+⚡Validity: 01.05.2026
+Type: Free / VIP
+⚡Developed by: Faelzin
+Brasileiro programação
+
+📱 Redes sociais:
+⚡Instagram @Infinity_cliente_oficial
+⚡Youtube: em breve
+⚡TikTok: em breve
+⚡WhatsApp: 5198152-8372 - suporte
+⚡Kwai: em breve
+
+📌 Comandos:
+/produtos
+/status
+/plano
+/publicar
+/botinfo`);
+});
+
+// 📦 PUBLICAR PRODUTO (modo seguro)
+bot.onText(/\/publicar/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`📦 Envie o produto assim:
+
+nome|descricao|valor|whatsapp|pix`);
+
+    const listener = (ctx) => {
+        if (!ctx.text || !ctx.text.includes("|")) return;
+
+        const [nome, descricao, valor, whatsapp, pix] = ctx.text.split("|");
+
+        produtos.push({ nome, descricao, valor, whatsapp, pix });
+
+        bot.sendMessage(ctx.chat.id, "produto publicado ✔️");
+
+        bot.removeListener("message", listener);
+    };
+
+    bot.on("message", listener);
+});
+
+// 📦 LISTAR PRODUTOS
+bot.onText(/\/produtos/, (msg) => {
     const chatId = msg.chat.id;
 
-    console.log("START recebido:", chatId);
+    if (produtos.length === 0) {
+        return bot.sendMessage(chatId, "⚠️ Nenhum produto disponível.");
+    }
 
-    bot.sendMessage(chatId, "🛒 INFINITY VENDAS\n🤖 Bot online");
+    produtos.forEach((p) => {
+        bot.sendMessage(chatId,
+`🛒 Nome: ${p.nome}
+📄 Descrição: ${p.descricao}
+💰 Valor: ${p.valor}
+📲 WhatsApp: ${p.whatsapp}
+💳 PIX: ${p.pix}
 
-    // 📦 ENVIA COMO DOCUMENTO (SEM ERRO 400)
-    bot.sendDocument(
-        chatId,
-        "https://raw.githubusercontent.com/infinity-vendas/telegram-vendas-bot/main/logo.png",
-        {
-            caption: `🚀 Bem-vindo ao sistema!
-
-💰 Produtos disponíveis
-📦 Pedidos rápidos
-👥 Suporte ativo`
-        }
-    ).catch((err) => {
-        console.log("Erro imagem:", err.message);
-        bot.sendMessage(chatId, "⚠️ Imagem não carregou no momento.");
+👉 Adquirir: https://wa.me/${p.whatsapp}`);
     });
 });
 
-// 📡 log de mensagens
-bot.on("message", (msg) => {
-    console.log("Mensagem:", msg.text);
+// ⚡ STATUS
+bot.onText(/\/status/, (msg) => {
+    const start = Date.now();
+
+    bot.sendMessage(msg.chat.id, "⏳ verificando...").then(() => {
+        const latency = Date.now() - start;
+        bot.sendMessage(msg.chat.id, `⚡ Bot online\n📡 Latência: ${latency}ms`);
+    });
 });
 
-// 🌐 health check Render
+// 📊 PLANO
+bot.onText(/\/plano/, (msg) => {
+    bot.sendMessage(msg.chat.id, "⚡ Plano atual: FREE\n🚀 VIP ainda não disponível");
+});
+
+// ℹ️ BOT INFO
+bot.onText(/\/botinfo/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`🤖 Bot Infinity Vendas
+📌 Versão: V1.1
+📅 Atualização: 21.04.2026
+
+⚡ Sistema em evolução`);
+});
+
+// 🌐 HEALTH CHECK (Render)
 app.get("/", (req, res) => {
     res.send("Bot rodando 🚀");
 });
 
-// 🚀 inicia servidor + webhook
+// 🚀 START WEBHOOK
 app.listen(process.env.PORT || 3000, async () => {
     console.log("Servidor rodando");
 
