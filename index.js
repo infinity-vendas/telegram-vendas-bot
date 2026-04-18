@@ -34,12 +34,8 @@ const cart = {};
 const verified = {};
 
 
-// ================= AUDIO =================
-const audioURL = "https://files.catbox.moe/0dd5wo.mp3";
-
-
-// ================= INSTAGRAM =================
-const instaLink = "https://www.instagram.com/infinity_cliente_oficial?igsh=dDJxMHpoM3hvMmNq";
+// ================= SEU ÁUDIO =================
+const audioURL = "https://files.catbox.moe/3da5mk.mp3";
 
 
 // ================= PALAVRÕES =================
@@ -69,23 +65,25 @@ function infinityAI(text) {
 }
 
 
-// ================= START (LAYOUT ORIGINAL + AUDIO) =================
+// ================= START (LAYOUT ORIGINAL + ÁUDIO) =================
 bot.onText(/\/start$/, async (msg) => {
 
-    const chatId = msg.chat.id;
-
     // TEXTO INICIAL
-    bot.sendMessage(chatId,
-`🔓 DESBLOQUEIE O ACESSO TOTAL
+    await bot.sendMessage(msg.chat.id,
+`®INFINITY VENDAS AUTOMÁTICAS ON-LINE
 
-Escute esse áudio importante (1 minuto)...`);
+todos os direitos humanos e segurança preservados. N° Lei
 
-    // AUDIO
-    await bot.sendAudio(chatId, audioURL);
+⚡Render projeto e hospedagem , Infinity Vendas e divulgações (Patrocinado) ⚡
 
-    // LIBERA MENU APÓS 1 MINUTO
+🔓 desbloqueie todo o acesso limitado , escute com atenção é muito importante...`);
+
+    // ENVIA ÁUDIO
+    await bot.sendAudio(msg.chat.id, audioURL);
+
+    // APÓS 1 MINUTO MOSTRA MENU ORIGINAL
     setTimeout(() => {
-        bot.sendMessage(chatId,
+        bot.sendMessage(msg.chat.id,
 `⚡Dono: Infinity Vendas e divulgações Ultra
 ⚡Validity: 01.05.2026
 Type: Free / VIP
@@ -100,78 +98,16 @@ Type: Free / VIP
 /produtos
 /lojas
 /rank
-/status
-
-⚠️ Para liberar funções:
-/verificar`);
+/status`);
     }, 60000);
 });
-
-
-// ================= VERIFICAÇÃO =================
-bot.onText(/\/verificar/, (msg) => {
-
-    bot.sendMessage(msg.chat.id,
-`📲 PASSO OBRIGATÓRIO
-
-1️⃣ Siga o Instagram:
-${instaLink}
-
-2️⃣ Aguarde 15 segundos
-
-3️⃣ Digite:
-/liberar`);
-});
-
-
-// ================= LIBERAR =================
-bot.onText(/\/liberar/, (msg) => {
-
-    const userId = msg.from.id;
-
-    if (verified[userId]) {
-        return bot.sendMessage(msg.chat.id, "✅ Você já está liberado.");
-    }
-
-    bot.sendMessage(msg.chat.id, "⏳ Verificando... aguarde 15 segundos");
-
-    setTimeout(() => {
-        verified[userId] = true;
-
-        bot.sendMessage(msg.chat.id,
-`✅ LIBERADO!
-
-Agora você pode:
-➕ Criar loja (/minhaloja)
-➕ Criar produtos (/addproduto)`);
-    }, 15000);
-});
-
-
-// ================= CHECK ACESSO =================
-function checkAccess(msg) {
-
-    const userId = msg.from.id;
-
-    if (!verified[userId]) {
-        bot.sendMessage(msg.chat.id,
-`🚫 ACESSO BLOQUEADO
-
-Você precisa:
-1 - Seguir Instagram
-2 - Usar /verificar`);
-        return false;
-    }
-
-    return true;
-}
 
 
 // ================= MENU =================
 bot.onText(/\/menu/, (msg) => {
 
     bot.sendMessage(msg.chat.id,
-`📌 MENU
+`📌 MENU COMPLETO
 
 🛒 /produtos
 ➕ /addproduto nome|valor
@@ -185,14 +121,13 @@ bot.onText(/\/menu/, (msg) => {
 
 ⭐ /avaliar UID|nota
 🏆 /rank
-📡 /status`);
+📡 /status
+🚨 /listadv (admin)`);
 });
 
 
 // ================= LOJA =================
 bot.onText(/\/minhaloja (.+)/, async (msg, match) => {
-
-    if (!checkAccess(msg)) return;
 
     await db.collection("users").doc(String(msg.from.id)).set({
         nomeLoja: match[1],
@@ -205,10 +140,8 @@ bot.onText(/\/minhaloja (.+)/, async (msg, match) => {
 });
 
 
-// ================= PRODUTO =================
+// ================= ADD PRODUTO =================
 bot.onText(/\/addproduto (.+)/, async (msg, match) => {
-
-    if (!checkAccess(msg)) return;
 
     const [nome, valor] = match[1].split("|");
 
@@ -279,13 +212,33 @@ UID: ${doc.id}
 });
 
 
-// ================= STATUS =================
-bot.onText(/\/status/, (msg) => {
-    bot.sendMessage(msg.chat.id, "Bot online ⚡");
+// ================= RANK =================
+bot.onText(/\/rank/, async (msg) => {
+
+    const snap = await db.collection("users").get();
+
+    let list = [];
+
+    snap.forEach(doc => {
+        list.push({
+            nome: doc.data().nomeLoja,
+            rating: doc.data().rating || 5
+        });
+    });
+
+    list.sort((a, b) => b.rating - a.rating);
+
+    let text = "🏆 RANKING:\n\n";
+
+    list.forEach((v, i) => {
+        text += `${i + 1}º ${v.nome} ⭐${v.rating.toFixed(1)}\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
 });
 
 
-// ================= ANTI-SPAM + ADV =================
+// ================= IA + ANTI-SPAM =================
 bot.on("message", async (msg) => {
 
     if (!msg.text) return;
@@ -302,22 +255,16 @@ bot.on("message", async (msg) => {
     const now = Date.now();
 
     if (lastMsg[userId] && now - lastMsg[userId] < 2000) {
-
         const c = await addAdv(userId, msg.from.first_name, "Spam");
-
         if (c >= 15) return applyBan(userId, msg);
-
         return bot.sendMessage(msg.chat.id, "🚨 Spam detectado");
     }
 
     lastMsg[userId] = now;
 
     if (blockedWords.some(w => text.includes(w))) {
-
         const c = await addAdv(userId, msg.from.first_name, "Ofensa");
-
         if (c >= 15) return applyBan(userId, msg);
-
         return bot.sendMessage(msg.chat.id, "⚠️ Linguagem proibida");
     }
 
@@ -363,8 +310,37 @@ Conta suspensa por 24h.`);
 }
 
 
+// ================= LIST ADV =================
+bot.onText(/\/listadv/, async (msg) => {
+
+    if (!ADMINS.includes(String(msg.from.id))) return;
+
+    const snap = await db.collection("advertencias").get();
+
+    let text = "🚨 USUÁRIOS COM ADVERTÊNCIA:\n\n";
+
+    snap.forEach(doc => {
+
+        const d = doc.data();
+
+        text += `👤 ${d.name}
+🆔 ${d.userId}
+⚠️ ${d.count}
+━━━━━━━━━━\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= STATUS =================
+bot.onText(/\/status/, (msg) => {
+    bot.sendMessage(msg.chat.id, "Bot online ⚡");
+});
+
+
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
     await bot.setWebHook(`${URL}/webhook`);
-    console.log("🔥 INFINITY FULL COMPLETO ONLINE");
+    console.log("🔥 INFINITY BOT FULL + AUDIO ONLINE");
 });
