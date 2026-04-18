@@ -13,8 +13,6 @@ admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 
-const db = admin.firestore();
-
 const bot = new TelegramBot(TOKEN);
 const app = express();
 
@@ -33,42 +31,103 @@ const users = {};
 const pendingRegister = {};
 const pending2FA = {};
 const pendingPayments = {};
-const productFiles = {}; // 🔥 ARQUIVOS SALVOS
-
-let botStatus = "ATIVO";
-let ownerStatus = "ONLINE";
+const productFiles = {};
 
 
-// 🤖 START
+// 🤖 START (LAYOUT ORIGINAL MANTIDO)
 bot.onText(/\/start/, (msg) => {
     bot.sendMessage(msg.chat.id,
-`⚡ INFINITY STORE
+`⚡Dono: Infinity Vendas e divulgações Ultra
+⚡Validity: 01.05.2026
+Type: Free / VIP
+⚡Developed by: Faelzin
+Brasileiro programação
+
+📱 Redes sociais
+
+⚡Instagram @Infinity_cliente_oficial
+⚡WhatsApp suporte: 51981528372
 
 📌 Comandos:
-/produtos
 /menu
+/produtos
 /status`);
 });
 
 
-// 🛒 PRODUTOS FIXOS
-const likesPackages = [
-    { name: "🆔 100 curtidas", price: 10 },
-    { name: "🆔 200 curtidas", price: 20 },
-    { name: "🆔 300 curtidas", price: 30 }
-];
-
-
-// 📦 PRODUTOS
+// 🛒 PRODUTOS ATUALIZADOS COMPLETOS
 bot.onText(/\/produtos/, (msg) => {
 
-    let text = `🔥 LOJA:\n`;
+    bot.sendMessage(msg.chat.id,
+`🔥 PRODUTOS DISPONÍVEIS
 
-    likesPackages.forEach(p => {
-        text += `${p.name} — R$ ${p.price}\n`;
-    });
+━━━━━━━━━━━━━━
+📧 GMAIL / CONTAS GOOGLE
+━━━━━━━━━━━━━━
+📌 Conta Google — $1,65
 
-    bot.sendMessage(msg.chat.id, text);
+━━━━━━━━━━━━━━
+📘 FACEBOOK
+━━━━━━━━━━━━━━
+📌 Conta Facebook — $2,80
+
+━━━━━━━━━━━━━━
+🐦 TWITTER
+━━━━━━━━━━━━━━
+📌 Conta Twitter — $3,20
+
+━━━━━━━━━━━━━━
+👤 GUEST ACCOUNTS
+━━━━━━━━━━━━━━
+📌 Guest NVL 0 — $0,97
+📌 Guest NVL 5 — $1,20
+📌 Guest NVL 12 — $2,60
+📌 Guest NVL 15 — $3,85
+
+━━━━━━━━━━━━━━
+🆔 LIKES END ID
+⚠️ Entrega em até 24h
+━━━━━━━━━━━━━━
+🆔 100 — $15,00
+🆔 200 — $25,00
+🆔 300 — $35,00
+🆔 400 — $45,00
+🆔 500 — $55,00
+🆔 1K — $65,00
+🆔 2K — $75,00
+🆔 5K — $90,00
+
+━━━━━━━━━━━━━━
+🤖 ALUGAR BOT TELEGRAM
+━━━━━━━━━━━━━━
+💸 1 Day — $15,00
+💸 7 Days — $30,00
+💸 14 Days — $60,00
+💸 21 Days — $90,00
+💸 31 Days — $120,00
+💸 1 Ano — $150,00
+
+━━━━━━━━━━━━━━
+💰 PLANO BÁSICO
+━━━━━━━━━━━━━━
+📌 $1,99
+
+━━━━━━━━━━━━━━
+🤖 ALUGAR BOT DISCORD
+━━━━━━━━━━━━━━
+💸 30 Days — $100,00
+💸 60 Days — $150,00
+💸 90 Days — $300,00
+
+━━━━━━━━━━━━━━
+📱 ALUGAR BOT WHATSAPP
+━━━━━━━━━━━━━━
+💸 7 Days — $100,00
+💸 14 Days — $150,00
+💸 21 Days — $300,00
+💸 31 Days — $500,00
+
+⚡ Todos os produtos são entregues após aprovação do admin.`);
 });
 
 
@@ -89,10 +148,10 @@ bot.on("message", (msg) => {
 
         delete pendingRegister[userId];
 
-        return bot.sendMessage(msg.chat.id, "✅ Cadastro ok");
+        return bot.sendMessage(msg.chat.id, "✅ Cadastro concluído");
     }
 
-    // 🔥 CAPTURA DE ARQUIVOS DO ADMIN (UPLOAD REAL)
+    // 📦 UPLOAD ADMIN
     if (msg.document || msg.video || msg.photo) {
 
         if (ADMINS.includes(String(userId))) {
@@ -102,15 +161,14 @@ bot.on("message", (msg) => {
                 msg.video?.file_id ||
                 msg.photo?.slice(-1)[0]?.file_id;
 
-            const fileName = msg.document?.file_name || "arquivo";
+            const fileName = msg.document?.file_name || "produto";
 
             productFiles[fileName] = fileId;
 
             return bot.sendMessage(msg.chat.id,
-`📦 ARQUIVO SALVO COMO PRODUTO
+`📦 PRODUTO SALVO
 
-Nome: ${fileName}
-ID: ${fileId}`);
+Nome: ${fileName}`);
         }
     }
 
@@ -128,38 +186,15 @@ ID: ${fileId}`);
             delete pending2FA[userId];
 
             return bot.sendMessage(msg.chat.id,
-`✅ OK
+`✅ VERIFICAÇÃO OK
 
-💳 Envie comprovante`);
+Envie comprovante`);
         }
     }
 });
 
 
-// 💳 COMPRA
-bot.on("callback_query", (callback) => {
-
-    const userId = callback.from.id;
-
-    if (!users[userId]) {
-        pendingRegister[userId] = true;
-        return bot.sendMessage(callback.message.chat.id, "⚠️ cadastre-se");
-    }
-
-    const code = Math.floor(10000 + Math.random() * 90000);
-
-    pending2FA[userId] = {
-        code,
-        productId: "Produto digital"
-    };
-
-    bot.sendMessage(callback.message.chat.id,
-`🔐 Código:
-${code}`);
-});
-
-
-// 📤 ADMIN COMPROVANTE
+// 📤 ADMIN COMPRA
 bot.on("message", (msg) => {
 
     const userId = msg.from.id;
@@ -169,14 +204,14 @@ bot.on("message", (msg) => {
         ADMINS.forEach(adminId => {
 
             bot.sendMessage(adminId,
-`💳 COMPRA
+`💳 NOVA COMPRA
 
 👤 UID: ${userId}
 📦 Produto: ${pendingPayments[userId].productId}`, {
                 reply_markup: {
                     inline_keyboard: [
                         [
-                            { text: "✅ Entregar arquivo", callback_data: `deliver_${userId}` },
+                            { text: "✅ Entregar", callback_data: `deliver_${userId}` },
                             { text: "❌ Reprovar", callback_data: `reject_${userId}` }
                         ]
                     ]
@@ -187,7 +222,7 @@ bot.on("message", (msg) => {
 });
 
 
-// 🚀 ENTREGA AUTOMÁTICA DE ARQUIVO
+// 🚀 ENTREGA AUTOMÁTICA
 bot.on("callback_query", (callback) => {
 
     const data = callback.data;
@@ -196,13 +231,11 @@ bot.on("callback_query", (callback) => {
 
         const userId = data.split("_")[1];
 
-        const fileKey = Object.keys(productFiles)[0];
-        const fileId = productFiles[fileKey];
+        const fileId = Object.values(productFiles)[0];
 
         if (fileId) {
-
             bot.sendDocument(userId, fileId, {
-                caption: "🎉 Produto entregue automaticamente!"
+                caption: "🎉 Produto entregue com sucesso!"
             });
         }
     }
@@ -211,8 +244,37 @@ bot.on("callback_query", (callback) => {
 
         const userId = data.split("_")[1];
 
-        bot.sendMessage(userId, "❌ Reprovado");
+        bot.sendMessage(userId, "❌ Pedido reprovado");
     }
+});
+
+
+// 📌 MENU (MANTIDO SIMPLES)
+bot.onText(/\/menu/, (msg) => {
+
+    bot.sendMessage(msg.chat.id,
+`📌 MENU
+
+🛒 /produtos
+👤 /cadastro
+📡 /status
+🚨 /denunciar
+👥 /clientes`);
+});
+
+
+// 🚨 DENÚNCIA
+bot.onText(/\/denunciar (.+)/, (msg, match) => {
+
+    ADMINS.forEach(a => {
+        bot.sendMessage(a,
+`🚨 DENÚNCIA
+
+👤 ${msg.from.id}
+📌 ${match[1]}`);
+    });
+
+    bot.sendMessage(msg.chat.id, "✅ enviado");
 });
 
 
@@ -222,8 +284,18 @@ bot.onText(/\/status/, (msg) => {
 });
 
 
+// 👥 CLIENTES
+bot.onText(/\/clientes/, (msg) => {
+
+    if (!ADMINS.includes(String(msg.from.id))) return;
+
+    bot.sendMessage(msg.chat.id,
+`👥 CLIENTES: ${Object.keys(users).length}`);
+});
+
+
 // 🚀 SERVER
 app.listen(process.env.PORT || 3000, async () => {
     console.log("Rodando");
-    await bot.setWebHook(`${URL}${WEBHOOK_PATH}`);
+    await bot.setWebHook(`${URL}/webhook`);
 });
