@@ -4,7 +4,7 @@ const TelegramBot = require("node-telegram-bot-api");
 const app = express();
 
 // TOKEN DO BOT (coloque o seu aqui)
-const bot = new TelegramBot("8605240230:AAHAR9SeSNXqJAFr62EP_BbzsOIMikNsNek", { polling: true });
+const bot = new TelegramBot("8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE", { polling: true });
 
 // LOGO (sua imagem do GitHub)
 const logo = "https://raw.githubusercontent.com/infinity-vendas/telegram-vendas-bot/main/Screenshot_20260416-141951-1.png";
