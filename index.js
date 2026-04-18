@@ -1,32 +1,37 @@
-const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
+const bodyParser = require("body-parser");
+const TelegramBot = require("node-telegram-bot-api");
 
-const app = express();
-
+// 🔐 SEU TOKEN
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 
-// ⚠️ importante: disable polling automático conflitante
-const bot = new TelegramBot(TOKEN, { polling: false });
+// 🌐 SEU LINK DO RENDER (já inserido)
+const URL = "https://telegram-vendas-bot-1.onrender.com";
 
-// inicia polling de forma controlada
-bot.startPolling()
-    .then(() => {
-        console.log("Bot iniciado com polling");
-    })
-    .catch(err => {
-        console.log("Erro polling:", err.message);
-    });
+const bot = new TelegramBot(TOKEN);
+const app = express();
 
+app.use(bodyParser.json());
+
+// 📩 recebe updates do Telegram
+app.post(`/bot${TOKEN}`, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+});
+
+// 🤖 comando /start
 bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id, "🤖 Bot online funcionando!");
+    bot.sendMessage(msg.chat.id, "🤖 Bot online via WEBHOOK!");
 });
 
-// health check obrigatório Render
-app.get("/", (req, res) => {
-    res.send("Bot rodando 🚀");
-});
+// 🚀 inicia servidor e ativa webhook
+app.listen(process.env.PORT || 3000, async () => {
+    console.log("Servidor rodando");
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log("Servidor ativo na porta", PORT);
+    try {
+        await bot.setWebHook(`${URL}/bot${TOKEN}`);
+        console.log("Webhook ativado com sucesso");
+    } catch (err) {
+        console.log("Erro webhook:", err.message);
+    }
 });
