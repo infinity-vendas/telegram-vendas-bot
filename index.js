@@ -31,11 +31,6 @@ const adv = {};
 const lastMsg = {};
 const banned = {};
 const cart = {};
-const verified = {}; // apenas controle opcional
-
-
-// ================= INSTAGRAM =================
-const instaLink = "https://www.instagram.com/infinity_cliente_oficial?igsh=dDJxMHpoM3hvMmNq";
 
 
 // ================= PALAVRÕES =================
@@ -44,7 +39,7 @@ const blockedWords = [
 ];
 
 
-// ================= IA =================
+// ================= IA INFINITY =================
 function infinityAI(text) {
 
     text = text.toLowerCase();
@@ -61,11 +56,15 @@ function infinityAI(text) {
         return "🏪 Use /lojas para ver vendedores.";
     }
 
+    if (text.includes("ajuda")) {
+        return "🆘 Suporte: 51981528372";
+    }
+
     return "🤖 Não entendi, use /menu.";
 }
 
 
-// ================= START (LAYOUT ORIGINAL MANTIDO) =================
+// ================= START =================
 bot.onText(/\/start$/, (msg) => {
 
     bot.sendMessage(msg.chat.id,
@@ -84,50 +83,23 @@ Type: Free / VIP
 /lojas
 /rank
 /status
-
-⚠️ Verificação opcional:
-/verificar`);
+/audio`);
 });
 
 
-// ================= VERIFICAÇÃO (NÃO BLOQUEIA NADA) =================
-bot.onText(/\/verificar/, (msg) => {
+// ================= AUDIO (CATBOX) =================
+const audioLink = "https://files.catbox.moe/3da5mk.mp3";
 
-    bot.sendMessage(msg.chat.id,
-`📲 Verificação (OPCIONAL)
+bot.onText(/\/audio/, (msg) => {
 
-1️⃣ Siga o Instagram:
-${instaLink}
+    bot.sendAudio(
+        msg.chat.id,
+        audioLink,
+        {
+            caption: "🎧 Mensagem oficial Infinity Vendas"
+        }
+    );
 
-2️⃣ Aguarde 15 segundos
-
-3️⃣ Digite:
-/liberar
-
-⚠️ Isso NÃO bloqueia o uso do bot.`);
-});
-
-
-// ================= LIBERAR (SÓ MARCA USUÁRIO) =================
-bot.onText(/\/liberar/, (msg) => {
-
-    const userId = msg.from.id;
-
-    if (verified[userId]) {
-        return bot.sendMessage(msg.chat.id, "✅ Já marcado como verificado.");
-    }
-
-    bot.sendMessage(msg.chat.id, "⏳ Processando verificação...");
-
-    setTimeout(() => {
-
-        verified[userId] = true;
-
-        bot.sendMessage(msg.chat.id,
-`✅ Verificação registrada!
-
-Isso não altera seu acesso ao sistema.`);
-    }, 15000);
 });
 
 
@@ -147,55 +119,10 @@ bot.onText(/\/menu/, (msg) => {
 🛍 /carrinho
 ➕ /addcarrinho ID
 
+🎧 /audio
 ⭐ /avaliar UID|nota
 🏆 /rank
 📡 /status`);
-});
-
-
-// ================= CRIAR LOJA =================
-bot.onText(/\/minhaloja (.+)/, async (msg, match) => {
-
-    await db.collection("users").doc(String(msg.from.id)).set({
-        nomeLoja: match[1],
-        uid: msg.from.id,
-        rating: 5,
-        votos: 1
-    });
-
-    bot.sendMessage(msg.chat.id, "🏪 Loja criada com sucesso");
-});
-
-
-// ================= ADD PRODUTO =================
-bot.onText(/\/addproduto (.+)/, async (msg, match) => {
-
-    const [nome, valor] = match[1].split("|");
-
-    await db.collection("produtos").add({
-        nome,
-        valor,
-        vendedor: String(msg.from.id)
-    });
-
-    bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
-});
-
-
-// ================= DELETAR =================
-bot.onText(/\/deletar (.+)/, async (msg, match) => {
-
-    const id = match[1];
-
-    const doc = await db.collection("produtos").doc(id).get();
-
-    if (!doc.exists) return;
-
-    if (doc.data().vendedor !== String(msg.from.id)) return;
-
-    await db.collection("produtos").doc(id).delete();
-
-    bot.sendMessage(msg.chat.id, "🗑 Produto removido");
 });
 
 
@@ -204,14 +131,16 @@ bot.onText(/\/produtos/, async (msg) => {
 
     const snap = await db.collection("produtos").get();
 
-    let text = "🛒 PRODUTOS:\n\n";
+    let text = "🛒 PRODUTOS DISPONÍVEIS:\n\n";
 
     snap.forEach(doc => {
         const p = doc.data();
 
-        text += `⚡ ${p.nome}
+        text += `⚡produto - ${p.nome}
+⚡vendedor - ${p.vendedor}
 💰 R$ ${p.valor}
 🆔 ${doc.id}
+
 ━━━━━━━━━━━\n`;
     });
 
@@ -232,7 +161,169 @@ bot.onText(/\/lojas/, async (msg) => {
         text += `🏪 ${u.nomeLoja || "Sem nome"}
 UID: ${doc.id}
 ⭐ ${u.rating?.toFixed(1) || 5}
+
 ━━━━━━━━━━━\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= CARRINHO =================
+bot.onText(/\/carrinho/, (msg) => {
+
+    const items = cart[msg.from.id] || [];
+
+    if (!items.length) {
+        return bot.sendMessage(msg.chat.id, "🛒 Carrinho vazio.");
+    }
+
+    let text = "🛍 SEU CARRINHO:\n\n";
+
+    items.forEach((i, idx) => {
+        text += `${idx + 1}. ${i.nome} - R$${i.valor}\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= ADD CARRINHO =================
+bot.onText(/\/addcarrinho (.+)/, async (msg, match) => {
+
+    const id = match[1];
+
+    const doc = await db.collection("produtos").doc(id).get();
+    if (!doc.exists) return;
+
+    if (!cart[msg.from.id]) cart[msg.from.id] = [];
+
+    cart[msg.from.id].push(doc.data());
+
+    bot.sendMessage(msg.chat.id, "✅ Adicionado ao carrinho");
+});
+
+
+// ================= RANK =================
+bot.onText(/\/rank/, async (msg) => {
+
+    const snap = await db.collection("users").get();
+
+    let list = [];
+
+    snap.forEach(doc => {
+        list.push({
+            nome: doc.data().nomeLoja,
+            rating: doc.data().rating || 5
+        });
+    });
+
+    list.sort((a, b) => b.rating - a.rating);
+
+    let text = "🏆 RANKING:\n\n";
+
+    list.forEach((v, i) => {
+        text += `${i + 1}º ${v.nome} ⭐${v.rating.toFixed(1)}\n`;
+    });
+
+    bot.sendMessage(msg.chat.id, text);
+});
+
+
+// ================= IA + ANTI-SPAM + ADV + BAN =================
+bot.on("message", async (msg) => {
+
+    if (!msg.text) return;
+
+    const userId = msg.from.id;
+    const text = msg.text.toLowerCase();
+
+    if (text.startsWith("/")) return;
+
+    if (banned[userId] && Date.now() < banned[userId]) {
+        return bot.sendMessage(msg.chat.id, "⚠️ Conta suspensa temporariamente");
+    }
+
+    const now = Date.now();
+
+    if (lastMsg[userId] && now - lastMsg[userId] < 2000) {
+
+        const c = await addAdv(userId, msg.from.first_name, "Spam");
+
+        if (c >= 15) return applyBan(userId, msg);
+
+        return bot.sendMessage(msg.chat.id, "🚨 Spam detectado");
+    }
+
+    lastMsg[userId] = now;
+
+    if (blockedWords.some(w => text.includes(w))) {
+
+        const c = await addAdv(userId, msg.from.first_name, "Ofensa");
+
+        if (c >= 15) return applyBan(userId, msg);
+
+        return bot.sendMessage(msg.chat.id, "⚠️ Linguagem proibida");
+    }
+
+    bot.sendMessage(msg.chat.id, infinityAI(text));
+});
+
+
+// ================= ADV =================
+async function addAdv(userId, name, reason) {
+
+    if (!adv[userId]) adv[userId] = { count: 0, name };
+
+    adv[userId].count++;
+
+    await db.collection("advertencias").doc(String(userId)).set({
+        userId,
+        name,
+        reason,
+        count: adv[userId].count
+    });
+
+    return adv[userId].count;
+}
+
+
+// ================= BAN =================
+async function applyBan(userId, msg) {
+
+    const until = Date.now() + 24 * 60 * 60 * 1000;
+
+    banned[userId] = until;
+
+    await db.collection("banned").doc(String(userId)).set({
+        userId,
+        name: msg.from.first_name,
+        bannedUntil: until
+    });
+
+    return bot.sendMessage(msg.chat.id,
+`⚠️ Aviso crítico ⚠️
+
+Conta suspensa por 24h.`);
+}
+
+
+// ================= LISTA ADV =================
+bot.onText(/\/listadv/, async (msg) => {
+
+    if (!ADMINS.includes(String(msg.from.id))) return;
+
+    const snap = await db.collection("advertencias").get();
+
+    let text = "🚨 ADV LISTA:\n\n";
+
+    snap.forEach(doc => {
+        const d = doc.data();
+
+        text += `👤 ${d.name}
+🆔 ${d.userId}
+⚠️ ${d.count}
+━━━━━━━━━━\n`;
     });
 
     bot.sendMessage(msg.chat.id, text);
@@ -248,5 +339,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
     await bot.setWebHook(`${URL}/webhook`);
-    console.log("🔥 INFINITY BOT (VERIFICAÇÃO OPCIONAL) ONLINE");
+    console.log("🔥 INFINITY FULL BOT + AUDIO CATBOX ONLINE");
 });
