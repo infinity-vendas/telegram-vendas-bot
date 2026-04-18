@@ -2,11 +2,12 @@ const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
 
-// 🔐 TOKEN DO BOT
+// 🔐 TOKEN
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
-
-// 🌐 URL DO RENDER
 const URL = "https://telegram-vendas-bot-1.onrender.com";
+
+// 👑 ADMINS
+const ADMINS = ["6863505946"];
 
 // 🔥 FIREBASE
 const serviceAccount = require("./firebase.json");
@@ -31,35 +32,23 @@ app.post(WEBHOOK_PATH, (req, res) => {
 });
 
 
-// 🤖 START (SEU LAYOUT ORIGINAL MANTIDO)
+// 🆔 START (MANTIDO)
 bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
 
     let vendedorId = match && match[1] ? match[1] : msg.from.id;
 
-    // salva cliente vinculado ao vendedor
     await db.collection("clientes").doc(String(chatId)).set({
         vendedorId: String(vendedorId)
     });
 
     bot.sendMessage(chatId,
-`⚡Dono: Infinity Vendas e divulgações Ultra
-⚡Validity: 01.05.2026
-Type: Free / VIP
-⚡Developed by: Faelzin
-Brasileiro programação
+`⚡ Infinity Vendas Ultra
 
-📱 Redes sociais
-
-⚡Instagram @Infinity_cliente_oficial
-⚡Youtube : em breve
-⚡TikTok: em breve
-⚡whatsapp 5198152-8372 - suporte
-⚡Kwai: em breve
-
-📌 Comandos:
+🆔 Comandos:
 /produtos
 /publicar
+/deletar
 /status
 /plano
 /botinfo
@@ -67,31 +56,61 @@ Brasileiro programação
 });
 
 
-// 📦 PUBLICAR PRODUTO
+// 🆔 PUBLICAR PRODUTO + LOG
 bot.onText(/\/publicar/, (msg) => {
+
     const userId = msg.from.id;
 
     bot.sendMessage(msg.chat.id,
-`📦 Envie:
+`🆔 Envie:
 
-nome|descricao|valor|whatsapp|pix`);
+-vendedor: nome
+-idade: 25
+-produto: nome
+-valor: 10,00
+-descricao: texto
+-instagram: @perfil
+-youtube: link
+-facebook: link
+-cupom: CODE
+-desconto: 10%
+-whatsapp: 5198xxxx`);
 
     const listener = async (ctx) => {
-        if (!ctx.text || !ctx.text.includes("|")) return;
+        if (!ctx.text || !ctx.text.includes("-produto")) return;
 
-        const [nome, descricao, valor, whatsapp, pix] = ctx.text.split("|");
+        const get = (key) => {
+            const match = ctx.text.match(new RegExp(`-${key}: (.*)`));
+            return match ? match[1].trim() : "";
+        };
 
-        await db.collection("produtos").add({
-            userId: String(userId),
-            nome,
-            descricao,
-            valor,
-            whatsapp,
-            pix,
+        const docRef = await db.collection("produtos").add({
+            vendedor: get("vendedor"),
+            idade: get("idade"),
+            produto: get("produto"),
+            valor: get("valor"),
+            descricao: get("descricao"),
+            instagram: get("instagram"),
+            youtube: get("youtube"),
+            facebook: get("facebook"),
+            cupom: get("cupom"),
+            desconto: get("desconto"),
+            whatsapp: get("whatsapp"),
             createdAt: Date.now()
         });
 
-        bot.sendMessage(ctx.chat.id, "produto publicado ✔️");
+        // 📊 LOG
+        await db.collection("logs").add({
+            tipo: "CREATE",
+            userId,
+            produtoId: docRef.id,
+            time: Date.now()
+        });
+
+        bot.sendMessage(ctx.chat.id,
+`produto publicado ✔️
+
+🆔 ID: ${docRef.id}`);
 
         bot.removeListener("message", listener);
     };
@@ -100,7 +119,7 @@ nome|descricao|valor|whatsapp|pix`);
 });
 
 
-// 📦 PRODUTOS (por vendedor)
+// 📢 LISTAR PRODUTOS
 bot.onText(/\/produtos/, async (msg) => {
     const chatId = String(msg.chat.id);
 
@@ -113,7 +132,7 @@ bot.onText(/\/produtos/, async (msg) => {
     }
 
     const snapshot = await db.collection("produtos")
-        .where("userId", "==", vendedorId)
+        .where("vendedor", "==", vendedorId)
         .get();
 
     if (snapshot.empty) {
@@ -124,13 +143,85 @@ bot.onText(/\/produtos/, async (msg) => {
         const p = doc.data();
 
         bot.sendMessage(msg.chat.id,
-`🛒 Nome: ${p.nome}
-📄 ${p.descricao}
-💰 ${p.valor}
-📲 WhatsApp: ${p.whatsapp}
+`🆔 ID: ${doc.id}
 
-👉 Comprar: https://wa.me/${p.whatsapp}`);
+🆔 Produto: ${p.produto}
+🆔 Vendedor: ${p.vendedor}
+🆔 Idade: ${p.idade}
+
+📄 ${p.descricao}
+💰 Valor: ${p.valor}
+🏷 Cupom: ${p.cupom}
+📉 Desconto: ${p.desconto}
+
+📱 Instagram: ${p.instagram}
+▶️ YouTube: ${p.youtube}
+🔥 Facebook: ${p.facebook}
+
+📢 WhatsApp: https://wa.me/${p.whatsapp}`);
     });
+});
+
+
+// 🗑️ DELETE COM CONFIRMAÇÃO
+const pendingDelete = {};
+
+bot.onText(/\/deletar (.+)/, async (msg, match) => {
+    const userId = String(msg.from.id);
+    const productId = match[1];
+
+    const isAdmin = ADMINS.includes(userId);
+
+    const doc = await db.collection("produtos").doc(productId).get();
+
+    if (!doc.exists) {
+        return bot.sendMessage(msg.chat.id, "❌ Produto não encontrado.");
+    }
+
+    const data = doc.data();
+
+    if (!isAdmin && data.vendedor !== userId) {
+        return bot.sendMessage(msg.chat.id, "⛔ Sem permissão.");
+    }
+
+    pendingDelete[userId] = productId;
+
+    bot.sendMessage(msg.chat.id,
+`⚠️ CONFIRMAR DELETE
+
+Produto: ${data.produto}
+
+Digite:
+/confirmardelete`);
+});
+
+
+// ✔ CONFIRMAR DELETE
+bot.onText(/\/confirmardelete/, async (msg) => {
+    const userId = String(msg.from.id);
+    const productId = pendingDelete[userId];
+
+    if (!productId) {
+        return bot.sendMessage(msg.chat.id, "❌ Nenhuma ação pendente.");
+    }
+
+    const doc = await db.collection("produtos").doc(productId).get();
+
+    if (doc.exists) {
+        await db.collection("produtos").doc(productId).delete();
+
+        // 📊 LOG
+        await db.collection("logs").add({
+            tipo: "DELETE",
+            userId,
+            produtoId: productId,
+            time: Date.now()
+        });
+
+        bot.sendMessage(msg.chat.id, "🗑 Produto deletado com sucesso.");
+    }
+
+    delete pendingDelete[userId];
 });
 
 
@@ -147,7 +238,7 @@ bot.onText(/\/status/, (msg) => {
 
 // 📊 PLANO
 bot.onText(/\/plano/, (msg) => {
-    bot.sendMessage(msg.chat.id, "⚡ Plano atual: FREE / VIP em breve");
+    bot.sendMessage(msg.chat.id, "⚡ Plano atual: FREE");
 });
 
 
@@ -156,47 +247,36 @@ bot.onText(/\/botinfo/, (msg) => {
     bot.sendMessage(msg.chat.id,
 `🤖 Infinity Bot
 🔥 Firebase ativo
-👥 Multi-vendedor
-📌 Versão V4`);
+🛡 Segurança V10
+📌 Logs ativos`);
 });
 
 
-// 🔗 MEU LINK (AUTOMÁTICO E BONITO)
+// 🔗 MEU LINK
 bot.onText(/\/meulink/, (msg) => {
     const userId = msg.from.id;
-    const nome = msg.from.first_name || "vendedor";
 
-    const nomeFormatado = nome
-        .toLowerCase()
-        .replace(/\s/g, "")
-        .replace(/[^a-z0-9]/g, "");
+    const link = `https://t.me/SEU_BOT?start=${userId}`;
 
-    const link = `https://t.me/SEU_BOT?start=${nomeFormatado}-${userId}`;
-
-    bot.sendMessage(msg.chat.id,
-`🔗 Seu link de vendas:
-
-${link}
-
-👤 Vendedor: ${nome}`);
+    bot.sendMessage(msg.chat.id, `🔗 Seu link:\n\n${link}`);
 });
 
 
-// 🌐 HEALTH CHECK
+// 🌐 HEALTH
 app.get("/", (req, res) => {
     res.send("Bot rodando 🚀");
 });
 
 
-// 🚀 START WEBHOOK
+// 🚀 START
 app.listen(process.env.PORT || 3000, async () => {
     console.log("Servidor rodando");
 
     try {
         await bot.deleteWebHook();
         await bot.setWebHook(`${URL}${WEBHOOK_PATH}`);
-        console.log("Webhook ativo com sucesso");
+        console.log("Webhook ativo");
     } catch (err) {
-        console.log("Erro webhook:", err.message);
+        console.log(err.message);
     }
 });
