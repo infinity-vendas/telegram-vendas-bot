@@ -35,7 +35,7 @@ const verified = {};
 
 
 // ================= SEU ÁUDIO =================
-const audioURL = "https://files.catbox.moe/3da5mk.mp3";
+const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
 
 
 // ================= PALAVRÕES =================
@@ -68,7 +68,6 @@ function infinityAI(text) {
 // ================= START (LAYOUT ORIGINAL + ÁUDIO) =================
 bot.onText(/\/start$/, async (msg) => {
 
-    // TEXTO INICIAL
     await bot.sendMessage(msg.chat.id,
 `®INFINITY VENDAS AUTOMÁTICAS ON-LINE
 
@@ -78,10 +77,8 @@ todos os direitos humanos e segurança preservados. N° Lei
 
 🔓 desbloqueie todo o acesso limitado , escute com atenção é muito importante...`);
 
-    // ENVIA ÁUDIO
     await bot.sendAudio(msg.chat.id, audioURL);
 
-    // APÓS 1 MINUTO MOSTRA MENU ORIGINAL
     setTimeout(() => {
         bot.sendMessage(msg.chat.id,
 `⚡Dono: Infinity Vendas e divulgações Ultra
