@@ -29,27 +29,47 @@ const sessions = {};
 const adv = {};
 const lastMsg = {};
 const banned = {};
-const cart = {};
 const verified = {};
 
-// ================= IDENTIDADE =================
-const BOT_VERSION = "v1.0";
+// ================= IDENTIDADE NOVA =================
+const BOT_VERSION = "v1";
 const OWNER = "Faelzin";
 
 const INFO_TEXT =
-`⚡Dono: ${OWNER} (UID ativo)
-⚡Created date: 19.04.2026
+`⚡INFINITY CLIENTE VENDAS ON-LINE
+
++10X comandos atualizados todos os dias
+
+Bot funcionando perfeitamente, sem bugs, erros externos
+
+Feedback de clientes em tempo real
+
+Vínculos de novos produtos 100% em tempo real
+
+🔥 Melhor bot Beta atualizado para vendas e divulgações em tempo real
+
+━━━━━━━━━━━━━━
+
+⚡Valid: 21.04.2026 - 23:50
+⚡Type: Free
 ⚡version atual: ${BOT_VERSION}
+⚡whatsapp 51981528372 - desenvolvedor oficial
+⚡suporte: suporte@InfinityTermux.com
 
-Redes sociais:
-Facebook: Rafael Matos
-Whatsapp: 51981528372
-Instagram: @Infinity_cliente_oficial
-Twitter: @InfinityCliente
+⚠️ Aviso: compre somente com administrador oficial
+Evite golpes, fraudes etc
 
-Sistema: Render + Firebase
-Status: Online`;
+📦 Entregas via: e-mail, whatsapp, instagram e discord
 
+⚡ Pagamento validado por UID
+⚡ Sistema anti-fraude ativo
+
+📢 Redes sociais:
+@Infinity_termux_ofc
+YouTube @Infinity_termux_ofc
+Telegram @InfinityTermux
+TikTok: Em breve
+Kwai: Em breve`;
 
 // ================= ÁUDIOS =================
 const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
@@ -68,23 +88,25 @@ await bot.sendMessage(chatId, INFO_TEXT);
 await bot.sendAudio(chatId, audioURL);
 
 await bot.sendMessage(chatId,
-`⏳ aguarde estamos configurando servidor do bot...`);
+`⏳ Aguarde estamos configurando servidor do bot...
+
+📡 STATUS: inicializando sistema seguro`);
 
 setTimeout(() => {
 bot.sendMessage(chatId,
 `📌 CADASTRO OBRIGATÓRIO:
 
-nome:
-idade:
-estado:
-cidade:
-whatsapp número:
-instagram @:`);
+*Insira nome:
+*Insira idade:
+*cidade:
+*estado:
+*whatsapp:
+*Instagram:`);
 }, 4000);
 
 });
 
-// ================= CADASTRO FIREBASE =================
+// ================= CADASTRO =================
 bot.on("message", async (msg) => {
 
 if (!msg.text) return;
@@ -92,17 +114,26 @@ if (msg.text.startsWith("/")) return;
 
 const text = msg.text.toLowerCase();
 
-// detecta cadastro
-if (
-text.includes("nome:") &&
-text.includes("idade:") &&
-text.includes("estado:") &&
-text.includes("cidade:") &&
+// valida cadastro completo
+const valid =
+text.includes("nome") &&
+text.includes("idade") &&
+text.includes("cidade") &&
+text.includes("estado") &&
 text.includes("whatsapp") &&
-text.includes("instagram")
-){
+text.includes("instagram");
+
+// se estiver incompleto
+if (text.includes("nome") || text.includes("idade") || text.includes("cidade") || text.includes("estado") || text.includes("whatsapp") || text.includes("instagram")) {
+
+if (!valid) {
+return bot.sendMessage(msg.chat.id,
+`❌ Erro: completo necessário completar cadastrado ☹️`);
+}
+
 try {
 
+// salva no firebase
 await db.collection("usuarios").doc(String(msg.from.id)).set({
 userId: msg.from.id,
 username: msg.from.username || null,
@@ -110,9 +141,9 @@ dados: msg.text,
 criadoEm: new Date().toISOString()
 });
 
-// salva como bloqueado temporário
 verified[msg.from.id] = false;
 
+// áudio final
 await bot.sendAudio(msg.chat.id, audioCadastro);
 
 await bot.sendMessage(msg.chat.id,
@@ -120,6 +151,7 @@ await bot.sendMessage(msg.chat.id,
 
 ⏳ aguarde 15 segundos estamos preparando material...`);
 
+// libera após 15s
 setTimeout(() => {
 
 verified[msg.from.id] = true;
@@ -138,7 +170,7 @@ bot.sendMessage(msg.chat.id,"❌ erro ao salvar cadastro");
 }
 });
 
-// ================= BLOQUEIO DE COMANDOS =================
+// ================= BLOQUEIO =================
 function checkAccess(msg, next) {
 if (verified[msg.from.id] === false) {
 return bot.sendMessage(msg.chat.id,
@@ -197,33 +229,12 @@ bot.sendMessage(msg.chat.id, text);
 bot.onText(/\/status/, (msg) => {
 bot.sendMessage(msg.chat.id,
 `Bot online ⚡
+
 DEV: ${OWNER}`);
-});
-
-// ================= IA + ANTI-SPAM =================
-bot.on("message", async (msg) => {
-if (!msg.text) return;
-
-const userId = msg.from.id;
-const text = msg.text.toLowerCase();
-
-if (text.startsWith("/")) return;
-
-if (banned[userId] && Date.now() < banned[userId]) {
-return bot.sendMessage(msg.chat.id,"⚠️ Conta suspensa");
-}
-
-if (lastMsg[userId] && Date.now() - lastMsg[userId] < 2000) return;
-
-lastMsg[userId] = Date.now();
-
-if (blockedWords.some(w => text.includes(w))) {
-return bot.sendMessage(msg.chat.id,"⚠️ linguagem proibida");
-}
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 await bot.setWebHook(`${URL}/webhook`);
-console.log("🔥 INFINITY BOT v3.2 ONLINE COM CADASTRO + LIBERAÇÃO");
+console.log("🔥 INFINITY BOT v3.4 ONLINE COM CADASTRO OBRIGATÓRIO");
 });
