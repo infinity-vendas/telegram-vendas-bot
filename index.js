@@ -13,9 +13,11 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-const bot = new TelegramBot(TOKEN);
-const app = express();
 
+// ⚡ IMPORTANTE: force polling false (webhook mode)
+const bot = new TelegramBot(TOKEN, { webHook: true });
+
+const app = express();
 app.use(express.json());
 
 app.post("/webhook", (req, res) => {
@@ -31,8 +33,10 @@ const BOT_VERSION = "v1";
 const LOGO_URL = "https://files.catbox.moe/3sewrd.png";
 const AUDIO_URL = "https://files.catbox.moe/p6wlxb.mp3";
 
-// ================= DELETE CONFIRM =================
+// ================= CONTROLES =================
 const deleteConfirm = {};
+const addStep = {};
+const addData = {};
 
 // ================= MENU =================
 const MENU_TEXT =
@@ -43,7 +47,7 @@ const MENU_TEXT =
 ⚡ /deletarprodutos
 ⚡ /status`;
 
-// ================= START LAYOUT =================
+// ================= START TEXT =================
 const START_TEXT =
 `⚡Nick Dono: Infinity Vendas e divulgações
 Valid 24.04.2026 - 23:59
@@ -58,28 +62,34 @@ vendedor atual: ADMIN (Eu)
 
 ━━━━━━━━━━━━━━
 
-🤜🏻🤛🏿 No momento não estamos fechando parcerias.
-Empresa nova, evolução em andamento.
+🤜🏻🤛🏿 Empresa nova, evolução em andamento.
 Deus no comando acima de tudo.`;
 
-// ================= START =================
+// ================= START (CORRIGIDO 100%) =================
 bot.onText(/\/start/, async (msg) => {
 
   const chatId = msg.chat.id;
 
-  // 📸 LOGO
-  await bot.sendPhoto(chatId, LOGO_URL);
+  try {
 
-  // 📝 TEXTO
-  await bot.sendMessage(chatId, START_TEXT);
+    // 📸 LOGO
+    await bot.sendPhoto(chatId, LOGO_URL);
 
-  // 🎧 ÁUDIO
-  await bot.sendAudio(chatId, AUDIO_URL);
+    // 📝 TEXTO
+    await bot.sendMessage(chatId, START_TEXT);
 
-  // ⏳ LIBERA MENU
-  setTimeout(() => {
-    bot.sendMessage(chatId, MENU_TEXT);
-  }, 15000);
+    // 🎧 ÁUDIO
+    await bot.sendAudio(chatId, AUDIO_URL);
+
+    // ⏳ MENU
+    setTimeout(() => {
+      bot.sendMessage(chatId, MENU_TEXT);
+    }, 15000);
+
+  } catch (err) {
+    console.log("Erro /start:", err);
+    bot.sendMessage(chatId, "⚡ Erro ao carregar início do bot");
+  }
 });
 
 // ================= PRODUTOS =================
@@ -110,9 +120,6 @@ bot.onText(/\/produtos/, async (msg) => {
 });
 
 // ================= ADD PRODUTO =================
-const addStep = {};
-const addData = {};
-
 bot.onText(/\/addproduto/, (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -120,7 +127,6 @@ bot.onText(/\/addproduto/, (msg) => {
   }
 
   addStep[msg.from.id] = "nome";
-
   bot.sendMessage(msg.chat.id, "⚡ Digite o NOME do produto:");
 });
 
@@ -182,7 +188,7 @@ bot.on("message", async (msg) => {
   }
 });
 
-// ================= DELETE PRODUTOS (SEGURO) =================
+// ================= DELETE PRODUTOS =================
 bot.onText(/\/deletarprodutos/, async (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -196,11 +202,9 @@ bot.onText(/\/deletarprodutos/, async (msg) => {
   bot.sendMessage(msg.chat.id,
 `⚠️ CONFIRMAÇÃO NECESSÁRIA
 
-Para deletar TODOS os produtos:
-
 🔐 Código: ${code}
 
-⚡ Esta ação não pode ser desfeita`);
+⚡ Digite para confirmar`);
 });
 
 // ================= CONFIRMA DELETE =================
@@ -217,9 +221,7 @@ bot.on("message", async (msg) => {
     const snap = await db.collection("produtos").get();
     const batch = db.batch();
 
-    snap.forEach(doc => {
-      batch.delete(doc.ref);
-    });
+    snap.forEach(doc => batch.delete(doc.ref));
 
     await batch.commit();
 
@@ -244,5 +246,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("⚡ BOT V7.7 FINAL ONLINE");
+  console.log("⚡ BOT CORRIGIDO E ONLINE");
 });
