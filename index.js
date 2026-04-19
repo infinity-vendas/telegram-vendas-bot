@@ -34,7 +34,37 @@ const cart = {};
 const verified = {};
 
 
-// ================= SEU ÁUDIO =================
+// ================= IDENTIDADE (LAYOUT INICIAL) =================
+const BOT_VERSION = "v1.0";
+const OWNER = "Faelzin";
+
+const INFO_TEXT =
+`⚡Dono: ${OWNER} (UID ativo)
+⚡Created date: 19.04.2026
+⚡planos VIP e melhorias no sistema. Plano Free encerra dia 25.04.2026 - 23:50
+⚡version atual: ${BOT_VERSION}
+---------- ---------- ----------- ------
+
+Redes sociais principal:
+Facebook: Rafael Matos
+Whatsapp: 51981528372
+Instagram: @Infinity_cliente_oficial
+Twitter: @InfinityCliente
+
+--------- ------- ------- --------- -----
+
+Sites registrados: Render (Hospedado)
+Tipo: confidencial
+Dados: armazenados no Firebase
+
+Não coletamos dados sensíveis, apenas registro de acesso.
+
+Contate: 51981528372
+
+Sejam bem-vindos`;
+
+
+// ================= ÁUDIO =================
 const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
 
 
@@ -44,59 +74,73 @@ const blockedWords = [
 ];
 
 
-// ================= IA =================
-function infinityAI(text) {
-
-    text = text.toLowerCase();
-
-    if (text.includes("oi") || text.includes("olá")) {
-        return "👋 Olá! Bem-vindo à Infinity Vendas. Digite /menu para começar.";
-    }
-
-    if (text.includes("produto")) {
-        return "🛒 Use /produtos para ver os itens disponíveis.";
-    }
-
-    if (text.includes("loja")) {
-        return "🏪 Use /lojas para ver vendedores.";
-    }
-
-    return "🤖 Não entendi, use /menu.";
-}
-
-
-// ================= START (LAYOUT ORIGINAL + ÁUDIO) =================
+// ================= START =================
 bot.onText(/\/start$/, async (msg) => {
 
-    await bot.sendMessage(msg.chat.id,
-`®INFINITY VENDAS AUTOMÁTICAS ON-LINE
+    const chatId = msg.chat.id;
 
-todos os direitos humanos e segurança preservados. N° Lei
+    await bot.sendMessage(chatId, INFO_TEXT);
 
-⚡Render projeto e hospedagem , Infinity Vendas e divulgações (Patrocinado) ⚡
+    await bot.sendAudio(chatId, audioURL);
 
-🔓 desbloqueie todo o acesso limitado , escute com atenção é muito importante...`);
+    await bot.sendMessage(chatId,
+`⏳ aguarde estamos configurando servidor do bot...
 
-    await bot.sendAudio(msg.chat.id, audioURL);
+📡 STATUS: inicializando sistema seguro`);
 
     setTimeout(() => {
-        bot.sendMessage(msg.chat.id,
-`⚡Dono: Infinity Vendas e divulgações Ultra
-⚡Validity: 01.05.2026
-Type: Free / VIP
-⚡Developed by: Faelzin
 
-📱 Redes sociais:
-⚡Instagram @Infinity_cliente_oficial
-⚡WhatsApp suporte: 51981528372
+        bot.sendMessage(chatId,
+`📌 PARA CONTINUAR USANDO OS SERVIÇOS
 
-📌 COMANDOS:
-/menu
-/produtos
-/lojas
-/rank
-/status`);
-    }, 60000);
+É necessário se cadastrar em nosso sistema:
+
+✍️ envie no formato abaixo:
+
+nome: 
+idade: 
+estado: 
+cidade: 
+whatsapp número: 
+instagram @:`);
+    }, 4000);
+});
+
+
+// ================= CADASTRO FIREBASE =================
+bot.on("message", async (msg) => {
+
+    if (!msg.text) return;
+    if (msg.text.startsWith("/")) return;
+
+    const text = msg.text.toLowerCase();
+
+    if (
+        text.includes("nome:") &&
+        text.includes("idade:") &&
+        text.includes("estado:") &&
+        text.includes("cidade:") &&
+        text.includes("whatsapp") &&
+        text.includes("instagram")
+    ) {
+        try {
+
+            await db.collection("usuarios").doc(String(msg.from.id)).set({
+                userId: msg.from.id,
+                username: msg.from.username || null,
+                dados: msg.text,
+                criadoEm: new Date().toISOString()
+            });
+
+            bot.sendMessage(msg.chat.id,
+`✅ CADASTRO SALVO COM SUCESSO
+
+Agora você tem acesso liberado ao sistema.`);
+        } catch (err) {
+            bot.sendMessage(msg.chat.id,
+`❌ erro ao salvar cadastro`);
+        }
+    }
 });
 
 
@@ -137,38 +181,6 @@ bot.onText(/\/minhaloja (.+)/, async (msg, match) => {
 });
 
 
-// ================= ADD PRODUTO =================
-bot.onText(/\/addproduto (.+)/, async (msg, match) => {
-
-    const [nome, valor] = match[1].split("|");
-
-    await db.collection("produtos").add({
-        nome,
-        valor,
-        vendedor: String(msg.from.id)
-    });
-
-    bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
-});
-
-
-// ================= DELETAR =================
-bot.onText(/\/deletar (.+)/, async (msg, match) => {
-
-    const id = match[1];
-
-    const doc = await db.collection("produtos").doc(id).get();
-
-    if (!doc.exists) return;
-
-    if (doc.data().vendedor !== String(msg.from.id)) return;
-
-    await db.collection("produtos").doc(id).delete();
-
-    bot.sendMessage(msg.chat.id, "🗑 Produto removido");
-});
-
-
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
@@ -189,49 +201,13 @@ bot.onText(/\/produtos/, async (msg) => {
 });
 
 
-// ================= LOJAS =================
-bot.onText(/\/lojas/, async (msg) => {
+// ================= STATUS =================
+bot.onText(/\/status/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`Bot online ⚡
 
-    const snap = await db.collection("users").get();
-
-    let text = "🏪 LOJAS:\n\n";
-
-    snap.forEach(doc => {
-        const u = doc.data();
-
-        text += `🏪 ${u.nomeLoja || "Sem nome"}
-UID: ${doc.id}
-⭐ ${u.rating?.toFixed(1) || 5}
-━━━━━━━━━━━\n`;
-    });
-
-    bot.sendMessage(msg.chat.id, text);
-});
-
-
-// ================= RANK =================
-bot.onText(/\/rank/, async (msg) => {
-
-    const snap = await db.collection("users").get();
-
-    let list = [];
-
-    snap.forEach(doc => {
-        list.push({
-            nome: doc.data().nomeLoja,
-            rating: doc.data().rating || 5
-        });
-    });
-
-    list.sort((a, b) => b.rating - a.rating);
-
-    let text = "🏆 RANKING:\n\n";
-
-    list.forEach((v, i) => {
-        text += `${i + 1}º ${v.nome} ⭐${v.rating.toFixed(1)}\n`;
-    });
-
-    bot.sendMessage(msg.chat.id, text);
+📡 STATUS: OPERACIONAL
+👤 DEV: ${OWNER}`);
 });
 
 
@@ -264,8 +240,6 @@ bot.on("message", async (msg) => {
         if (c >= 15) return applyBan(userId, msg);
         return bot.sendMessage(msg.chat.id, "⚠️ Linguagem proibida");
     }
-
-    bot.sendMessage(msg.chat.id, infinityAI(text));
 });
 
 
@@ -307,37 +281,8 @@ Conta suspensa por 24h.`);
 }
 
 
-// ================= LIST ADV =================
-bot.onText(/\/listadv/, async (msg) => {
-
-    if (!ADMINS.includes(String(msg.from.id))) return;
-
-    const snap = await db.collection("advertencias").get();
-
-    let text = "🚨 USUÁRIOS COM ADVERTÊNCIA:\n\n";
-
-    snap.forEach(doc => {
-
-        const d = doc.data();
-
-        text += `👤 ${d.name}
-🆔 ${d.userId}
-⚠️ ${d.count}
-━━━━━━━━━━\n`;
-    });
-
-    bot.sendMessage(msg.chat.id, text);
-});
-
-
-// ================= STATUS =================
-bot.onText(/\/status/, (msg) => {
-    bot.sendMessage(msg.chat.id, "Bot online ⚡");
-});
-
-
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
     await bot.setWebHook(`${URL}/webhook`);
-    console.log("🔥 INFINITY BOT FULL + AUDIO ONLINE");
+    console.log("🔥 INFINITY BOT V3.1 ONLINE COM IDENTIDADE COMPLETA");
 });
