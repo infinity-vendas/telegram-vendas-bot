@@ -27,7 +27,11 @@ app.post("/webhook", (req, res) => {
 const OWNER = "Infinity Vendas e divulgações";
 const BOT_VERSION = "v1";
 
-// ================= CONTROLE DELETE =================
+// ================= MÍDIA =================
+const LOGO_URL = "https://files.catbox.moe/3sewrd.png";
+const AUDIO_URL = "https://files.catbox.moe/p6wlxb.mp3";
+
+// ================= DELETE CONFIRM =================
 const deleteConfirm = {};
 
 // ================= MENU =================
@@ -39,7 +43,7 @@ const MENU_TEXT =
 ⚡ /deletarprodutos
 ⚡ /status`;
 
-// ================= LAYOUT ORIGINAL RESTAURADO =================
+// ================= START LAYOUT =================
 const START_TEXT =
 `⚡Nick Dono: Infinity Vendas e divulgações
 Valid 24.04.2026 - 23:59
@@ -54,21 +58,25 @@ vendedor atual: ADMIN (Eu)
 
 ━━━━━━━━━━━━━━
 
-🤜🏻🤛🏿 Lembrando: no momento não estou fechando parcerias.
-Empresa nova, vamos evoluir juntos com sinceridade.
+🤜🏻🤛🏿 No momento não estamos fechando parcerias.
+Empresa nova, evolução em andamento.
 Deus no comando acima de tudo.`;
-
-// ================= ÁUDIO =================
-const AUDIO_URL = "https://files.catbox.moe/p6wlxb.mp3";
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const chatId = msg.chat.id;
 
+  // 📸 LOGO
+  await bot.sendPhoto(chatId, LOGO_URL);
+
+  // 📝 TEXTO
   await bot.sendMessage(chatId, START_TEXT);
+
+  // 🎧 ÁUDIO
   await bot.sendAudio(chatId, AUDIO_URL);
 
+  // ⏳ LIBERA MENU
   setTimeout(() => {
     bot.sendMessage(chatId, MENU_TEXT);
   }, 15000);
@@ -99,58 +107,6 @@ bot.onText(/\/produtos/, async (msg) => {
   });
 
   bot.sendMessage(msg.chat.id, text);
-});
-
-// ================= DELETE PRODUTOS =================
-bot.onText(/\/deletarprodutos/, async (msg) => {
-
-  if (!ADMINS.includes(String(msg.from.id))) {
-    return bot.sendMessage(msg.chat.id, "⚡ Sem permissão");
-  }
-
-  const code = Math.floor(10000 + Math.random() * 90000);
-
-  deleteConfirm[msg.from.id] = code;
-
-  bot.sendMessage(msg.chat.id,
-`⚠️ CONFIRMAÇÃO NECESSÁRIA
-
-Para deletar TODOS os produtos do Firebase,
-digite o código abaixo:
-
-🔐 Código: ${code}
-
-⚡ Esta ação não pode ser desfeita`);
-});
-
-// ================= CONFIRMA DELETE =================
-bot.on("message", async (msg) => {
-
-  const id = msg.from.id;
-  const text = msg.text;
-
-  if (!text || text.startsWith("/")) return;
-  if (!deleteConfirm[id]) return;
-
-  if (text == deleteConfirm[id]) {
-
-    const snap = await db.collection("produtos").get();
-    const batch = db.batch();
-
-    snap.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-
-    await batch.commit();
-
-    delete deleteConfirm[id];
-
-    return bot.sendMessage(msg.chat.id, "⚡ Produtos deletados com sucesso!");
-  }
-
-  if (deleteConfirm[id]) {
-    return bot.sendMessage(msg.chat.id, "⚡ Código inválido");
-  }
 });
 
 // ================= ADD PRODUTO =================
@@ -226,6 +182,57 @@ bot.on("message", async (msg) => {
   }
 });
 
+// ================= DELETE PRODUTOS (SEGURO) =================
+bot.onText(/\/deletarprodutos/, async (msg) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) {
+    return bot.sendMessage(msg.chat.id, "⚡ Sem permissão");
+  }
+
+  const code = Math.floor(10000 + Math.random() * 90000);
+
+  deleteConfirm[msg.from.id] = code;
+
+  bot.sendMessage(msg.chat.id,
+`⚠️ CONFIRMAÇÃO NECESSÁRIA
+
+Para deletar TODOS os produtos:
+
+🔐 Código: ${code}
+
+⚡ Esta ação não pode ser desfeita`);
+});
+
+// ================= CONFIRMA DELETE =================
+bot.on("message", async (msg) => {
+
+  const id = msg.from.id;
+  const text = msg.text;
+
+  if (!text || text.startsWith("/")) return;
+  if (!deleteConfirm[id]) return;
+
+  if (text == deleteConfirm[id]) {
+
+    const snap = await db.collection("produtos").get();
+    const batch = db.batch();
+
+    snap.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+
+    delete deleteConfirm[id];
+
+    return bot.sendMessage(msg.chat.id, "⚡ Produtos deletados com sucesso!");
+  }
+
+  if (deleteConfirm[id]) {
+    return bot.sendMessage(msg.chat.id, "⚡ Código inválido");
+  }
+});
+
 // ================= STATUS =================
 bot.onText(/\/status/, (msg) => {
   bot.sendMessage(msg.chat.id,
@@ -237,5 +244,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("⚡ BOT V7.6 RESTAURADO ONLINE");
+  console.log("⚡ BOT V7.7 FINAL ONLINE");
 });
