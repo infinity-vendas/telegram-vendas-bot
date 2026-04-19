@@ -58,22 +58,7 @@ Vínculos de novos produtos 100% em tempo real
 ⚡Type: Free
 ⚡version atual: ${BOT_VERSION}
 ⚡whatsapp 51981528372 - desenvolvedor oficial
-⚡suporte: suporte@InfinityTermux.com
-
-⚠️ Aviso: compre somente com administrador oficial
-Evite golpes, fraudes etc
-
-📦 Entregas via: e-mail, whatsapp, instagram e discord
-
-⚡ Pagamento validado por UID
-⚡ Sistema anti-fraude ativo
-
-📢 Redes sociais:
-@Infinity_termux_ofc
-YouTube @Infinity_termux_ofc
-Telegram @InfinityTermux
-TikTok: Em breve
-Kwai: Em breve`;
+⚡suporte: suporte@InfinityTermux.com`;
 
 // ================= ÁUDIOS =================
 const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
@@ -88,22 +73,30 @@ await bot.sendMessage(chatId, INFO_TEXT);
 await bot.sendAudio(chatId, audioURL);
 
 await bot.sendMessage(chatId,
-`⏳ Aguarde estamos configurando servidor do bot...
-
-📡 STATUS: inicializando sistema seguro`);
+`⏳ Aguarde estamos configurando servidor do bot...`);
 
 setTimeout(() => {
+
 cadastroStep[msg.from.id] = "nome";
 
 bot.sendMessage(chatId,
-`🆔⚡ Autenticação pré - necessário , informe os dados corretos favor⚡
+`🆔⚡Autenticação pré - necessário , informe os dados corretos favor ⚡
+
+nome:
+sobrenome:
+idade:
+cidade:
+whatsapp:
+
+🔒 Suas informações são seguras, ninguém tem acesso
 
 Insira nome:`);
+
 }, 4000);
 
 });
 
-// ================= CADASTRO PASSO A PASSO =================
+// ================= CADASTRO =================
 bot.on("message", async (msg) => {
 
 if (!msg.text) return;
@@ -118,8 +111,13 @@ switch(cadastroStep[userId]) {
 
 case "nome":
 cadastroData[userId] = { nome: text };
+cadastroStep[userId] = "sobrenome";
+return bot.sendMessage(msg.chat.id, "Sobrenome:");
+
+case "sobrenome":
+cadastroData[userId].sobrenome = text;
 cadastroStep[userId] = "idade";
-return bot.sendMessage(msg.chat.id, "Insira idade:");
+return bot.sendMessage(msg.chat.id, "Idade:");
 
 case "idade":
 cadastroData[userId].idade = text;
@@ -128,22 +126,12 @@ return bot.sendMessage(msg.chat.id, "Cidade:");
 
 case "cidade":
 cadastroData[userId].cidade = text;
-cadastroStep[userId] = "estado";
-return bot.sendMessage(msg.chat.id, "Estado:");
-
-case "estado":
-cadastroData[userId].estado = text;
 cadastroStep[userId] = "whatsapp";
 return bot.sendMessage(msg.chat.id, "WhatsApp:");
 
 case "whatsapp":
+
 cadastroData[userId].whatsapp = text;
-cadastroStep[userId] = "instagram";
-return bot.sendMessage(msg.chat.id, "Instagram:");
-
-case "instagram":
-
-cadastroData[userId].instagram = text;
 
 try {
 
@@ -170,7 +158,7 @@ verified[userId] = true;
 bot.sendMessage(msg.chat.id,
 `🎉 ACESSO LIBERADO!
 
-Agora você pode usar todos os comandos:
+Agora você pode usar:
 /menu /produtos /lojas /status`);
 
 }, 15000);
@@ -203,12 +191,7 @@ bot.sendMessage(msg.chat.id,
 `📌 MENU COMPLETO
 
 🛒 /produtos
-➕ /addproduto nome|valor
-🗑 /deletar ID
-
 🏪 /lojas
-🔗 /minhaloja nome
-
 🏆 /status
 
 🔐 ADMIN:
@@ -216,17 +199,14 @@ bot.sendMessage(msg.chat.id,
 });
 });
 
-// ================= RESET PRODUTOS (ADMIN) =================
+// ================= RESET PRODUTOS =================
 bot.onText(/\/resetprodutos/, async (msg) => {
 
 if (!ADMINS.includes(String(msg.from.id))) {
-return bot.sendMessage(msg.chat.id, "⛔ Acesso negado (somente admin)");
+return bot.sendMessage(msg.chat.id, "⛔ Acesso negado");
 }
 
-try {
-
 const snap = await db.collection("produtos").get();
-
 const batch = db.batch();
 
 snap.forEach(doc => {
@@ -235,53 +215,11 @@ batch.delete(doc.ref);
 
 await batch.commit();
 
-bot.sendMessage(msg.chat.id, "🗑 Todos os produtos foram resetados com sucesso");
-
-} catch (err) {
-bot.sendMessage(msg.chat.id, "❌ erro ao resetar produtos");
-}
-
-});
-
-// ================= LOJA =================
-bot.onText(/\/minhaloja (.+)/, async (msg, match) => {
-checkAccess(msg, async () => {
-await db.collection("users").doc(String(msg.from.id)).set({
-nomeLoja: match[1],
-uid: msg.from.id,
-rating: 5
-});
-bot.sendMessage(msg.chat.id,"🏪 Loja criada");
-});
-});
-
-// ================= PRODUTOS =================
-bot.onText(/\/produtos/, async (msg) => {
-checkAccess(msg, async () => {
-
-const snap = await db.collection("produtos").get();
-
-let text = "🛒 PRODUTOS:\n\n";
-
-snap.forEach(doc => {
-const p = doc.data();
-text += `⚡ ${p.nome}\n💰 R$ ${p.valor}\n🆔 ${doc.id}\n━━━━━━━━━━━\n`;
-});
-
-bot.sendMessage(msg.chat.id, text);
-});
-});
-
-// ================= STATUS =================
-bot.onText(/\/status/, (msg) => {
-bot.sendMessage(msg.chat.id,
-`Bot online ⚡
-
-DEV: ${OWNER}`);
+bot.sendMessage(msg.chat.id, "🗑 Produtos resetados");
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 await bot.setWebHook(`${URL}/webhook`);
-console.log("🔥 INFINITY BOT v3.6 ONLINE (ADMIN RESET ATIVO)");
+console.log("🔥 INFINITY BOT v3.7 ONLINE");
 });
