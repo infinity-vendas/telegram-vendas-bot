@@ -4,7 +4,6 @@ const admin = require("firebase-admin");
 
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
-
 const ADMINS = ["6863505946"];
 
 const serviceAccount = require("./firebase.json");
@@ -24,238 +23,203 @@ bot.processUpdate(req.body);
 res.sendStatus(200);
 });
 
-// ================= SISTEMA =================
-const lastMsg = {};
-const banned = {};
-const verified = {};
-
+// ================= CONTROLE =================
 const cadastroStep = {};
 const cadastroData = {};
-const tentativaCadastro = {};
-const usuariosSuspeitos = {};
+const verified = {};
 
-// ================= IDENTIDADE =================
-const BOT_VERSION = "v3.8";
+// ================= IDENTIDADE (MANTIDA) =================
 const OWNER = "Faelzin";
+const BOT_VERSION = "v4.1";
 
 const INFO_TEXT =
 `⚡INFINITY CLIENTE VENDAS ON-LINE
 
 +10X comandos atualizados todos os dias
-Bot funcionando perfeitamente
-Feedback em tempo real
-Sistema anti-fraude ativo
+Bot funcionando perfeitamente, sem bugs
+
+🔥 Melhor bot Beta atualizado
 
 ━━━━━━━━━━━━━━
 
 ⚡version atual: ${BOT_VERSION}
-⚡WhatsApp: 51981528372
-⚡suporte: suporte@InfinityTermux.com`;
+⚡whatsapp 51981528372
+⚡suporte: suporte@InfinityTermux.com
+
+📢 Redes sociais:
+@Infinity_termux_ofc
+YouTube @Infinity_termux_ofc
+Telegram @InfinityTermux`;
 
 // ================= ÁUDIOS =================
-const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
-const audioCadastro = "https://files.catbox.moe/9dv9ln.mp3";
+const audio1 = "https://files.catbox.moe/p6wlxb.mp3";
+const audio2 = "https://files.catbox.moe/9dv9ln.mp3";
 
-// ================= ANTI-FAKE =================
-function isFakeText(text) {
-const t = text.toLowerCase();
+// ================= DDD BR =================
+const validDDDs = [11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,41,42,43,44,45,46,47,48,49,51,53,54,55,61,62,63,64,65,66,67,68,69,71,73,74,75,77,79,81,82,83,84,85,86,87,88,89,91,92,93,94,95,96,97,98,99];
 
-if (/^(.)\1+$/.test(t)) return true;
-if (/^\d+$/.test(t)) return true;
-if (t.length < 2) return true;
-
-const fakeWords = ["teste","aaa","bbb","123","fake"];
-if (fakeWords.some(w => t.includes(w))) return true;
-
-return false;
+function validPhone(num){
+if(!/^\d{10,11}$/.test(num)) return false;
+return validDDDs.includes(parseInt(num.substring(0,2)));
 }
 
 // ================= START =================
-bot.onText(/\/start$/, async (msg) => {
+bot.onText(/\/start/, async (msg)=>{
 
 const chatId = msg.chat.id;
 
 await bot.sendMessage(chatId, INFO_TEXT);
-await bot.sendAudio(chatId, audioURL);
+await bot.sendAudio(chatId, audio1);
 
-setTimeout(() => {
-
+setTimeout(()=>{
 cadastroStep[msg.from.id] = "nome";
 
 bot.sendMessage(chatId,
-`🆔⚡ Autenticação necessária
+`🆔⚡Autenticação pré - necessário
 
-nome:
-sobrenome:
-idade:
-cidade:
-whatsapp:
+Insira nome:
+Insira whatsapp (DDD + número)
 
-🔒 dados protegidos`);
-
-}, 4000);
-
+Suas informações são seguras`);
+}, 3000);
 });
 
-// ================= CADASTRO =================
-bot.on("message", async (msg) => {
+// ================= CADASTRO ÚNICO =================
+bot.on("message", async (msg)=>{
 
-if (!msg.text) return;
-if (msg.text.startsWith("/")) return;
+if(!msg.text) return;
+if(msg.text.startsWith("/")) return;
 
-const userId = msg.from.id;
+const id = msg.from.id;
 const text = msg.text.trim();
 
-if (!cadastroStep[userId]) return;
+if(!cadastroStep[id]) return;
 
-// tentativa anti spam
-tentativaCadastro[userId] = (tentativaCadastro[userId] || 0) + 1;
+if(!cadastroData[id]) cadastroData[id] = {};
 
-if (tentativaCadastro[userId] > 20) {
-usuariosSuspeitos[userId] = true;
-return bot.sendMessage(msg.chat.id, "🚨 Usuário suspeito detectado.");
+// ---------- NOME ----------
+if(cadastroStep[id] === "nome"){
+
+if(text.length < 2)
+return bot.sendMessage(msg.chat.id,"❌ Nome inválido");
+
+cadastroData[id].nome = text;
+cadastroStep[id] = "whatsapp";
+
+return bot.sendMessage(msg.chat.id,"📱 WhatsApp (DDD + número):");
 }
 
-// bloqueia fake direto
-if (isFakeText(text)) {
-return bot.sendMessage(msg.chat.id, "❌ Dados inválidos.");
-}
+// ---------- WHATSAPP ----------
+if(cadastroStep[id] === "whatsapp"){
 
-switch(cadastroStep[userId]) {
+if(!validPhone(text))
+return bot.sendMessage(msg.chat.id,"❌ WhatsApp inválido (DDD BR)");
 
-case "nome":
-cadastroData[userId] = { nome: text };
-cadastroStep[userId] = "sobrenome";
-return bot.sendMessage(msg.chat.id, "Sobrenome:");
+cadastroData[id].whatsapp = text;
 
-case "sobrenome":
-cadastroData[userId].sobrenome = text;
-cadastroStep[userId] = "idade";
-return bot.sendMessage(msg.chat.id, "Idade:");
+// salva firebase
+try{
 
-case "idade":
-
-if (isNaN(text) || text < 13 || text > 80) {
-return bot.sendMessage(msg.chat.id, "❌ Idade inválida");
-}
-
-cadastroData[userId].idade = Number(text);
-cadastroStep[userId] = "cidade";
-return bot.sendMessage(msg.chat.id, "Cidade:");
-
-case "cidade":
-cadastroData[userId].cidade = text;
-cadastroStep[userId] = "whatsapp";
-return bot.sendMessage(msg.chat.id, "WhatsApp:");
-
-case "whatsapp":
-
-if (!/^\d{10,13}$/.test(text)) {
-return bot.sendMessage(msg.chat.id, "❌ WhatsApp inválido");
-}
-
-cadastroData[userId].whatsapp = text;
-
-try {
-
-// bloqueia suspeito
-if (usuariosSuspeitos[userId]) {
-return bot.sendMessage(msg.chat.id, "⛔ Conta bloqueada.");
-}
-
-// salva Firebase
-await db.collection("usuarios").doc(String(userId)).set({
-userId,
+await db.collection("usuarios").doc(String(id)).set({
+userId: id,
 username: msg.from.username || null,
-...cadastroData[userId],
-suspeito: false,
-criadoEm: new Date().toISOString()
+nome: cadastroData[id].nome,
+whatsapp: cadastroData[id].whatsapp,
+createdAt: new Date().toISOString()
 });
 
-verified[userId] = false;
+verified[id] = false;
 
-await bot.sendAudio(msg.chat.id, audioCadastro);
+// áudio final
+await bot.sendAudio(msg.chat.id, audio2);
 
 await bot.sendMessage(msg.chat.id,
 `✅ CADASTRO SALVO
 
 ⏳ aguarde 15 segundos...`);
 
-setTimeout(() => {
+setTimeout(()=>{
 
-verified[userId] = true;
+verified[id] = true;
 
 bot.sendMessage(msg.chat.id,
-`🎉 ACESSO LIBERADO
+`🎉 ACESSO LIBERADO!
 
-/menu /produtos /lojas /status`);
-
-}, 15000);
+/menu /produtos /status`);
+},15000);
 
 // limpa
-delete cadastroStep[userId];
-delete cadastroData[userId];
+delete cadastroStep[id];
+delete cadastroData[id];
 
-} catch (err) {
-console.log(err);
-bot.sendMessage(msg.chat.id, "❌ erro ao salvar cadastro");
+}catch(e){
+bot.sendMessage(msg.chat.id,"❌ erro ao salvar cadastro");
 }
-
-break;
 }
-
 });
 
 // ================= PROTEÇÃO =================
-function checkAccess(msg, next) {
-if (!verified[msg.from.id]) {
-return bot.sendMessage(msg.chat.id, "⛔ Aguarde liberação...");
+function checkAccess(msg,next){
+if(!verified[msg.from.id]){
+return bot.sendMessage(msg.chat.id,"⛔ Aguarde liberação...");
 }
 next();
 }
 
 // ================= MENU =================
-bot.onText(/\/menu/, (msg) => {
-checkAccess(msg, () => {
+bot.onText(/\/menu/, (msg)=>{
+checkAccess(msg, ()=>{
 bot.sendMessage(msg.chat.id,
 `📌 MENU
 
 🛒 /produtos
-🏪 /lojas
-🏆 /status
-
-🔐 ADMIN:
-/resetprodutos`);
+🏪 /status
+🔐 /resetprodutos (admin)`);
 });
 });
 
 // ================= RESET PRODUTOS (ADMIN) =================
-bot.onText(/\/resetprodutos/, async (msg) => {
+bot.onText(/\/resetprodutos/, async (msg)=>{
 
-if (!ADMINS.includes(String(msg.from.id))) {
-return bot.sendMessage(msg.chat.id, "⛔ Sem permissão");
+if(!ADMINS.includes(String(msg.from.id))){
+return bot.sendMessage(msg.chat.id,"⛔ Sem permissão");
 }
 
 const snap = await db.collection("produtos").get();
 const batch = db.batch();
 
-snap.forEach(doc => batch.delete(doc.ref));
-
+snap.forEach(d => batch.delete(d.ref));
 await batch.commit();
 
-bot.sendMessage(msg.chat.id, "🗑 Produtos resetados");
+bot.sendMessage(msg.chat.id,"🗑 Produtos resetados com sucesso");
+});
+
+// ================= PRODUTOS =================
+bot.onText(/\/produtos/, async (msg)=>{
+checkAccess(msg, async ()=>{
+
+const snap = await db.collection("produtos").get();
+
+let text = "🛒 PRODUTOS:\n\n";
+
+snap.forEach(d=>{
+const p = d.data();
+text += `⚡ ${p.nome}\n💰 R$ ${p.valor}\n━━━━━━━━━━━\n`;
+});
+
+bot.sendMessage(msg.chat.id,text);
+});
 });
 
 // ================= STATUS =================
-bot.onText(/\/status/, (msg) => {
+bot.onText(/\/status/, (msg)=>{
 bot.sendMessage(msg.chat.id,
 `Bot online ⚡
-DEV: ${OWNER}
-VERSION: ${BOT_VERSION}`);
+DEV: ${OWNER}`);
 });
 
 // ================= SERVER =================
-app.listen(process.env.PORT || 3000, async () => {
+app.listen(process.env.PORT || 3000, async ()=>{
 await bot.setWebHook(`${URL}/webhook`);
-console.log("🔥 INFINITY BOT v3.8 ONLINE");
+console.log("🔥 BOT v4.1 ONLINE CORRIGIDO");
 });
