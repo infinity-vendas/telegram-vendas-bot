@@ -25,44 +25,50 @@ res.sendStatus(200);
 });
 
 // ================= SISTEMA =================
-const sessions = {};
-const adv = {};
 const lastMsg = {};
 const banned = {};
 const verified = {};
 
-// ================= CONTROLE CADASTRO =================
 const cadastroStep = {};
 const cadastroData = {};
+const tentativaCadastro = {};
+const usuariosSuspeitos = {};
 
 // ================= IDENTIDADE =================
-const BOT_VERSION = "v1";
+const BOT_VERSION = "v3.8";
 const OWNER = "Faelzin";
 
 const INFO_TEXT =
 `⚡INFINITY CLIENTE VENDAS ON-LINE
 
 +10X comandos atualizados todos os dias
-
-Bot funcionando perfeitamente, sem bugs, erros externos
-
-Feedback de clientes em tempo real
-
-Vínculos de novos produtos 100% em tempo real
-
-🔥 Melhor bot Beta atualizado para vendas e divulgações em tempo real
+Bot funcionando perfeitamente
+Feedback em tempo real
+Sistema anti-fraude ativo
 
 ━━━━━━━━━━━━━━
 
-⚡Valid: 21.04.2026 - 23:50
-⚡Type: Free
 ⚡version atual: ${BOT_VERSION}
-⚡whatsapp 51981528372 - desenvolvedor oficial
+⚡WhatsApp: 51981528372
 ⚡suporte: suporte@InfinityTermux.com`;
 
 // ================= ÁUDIOS =================
 const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
 const audioCadastro = "https://files.catbox.moe/9dv9ln.mp3";
+
+// ================= ANTI-FAKE =================
+function isFakeText(text) {
+const t = text.toLowerCase();
+
+if (/^(.)\1+$/.test(t)) return true;
+if (/^\d+$/.test(t)) return true;
+if (t.length < 2) return true;
+
+const fakeWords = ["teste","aaa","bbb","123","fake"];
+if (fakeWords.some(w => t.includes(w))) return true;
+
+return false;
+}
 
 // ================= START =================
 bot.onText(/\/start$/, async (msg) => {
@@ -72,15 +78,12 @@ const chatId = msg.chat.id;
 await bot.sendMessage(chatId, INFO_TEXT);
 await bot.sendAudio(chatId, audioURL);
 
-await bot.sendMessage(chatId,
-`⏳ Aguarde estamos configurando servidor do bot...`);
-
 setTimeout(() => {
 
 cadastroStep[msg.from.id] = "nome";
 
 bot.sendMessage(chatId,
-`🆔⚡Autenticação pré - necessário , informe os dados corretos favor ⚡
+`🆔⚡ Autenticação necessária
 
 nome:
 sobrenome:
@@ -88,9 +91,7 @@ idade:
 cidade:
 whatsapp:
 
-🔒 Suas informações são seguras, ninguém tem acesso
-
-Insira nome:`);
+🔒 dados protegidos`);
 
 }, 4000);
 
@@ -103,9 +104,22 @@ if (!msg.text) return;
 if (msg.text.startsWith("/")) return;
 
 const userId = msg.from.id;
-const text = msg.text;
+const text = msg.text.trim();
 
 if (!cadastroStep[userId]) return;
+
+// tentativa anti spam
+tentativaCadastro[userId] = (tentativaCadastro[userId] || 0) + 1;
+
+if (tentativaCadastro[userId] > 20) {
+usuariosSuspeitos[userId] = true;
+return bot.sendMessage(msg.chat.id, "🚨 Usuário suspeito detectado.");
+}
+
+// bloqueia fake direto
+if (isFakeText(text)) {
+return bot.sendMessage(msg.chat.id, "❌ Dados inválidos.");
+}
 
 switch(cadastroStep[userId]) {
 
@@ -120,7 +134,12 @@ cadastroStep[userId] = "idade";
 return bot.sendMessage(msg.chat.id, "Idade:");
 
 case "idade":
-cadastroData[userId].idade = text;
+
+if (isNaN(text) || text < 13 || text > 80) {
+return bot.sendMessage(msg.chat.id, "❌ Idade inválida");
+}
+
+cadastroData[userId].idade = Number(text);
 cadastroStep[userId] = "cidade";
 return bot.sendMessage(msg.chat.id, "Cidade:");
 
@@ -131,14 +150,25 @@ return bot.sendMessage(msg.chat.id, "WhatsApp:");
 
 case "whatsapp":
 
+if (!/^\d{10,13}$/.test(text)) {
+return bot.sendMessage(msg.chat.id, "❌ WhatsApp inválido");
+}
+
 cadastroData[userId].whatsapp = text;
 
 try {
 
+// bloqueia suspeito
+if (usuariosSuspeitos[userId]) {
+return bot.sendMessage(msg.chat.id, "⛔ Conta bloqueada.");
+}
+
+// salva Firebase
 await db.collection("usuarios").doc(String(userId)).set({
-userId: userId,
+userId,
 username: msg.from.username || null,
 ...cadastroData[userId],
+suspeito: false,
 criadoEm: new Date().toISOString()
 });
 
@@ -149,25 +179,26 @@ await bot.sendAudio(msg.chat.id, audioCadastro);
 await bot.sendMessage(msg.chat.id,
 `✅ CADASTRO SALVO
 
-⏳ aguarde 15 segundos estamos preparando material...`);
+⏳ aguarde 15 segundos...`);
 
 setTimeout(() => {
 
 verified[userId] = true;
 
 bot.sendMessage(msg.chat.id,
-`🎉 ACESSO LIBERADO!
+`🎉 ACESSO LIBERADO
 
-Agora você pode usar:
 /menu /produtos /lojas /status`);
 
 }, 15000);
 
+// limpa
 delete cadastroStep[userId];
 delete cadastroData[userId];
 
 } catch (err) {
-bot.sendMessage(msg.chat.id,"❌ erro ao salvar cadastro");
+console.log(err);
+bot.sendMessage(msg.chat.id, "❌ erro ao salvar cadastro");
 }
 
 break;
@@ -175,11 +206,10 @@ break;
 
 });
 
-// ================= BLOQUEIO =================
+// ================= PROTEÇÃO =================
 function checkAccess(msg, next) {
-if (verified[msg.from.id] === false) {
-return bot.sendMessage(msg.chat.id,
-`⛔ Aguarde liberação do sistema...`);
+if (!verified[msg.from.id]) {
+return bot.sendMessage(msg.chat.id, "⛔ Aguarde liberação...");
 }
 next();
 }
@@ -188,7 +218,7 @@ next();
 bot.onText(/\/menu/, (msg) => {
 checkAccess(msg, () => {
 bot.sendMessage(msg.chat.id,
-`📌 MENU COMPLETO
+`📌 MENU
 
 🛒 /produtos
 🏪 /lojas
@@ -199,27 +229,33 @@ bot.sendMessage(msg.chat.id,
 });
 });
 
-// ================= RESET PRODUTOS =================
+// ================= RESET PRODUTOS (ADMIN) =================
 bot.onText(/\/resetprodutos/, async (msg) => {
 
 if (!ADMINS.includes(String(msg.from.id))) {
-return bot.sendMessage(msg.chat.id, "⛔ Acesso negado");
+return bot.sendMessage(msg.chat.id, "⛔ Sem permissão");
 }
 
 const snap = await db.collection("produtos").get();
 const batch = db.batch();
 
-snap.forEach(doc => {
-batch.delete(doc.ref);
-});
+snap.forEach(doc => batch.delete(doc.ref));
 
 await batch.commit();
 
 bot.sendMessage(msg.chat.id, "🗑 Produtos resetados");
 });
 
+// ================= STATUS =================
+bot.onText(/\/status/, (msg) => {
+bot.sendMessage(msg.chat.id,
+`Bot online ⚡
+DEV: ${OWNER}
+VERSION: ${BOT_VERSION}`);
+});
+
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 await bot.setWebHook(`${URL}/webhook`);
-console.log("🔥 INFINITY BOT v3.7 ONLINE");
+console.log("🔥 INFINITY BOT v3.8 ONLINE");
 });
