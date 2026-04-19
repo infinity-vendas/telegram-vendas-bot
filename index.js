@@ -31,7 +31,11 @@ const lastMsg = {};
 const banned = {};
 const verified = {};
 
-// ================= IDENTIDADE NOVA =================
+// ================= CONTROLE CADASTRO =================
+const cadastroStep = {};
+const cadastroData = {};
+
+// ================= IDENTIDADE =================
 const BOT_VERSION = "v1";
 const OWNER = "Faelzin";
 
@@ -75,16 +79,12 @@ Kwai: Em breve`;
 const audioURL = "https://files.catbox.moe/p6wlxb.mp3";
 const audioCadastro = "https://files.catbox.moe/9dv9ln.mp3";
 
-// ================= PALAVRÕES =================
-const blockedWords = ["foda","merda","puta","bosta","scam","fraude","hack","roubo"];
-
 // ================= START =================
 bot.onText(/\/start$/, async (msg) => {
 
 const chatId = msg.chat.id;
 
 await bot.sendMessage(chatId, INFO_TEXT);
-
 await bot.sendAudio(chatId, audioURL);
 
 await bot.sendMessage(chatId,
@@ -93,57 +93,69 @@ await bot.sendMessage(chatId,
 📡 STATUS: inicializando sistema seguro`);
 
 setTimeout(() => {
-bot.sendMessage(chatId,
-`📌 CADASTRO OBRIGATÓRIO:
+cadastroStep[msg.from.id] = "nome";
 
-*Insira nome:
-*Insira idade:
-*cidade:
-*estado:
-*whatsapp:
-*Instagram:`);
+bot.sendMessage(chatId,
+`🆔⚡ Autenticação pré - necessário , informe os dados corretos favor⚡
+
+Insira nome:`);
 }, 4000);
 
 });
 
-// ================= CADASTRO =================
+// ================= CADASTRO PASSO A PASSO =================
 bot.on("message", async (msg) => {
 
 if (!msg.text) return;
 if (msg.text.startsWith("/")) return;
 
-const text = msg.text.toLowerCase();
+const userId = msg.from.id;
+const text = msg.text;
 
-// valida cadastro completo
-const valid =
-text.includes("nome") &&
-text.includes("idade") &&
-text.includes("cidade") &&
-text.includes("estado") &&
-text.includes("whatsapp") &&
-text.includes("instagram");
+if (!cadastroStep[userId]) return;
 
-// se estiver incompleto
-if (text.includes("nome") || text.includes("idade") || text.includes("cidade") || text.includes("estado") || text.includes("whatsapp") || text.includes("instagram")) {
+switch(cadastroStep[userId]) {
 
-if (!valid) {
-return bot.sendMessage(msg.chat.id,
-`❌ Erro: completo necessário completar cadastrado ☹️`);
-}
+case "nome":
+cadastroData[userId] = { nome: text };
+cadastroStep[userId] = "idade";
+return bot.sendMessage(msg.chat.id, "Insira idade:");
+
+case "idade":
+cadastroData[userId].idade = text;
+cadastroStep[userId] = "cidade";
+return bot.sendMessage(msg.chat.id, "Cidade:");
+
+case "cidade":
+cadastroData[userId].cidade = text;
+cadastroStep[userId] = "estado";
+return bot.sendMessage(msg.chat.id, "Estado:");
+
+case "estado":
+cadastroData[userId].estado = text;
+cadastroStep[userId] = "whatsapp";
+return bot.sendMessage(msg.chat.id, "WhatsApp:");
+
+case "whatsapp":
+cadastroData[userId].whatsapp = text;
+cadastroStep[userId] = "instagram";
+return bot.sendMessage(msg.chat.id, "Instagram:");
+
+case "instagram":
+
+cadastroData[userId].instagram = text;
 
 try {
 
-// salva no firebase
-await db.collection("usuarios").doc(String(msg.from.id)).set({
-userId: msg.from.id,
+await db.collection("usuarios").doc(String(userId)).set({
+userId: userId,
 username: msg.from.username || null,
-dados: msg.text,
+...cadastroData[userId],
 criadoEm: new Date().toISOString()
 });
 
-verified[msg.from.id] = false;
+verified[userId] = false;
 
-// áudio final
 await bot.sendAudio(msg.chat.id, audioCadastro);
 
 await bot.sendMessage(msg.chat.id,
@@ -151,10 +163,9 @@ await bot.sendMessage(msg.chat.id,
 
 ⏳ aguarde 15 segundos estamos preparando material...`);
 
-// libera após 15s
 setTimeout(() => {
 
-verified[msg.from.id] = true;
+verified[userId] = true;
 
 bot.sendMessage(msg.chat.id,
 `🎉 ACESSO LIBERADO!
@@ -164,10 +175,16 @@ Agora você pode usar todos os comandos:
 
 }, 15000);
 
+delete cadastroStep[userId];
+delete cadastroData[userId];
+
 } catch (err) {
 bot.sendMessage(msg.chat.id,"❌ erro ao salvar cadastro");
 }
+
+break;
 }
+
 });
 
 // ================= BLOQUEIO =================
@@ -192,8 +209,38 @@ bot.sendMessage(msg.chat.id,
 🏪 /lojas
 🔗 /minhaloja nome
 
-🏆 /status`);
+🏆 /status
+
+🔐 ADMIN:
+/resetprodutos`);
 });
+});
+
+// ================= RESET PRODUTOS (ADMIN) =================
+bot.onText(/\/resetprodutos/, async (msg) => {
+
+if (!ADMINS.includes(String(msg.from.id))) {
+return bot.sendMessage(msg.chat.id, "⛔ Acesso negado (somente admin)");
+}
+
+try {
+
+const snap = await db.collection("produtos").get();
+
+const batch = db.batch();
+
+snap.forEach(doc => {
+batch.delete(doc.ref);
+});
+
+await batch.commit();
+
+bot.sendMessage(msg.chat.id, "🗑 Todos os produtos foram resetados com sucesso");
+
+} catch (err) {
+bot.sendMessage(msg.chat.id, "❌ erro ao resetar produtos");
+}
+
 });
 
 // ================= LOJA =================
@@ -236,5 +283,5 @@ DEV: ${OWNER}`);
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 await bot.setWebHook(`${URL}/webhook`);
-console.log("🔥 INFINITY BOT v3.4 ONLINE COM CADASTRO OBRIGATÓRIO");
+console.log("🔥 INFINITY BOT v3.6 ONLINE (ADMIN RESET ATIVO)");
 });
