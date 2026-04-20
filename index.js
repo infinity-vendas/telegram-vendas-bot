@@ -13,11 +13,9 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-
-// ⚡ IMPORTANTE: force polling false (webhook mode)
 const bot = new TelegramBot(TOKEN, { webHook: true });
-
 const app = express();
+
 app.use(express.json());
 
 app.post("/webhook", (req, res) => {
@@ -26,11 +24,10 @@ app.post("/webhook", (req, res) => {
 });
 
 // ================= IDENTIDADE =================
-const OWNER = "Infinity Vendas e divulgações";
+const OWNER = "Faelzin Vendas";
 const BOT_VERSION = "v1";
 
-// ================= MÍDIA =================
-const LOGO_URL = "https://files.catbox.moe/3sewrd.png";
+// ================= ÁUDIO =================
 const AUDIO_URL = "https://files.catbox.moe/p6wlxb.mp3";
 
 // ================= CONTROLES =================
@@ -39,57 +36,96 @@ const addStep = {};
 const addData = {};
 
 // ================= MENU =================
-const MENU_TEXT =
-`⚡ MENU LIBERADO
+const MENU_TEXT = `⬛⬛⬛ INFINITY STORE ⬛⬛⬛
+
+━━━━━━━━━━━━━━━━━━
+
+💎 BEM-VINDO AO SISTEMA VIP
+
+⚡ Acesso liberado com sucesso
+⚡ Produtos atualizados diariamente
+⚡ Plataforma segura e estável
+
+━━━━━━━━━━━━━━━━━━
+
+📦 SERVIÇOS DISPONÍVEIS:
 
 ⚡ /produtos
 ⚡ /addproduto
 ⚡ /deletarprodutos
-⚡ /status`;
+⚡ /importarprodutos
+⚡ /status
 
-// ================= START TEXT =================
-const START_TEXT =
-`⚡Nick Dono: Infinity Vendas e divulgações
-Valid 24.04.2026 - 23:59
-Type: Premium / Básico
-Version atual: v1
-Commands atual: X
-Expires in: 99/99/9999
-status: On-line
-Parcerias: OFF
-vendedores: OFF
-vendedor atual: ADMIN (Eu)
+━━━━━━━━━━━━━━━━━━
 
-━━━━━━━━━━━━━━
+🛡️ Proteção ativa
+📢 Suporte direto
+💰 Melhor custo benefício
 
-🤜🏻🤛🏿 Empresa nova, evolução em andamento.
-Deus no comando acima de tudo.`;
+━━━━━━━━━━━━━━━━━━
 
-// ================= START (CORRIGIDO 100%) =================
+🔥 POWERED BY INFINITY SYSTEM`;
+
+// ================= START TEXTO =================
+const START_TEXT = `⚡ Nick Dono: Faelzin Vendas
+⚡ Validad day: 25.04.2026
+⚡ Expires: 99.99.9999
+⚡ Type: VIP
+
+━━━━━━━━━━━━━━━━━━
+
+⚡ Parcerias: ATIVO
+⚡ Redes sociais: ATIVO
+⚡ WhatsApp desenvolvedor: 51981528372
+
+━━━━━━━━━━━━━━━━━━
+
+⚡ Vendedores: no momento não tenho
+⚡ Divulgadores: no momento não tenho
+
+━━━━━━━━━━━━━━━━━━
+
+⚡ Bot criado por: Faelzin Dono
+⚡ Suporte: Direto chat PV
+
+━━━━━━━━━━━━━━━━━━
+
+📢 Redes sociais atuais:
+
+⚡ WhatsApp
+⚡ Facebook
+⚡ Instagram
+⚡ TikTok
+⚡ Kwai
+⚡ Telegram
+⚡ Twitter`;
+
+// ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const chatId = msg.chat.id;
 
+  // 🎧 ÁUDIO PRIMEIRO
   try {
-
-    // 📸 LOGO
-    await bot.sendPhoto(chatId, LOGO_URL);
-
-    // 📝 TEXTO
-    await bot.sendMessage(chatId, START_TEXT);
-
-    // 🎧 ÁUDIO
     await bot.sendAudio(chatId, AUDIO_URL);
-
-    // ⏳ MENU
-    setTimeout(() => {
-      bot.sendMessage(chatId, MENU_TEXT);
-    }, 15000);
-
-  } catch (err) {
-    console.log("Erro /start:", err);
-    bot.sendMessage(chatId, "⚡ Erro ao carregar início do bot");
+  } catch (e) {
+    console.log("Erro áudio:", e.message);
   }
+
+  // 📝 TEXTO
+  setTimeout(() => {
+    bot.sendMessage(chatId, START_TEXT);
+  }, 2000);
+
+  // ⏳ LIBERA MENU (tempo do áudio)
+  setTimeout(() => {
+    bot.sendMessage(chatId, MENU_TEXT);
+  }, 15000);
+});
+
+// ================= MENU =================
+bot.onText(/\/menu/, (msg) => {
+  bot.sendMessage(msg.chat.id, MENU_TEXT);
 });
 
 // ================= PRODUTOS =================
@@ -101,7 +137,7 @@ bot.onText(/\/produtos/, async (msg) => {
     return bot.sendMessage(msg.chat.id, "⚡ Nenhum produto disponível");
   }
 
-  let text = "⚡ PRODUTOS:\n\n";
+  let text = "⬛⬛⬛ PRODUTOS ⬛⬛⬛\n\n";
 
   snap.forEach(d => {
     const p = d.data();
@@ -112,7 +148,9 @@ bot.onText(/\/produtos/, async (msg) => {
 ⚡ Descrição: ${p.descricao}
 ⚡ Tipo: ${p.tipo}
 ⚡ Categoria: ${p.categoria}
-━━━━━━━━━━━━━━
+⚡ WhatsApp: ${p.whatsapp}
+⚡ Instagram: ${p.instagram}
+━━━━━━━━━━━━━━━━━━
 `;
   });
 
@@ -196,7 +234,6 @@ bot.onText(/\/deletarprodutos/, async (msg) => {
   }
 
   const code = Math.floor(10000 + Math.random() * 90000);
-
   deleteConfirm[msg.from.id] = code;
 
   bot.sendMessage(msg.chat.id,
@@ -222,7 +259,6 @@ bot.on("message", async (msg) => {
     const batch = db.batch();
 
     snap.forEach(doc => batch.delete(doc.ref));
-
     await batch.commit();
 
     delete deleteConfirm[id];
@@ -233,6 +269,24 @@ bot.on("message", async (msg) => {
   if (deleteConfirm[id]) {
     return bot.sendMessage(msg.chat.id, "⚡ Código inválido");
   }
+});
+
+// ================= IMPORTAR PRODUTOS =================
+bot.onText(/\/importarprodutos/, async (msg) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) {
+    return bot.sendMessage(msg.chat.id, "⚡ Sem permissão");
+  }
+
+  const produtos = [
+    { nome:"Pack FF", valor:"0,97", descricao:"Completo", tipo:"básico", categoria:"ff", whatsapp:"51981528372", instagram:"@Infinity" }
+  ];
+
+  for (const p of produtos) {
+    await db.collection("produtos").add(p);
+  }
+
+  bot.sendMessage(msg.chat.id, "⚡ Produtos importados!");
 });
 
 // ================= STATUS =================
@@ -246,5 +300,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("⚡ BOT CORRIGIDO E ONLINE");
+  console.log("⚡ BOT START NOVO ATIVO");
 });
