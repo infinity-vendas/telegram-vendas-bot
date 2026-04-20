@@ -13,9 +13,6 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-// CORREÇÃO 1: webhook deve ser escrito em camelCase correto: { webhook: true }
-// A opção correta para modo webhook no node-telegram-bot-api é passar apenas o token
-// e configurar o webhook manualmente (sem polling), removendo o objeto de opções incorreto.
 const bot = new TelegramBot(TOKEN);
 const app = express();
 
@@ -33,7 +30,7 @@ const BOT_VERSION = "v1";
 const WHATSAPP_NUMBER = "5551981528372";
 const PIX_KEY = "51981528372";
 
-// ================= MEMORY CONTROL =================
+// ================= MEMORY =================
 const cadastroStep = {};
 const cadastroData = {};
 
@@ -51,10 +48,10 @@ const PLANOS = {
   "21day": 21, "30day": 30
 };
 
-// ================= TEXTOS =================
+// ================= LAYOUT =================
 const START_TEXT = `
 Dono: INFINITY CLIENTE
-Validity: 99.99.9999
+Validity: 25,00
 Created by: @Infity_cliente_oficial
 Parcerias: nenhuma
 vendedores (1) admin
@@ -68,8 +65,9 @@ patrocinadores: nenhum
 
 Aceitamos pagamento Pix / cartão: em breve!
 Transições 100% manual e seguras
+¡compre somente comigo atualmente!
 
-Unidos, fortes venceremos!
+Unidos , fortes venceremos !
 `;
 
 const MENU_TEXT = `
@@ -83,20 +81,28 @@ INFINITY STORE
 /id
 `;
 
-// ================= FIREBASE CHECK =================
+// ================= CHECK USER =================
 async function isBlocked(userId, chatId) {
 
   const doc = await db.collection("users").doc(String(userId)).get();
 
   if (!doc.exists) {
-    bot.sendMessage(chatId, "⛔ Você precisa se cadastrar usando /start");
+
+    cadastroStep[userId] = "nome";
+    cadastroData[userId] = {};
+
+    bot.sendMessage(chatId,
+`🚀 CADASTRO OBRIGATÓRIO
+
+Digite seu nome:`);
+
     return true;
   }
 
   return false;
 }
 
-// ================= PLANO CHECK =================
+// ================= CHECK PLANO =================
 async function checkAcesso(userId, chatId) {
 
   const doc = await db.collection("alugueis").doc(String(userId)).get();
@@ -126,38 +132,39 @@ bot.onText(/\/start/, async (msg) => {
 
   const doc = await db.collection("users").doc(id).get();
 
-  if (doc.exists) {
+  if (!doc.exists) {
 
-    const ok = await checkAcesso(id, msg.chat.id);
-    if (!ok) return;
+    cadastroStep[id] = "nome";
+    cadastroData[id] = {};
 
-    bot.sendMessage(msg.chat.id, START_TEXT);
-    setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 5000);
+    return bot.sendMessage(msg.chat.id,
+`🚀 BEM-VINDO AO SISTEMA
 
-    return;
-  }
-
-  cadastroStep[id] = "nome";
-  cadastroData[id] = {};
-
-  bot.sendMessage(msg.chat.id,
-`SEU ID: ${id}
+SEU ID: ${id}
 
 Digite seu nome:`);
+  }
+
+  const ok = await checkAcesso(id, msg.chat.id);
+  if (!ok) return;
+
+  bot.sendMessage(msg.chat.id, START_TEXT);
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, MENU_TEXT);
+  }, 3000);
 });
 
-// ================= MESSAGE CENTRAL =================
+// ================= MESSAGE HANDLER =================
 bot.on("message", async (msg) => {
 
   const id = String(msg.from.id);
   const text = msg.text;
 
   if (!text) return;
-
-  // ignora comandos
   if (text.startsWith("/")) return;
 
-  // ===== CADASTRO =====
+  // ================= CADASTRO =================
   if (cadastroStep[id]) {
 
     if (cadastroStep[id] === "nome") {
@@ -175,7 +182,7 @@ bot.on("message", async (msg) => {
     if (cadastroStep[id] === "confirm") {
 
       if (text !== id) {
-        return bot.sendMessage(msg.chat.id, "ID incorreto.");
+        return bot.sendMessage(msg.chat.id, "❌ ID incorreto.");
       }
 
       await db.collection("users").doc(id).set({
@@ -189,18 +196,16 @@ bot.on("message", async (msg) => {
       delete cadastroStep[id];
       delete cadastroData[id];
 
-      bot.sendMessage(msg.chat.id, "Cadastro concluído.");
-      setTimeout(() => bot.sendMessage(msg.chat.id, START_TEXT), 2000);
-      setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 5000);
+      bot.sendMessage(msg.chat.id, "✔ Cadastro concluído");
+
+      setTimeout(() => bot.sendMessage(msg.chat.id, START_TEXT), 1500);
+      setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 3000);
     }
 
-    // CORREÇÃO 2: return após o bloco de cadastro para evitar que o fluxo
-    // continue para os blocos seguintes (deleteProductsConfirm, deleteUsersConfirm
-    // e bloqueio global) quando o usuário ainda está no fluxo de cadastro.
     return;
   }
 
-  // ===== ADD PRODUTO =====
+  // ================= ADD PRODUTO =================
   if (addStep[id]) {
 
     if (addStep[id] === "nome") {
@@ -224,62 +229,50 @@ bot.on("message", async (msg) => {
       delete addStep[id];
       delete addData[id];
 
-      return bot.sendMessage(msg.chat.id, "Produto cadastrado.");
+      return bot.sendMessage(msg.chat.id, "✔ Produto adicionado");
     }
 
-    // CORREÇÃO 3: return após o bloco de addStep para evitar queda no
-    // bloqueio global enquanto o admin está no fluxo de adição de produto.
     return;
   }
 
-  // ===== DELETE PRODUTOS CONFIRM =====
+  // ================= DELETE PRODUTOS =================
   if (deleteProductsConfirm[id]) {
 
-    // CORREÇÃO 4: comparação estrita (===) em vez de solta (==) para evitar
-    // coerção de tipo entre string e número ao comparar o código de confirmação.
     if (text === String(deleteProductsConfirm[id])) {
 
       const snap = await db.collection("produtos").get();
       const batch = db.batch();
 
-      snap.forEach(doc => batch.delete(doc.ref));
+      snap.forEach(d => batch.delete(d.ref));
 
       await batch.commit();
 
       delete deleteProductsConfirm[id];
 
-      return bot.sendMessage(msg.chat.id, "✔ Produtos deletados.");
+      return bot.sendMessage(msg.chat.id, "✔ Produtos deletados");
     }
 
-    return bot.sendMessage(msg.chat.id, "❌ Código inválido.");
+    return bot.sendMessage(msg.chat.id, "❌ Código inválido");
   }
 
-  // ===== DELETE USERS CONFIRM =====
+  // ================= DELETE USERS =================
   if (deleteUsersConfirm[id]) {
 
-    // CORREÇÃO 5: mesma correção de comparação estrita para o código de usuários.
     if (text === String(deleteUsersConfirm[id])) {
 
       const snap = await db.collection("users").get();
       const batch = db.batch();
 
-      snap.forEach(doc => batch.delete(doc.ref));
+      snap.forEach(d => batch.delete(d.ref));
 
       await batch.commit();
 
       delete deleteUsersConfirm[id];
 
-      return bot.sendMessage(msg.chat.id, "✔ Usuários deletados.");
+      return bot.sendMessage(msg.chat.id, "✔ Usuários deletados");
     }
 
-    return bot.sendMessage(msg.chat.id, "❌ Código inválido.");
-  }
-
-  // ===== BLOQUEIO GLOBAL =====
-  const doc = await db.collection("users").doc(id).get();
-
-  if (!doc.exists) {
-    return bot.sendMessage(msg.chat.id, "Use /start para se cadastrar.");
+    return bot.sendMessage(msg.chat.id, "❌ Código inválido");
   }
 });
 
@@ -312,10 +305,8 @@ bot.onText(/\/produtos/, async (msg) => {
     }]);
   });
 
-  // CORREÇÃO 6: verificar se há produtos antes de enviar o teclado inline,
-  // evitando erro da API do Telegram ao enviar inline_keyboard vazio.
   if (buttons.length === 0) {
-    return bot.sendMessage(msg.chat.id, "Nenhum produto cadastrado.");
+    return bot.sendMessage(msg.chat.id, "Nenhum produto.");
   }
 
   bot.sendMessage(msg.chat.id, "Selecione:", {
@@ -323,81 +314,38 @@ bot.onText(/\/produtos/, async (msg) => {
   });
 });
 
-// ================= DELETE PRODUTOS =================
-bot.onText(/\/deletarprodutos/, (msg) => {
-
-  if (!ADMINS.includes(String(msg.from.id))) return;
-
-  const code = Math.floor(100000 + Math.random() * 900000);
-  // CORREÇÃO 7: a chave do objeto deve usar String(msg.from.id) para ser
-  // consistente com o id usado no handler de mensagens (que já é string).
-  deleteProductsConfirm[String(msg.from.id)] = code;
-
-  bot.sendMessage(msg.chat.id,
-`⚠️ Confirmação necessária
-
-Código: ${code}`);
-});
-
-// ================= DELETE USERS =================
-bot.onText(/\/deletarusuarios/, (msg) => {
-
-  if (!ADMINS.includes(String(msg.from.id))) return;
-
-  const code = Math.floor(100000 + Math.random() * 900000);
-  // CORREÇÃO 8: mesma correção de consistência de tipo de chave.
-  deleteUsersConfirm[String(msg.from.id)] = code;
-
-  bot.sendMessage(msg.chat.id,
-`⚠️ APAGAR TODOS USUÁRIOS
-
-Código: ${code}`);
-});
-
-// ================= ADD PRODUTO =================
+// ================= ADMIN =================
 bot.onText(/\/addprodutos/, (msg) => {
-
   if (!ADMINS.includes(String(msg.from.id))) return;
 
-  // CORREÇÃO 9: mesma correção de consistência de tipo de chave para addStep/addData.
-  addStep[String(msg.from.id)] = "nome";
-  addData[String(msg.from.id)] = {};
+  addStep[msg.from.id] = "nome";
+  addData[msg.from.id] = {};
 
   bot.sendMessage(msg.chat.id, "Nome do produto:");
 });
 
-// ================= LIBERAR PLANO =================
-bot.onText(/\/liberar (.+) (.+)/, async (msg, match) => {
-
+// ================= DELETE PRODUTOS =================
+bot.onText(/\/deletarprodutos/, (msg) => {
   if (!ADMINS.includes(String(msg.from.id))) return;
 
-  const userId = match[1];
-  const plano = match[2];
+  const code = Math.floor(100000 + Math.random() * 900000);
+  deleteProductsConfirm[msg.from.id] = code;
 
-  // CORREÇÃO 10: validar se o plano existe antes de calcular a expiração,
-  // evitando NaN em expiraEm quando um plano inválido é informado.
-  if (!PLANOS[plano]) {
-    return bot.sendMessage(msg.chat.id,
-      `Plano inválido. Use: ${Object.keys(PLANOS).join(", ")}`);
-  }
+  bot.sendMessage(msg.chat.id, `Código: ${code}`);
+});
 
-  const dias = PLANOS[plano];
-  const expira = Date.now() + dias * 86400000;
+// ================= DELETE USERS =================
+bot.onText(/\/deletarusuarios/, (msg) => {
+  if (!ADMINS.includes(String(msg.from.id))) return;
 
-  await db.collection("alugueis").doc(userId).set({
-    ativo: true,
-    plano,
-    expiraEm: expira
-  });
+  const code = Math.floor(100000 + Math.random() * 900000);
+  deleteUsersConfirm[msg.from.id] = code;
 
-  bot.sendMessage(msg.chat.id, "Plano liberado");
+  bot.sendMessage(msg.chat.id, `Código: ${code}`);
 });
 
 // ================= STATUS =================
 bot.onText(/\/status/, async (msg) => {
-
-  const block = await isBlocked(msg.from.id, msg.chat.id);
-  if (block) return;
 
   const ok = await checkAcesso(msg.from.id, msg.chat.id);
   if (!ok) return;
@@ -411,5 +359,5 @@ versão ${BOT_VERSION}`);
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("BOT FINAL BLINDADO 🚀");
+  console.log("BOT ONLINE 🚀");
 });
