@@ -39,7 +39,7 @@ const deleteConfirm = {};
 const addStep = {};
 const addData = {};
 
-// ================= LAYOUT =================
+// ================= MENU =================
 const MENU_TEXT = `⬛⬛⬛ INFINITY STORE ⬛⬛⬛
 
 ━━━━━━━━━━━━━━━━━━
@@ -53,24 +53,45 @@ const MENU_TEXT = `⬛⬛⬛ INFINITY STORE ⬛⬛⬛
 
 ━━━━━━━━━━━━━━━━━━`;
 
-// ================= START =================
-const START_TEXT = `⚡ Faelzin Vendas
-⚡ Sistema Online
-⚡ Status: ATIVO`;
+// ================= START NOVO LAYOUT =================
+const START_TEXT = `Dono: INFINITY CLIENTE
+Validity: 25,00
+Created by: @Infity_cliente_oficial
+
+Parcerias: nenhuma
+Vendedores (1): admin
+Divulgadores: nenhum
+
+Facebook: indisponível
+Instagram: disponível
+YouTube: Em Breve
+TikTok: indisponível
+Kwai: indisponível
+Patrocinadores: nenhum
+
+━━━━━━━━━━━━━━━━━━
+
+💰 Aceitamos pagamento Pix / cartão: em breve!
+🔐 Transações 100% manual e seguras
+⚠️ Compre somente comigo atualmente!
+
+🤝 Unidos, fortes venceremos!`;
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const chatId = msg.chat.id;
 
+  // envia layout atualizado
   bot.sendMessage(chatId, START_TEXT);
 
+  // libera menu depois de 5 segundos
   setTimeout(() => {
     bot.sendMessage(chatId, MENU_TEXT);
-  }, 2500);
+  }, 5000);
 });
 
-// ================= BOTÃO =================
+// ================= BOTÃO COMPRA =================
 function buyButton(nome, valor) {
   return {
     reply_markup: {
@@ -113,7 +134,7 @@ bot.onText(/\/produtos/, async (msg) => {
   });
 });
 
-// ================= FLUXO COMPRA =================
+// ================= COMPRA =================
 bot.on("callback_query", async (query) => {
 
   const data = query.data;
@@ -129,7 +150,7 @@ bot.on("callback_query", async (query) => {
 `⚡ PRODUTO SELECIONADO
 
 📦 Produto: ${nome}
-💰 Valor a pagar: R$ ${valor}
+💰 Valor: R$ ${valor}
 
 ━━━━━━━━━━━━━━
 
@@ -151,23 +172,23 @@ Segue comprovante para análise.`
 
   setTimeout(() => {
     bot.sendMessage(chatId,
-`👇 Clique abaixo para enviar comprovante:`,
+`👇 WhatsApp:`,
 {
   reply_markup: {
     inline_keyboard: [
       [
         {
-          text: "📲 WhatsApp",
+          text: "📲 Enviar comprovante",
           url: `https://wa.me/${WHATSAPP_NUMBER}?text=${msgWhats}`
         }
       ]
     ]
   }
 });
-  }, 2500);
+  }, 2000);
 });
 
-// ================= ADD PRODUTO (ADMIN) =================
+// ================= ADD PRODUTO =================
 bot.onText(/\/addproduto/, (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -178,41 +199,62 @@ bot.onText(/\/addproduto/, (msg) => {
   bot.sendMessage(msg.chat.id, "⚡ Nome do produto:");
 });
 
+// ================= FLUXO ADMIN =================
 bot.on("message", async (msg) => {
 
   const id = msg.from.id;
   const text = msg.text;
 
   if (!text || text.startsWith("/")) return;
-  if (!addStep[id]) return;
 
-  if (!addData[id]) addData[id] = {};
+  if (addStep[id]) {
 
-  if (addStep[id] === "nome") {
-    addData[id].nome = text;
-    addStep[id] = "valor";
-    return bot.sendMessage(msg.chat.id, "⚡ Valor:");
+    if (!addData[id]) addData[id] = {};
+
+    if (addStep[id] === "nome") {
+      addData[id].nome = text;
+      addStep[id] = "valor";
+      return bot.sendMessage(msg.chat.id, "⚡ Valor:");
+    }
+
+    if (addStep[id] === "valor") {
+      addData[id].valor = text;
+      addStep[id] = "descricao";
+      return bot.sendMessage(msg.chat.id, "⚡ Descrição:");
+    }
+
+    if (addStep[id] === "descricao") {
+      addData[id].descricao = text;
+
+      await db.collection("produtos").add(addData[id]);
+
+      delete addStep[id];
+      delete addData[id];
+
+      return bot.sendMessage(msg.chat.id, "⚡ Produto adicionado com sucesso!");
+    }
   }
 
-  if (addStep[id] === "valor") {
-    addData[id].valor = text;
-    addStep[id] = "descricao";
-    return bot.sendMessage(msg.chat.id, "⚡ Descrição:");
-  }
+  if (deleteConfirm[id]) {
 
-  if (addStep[id] === "descricao") {
-    addData[id].descricao = text;
+    if (text == deleteConfirm[id]) {
 
-    await db.collection("produtos").add(addData[id]);
+      const snap = await db.collection("produtos").get();
+      const batch = db.batch();
 
-    delete addStep[id];
-    delete addData[id];
+      snap.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
 
-    return bot.sendMessage(msg.chat.id, "⚡ Produto adicionado com sucesso!");
+      delete deleteConfirm[id];
+
+      return bot.sendMessage(msg.chat.id, "⚡ Produtos deletados com sucesso!");
+    }
+
+    return bot.sendMessage(msg.chat.id, "⚡ Código inválido");
   }
 });
 
-// ================= DELETE PRODUTOS (ADMIN) =================
+// ================= DELETE PRODUTOS =================
 bot.onText(/\/deletarprodutos/, async (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -224,38 +266,11 @@ bot.onText(/\/deletarprodutos/, async (msg) => {
   deleteConfirm[msg.from.id] = code;
 
   bot.sendMessage(msg.chat.id,
-`⚠️ CONFIRMAÇÃO NECESSÁRIA
+`⚠️ CONFIRMAÇÃO
 
 Código: ${code}
 
-Digite para confirmar exclusão total dos produtos`);
-});
-
-// ================= CONFIRMA DELETE =================
-bot.on("message", async (msg) => {
-
-  const id = msg.from.id;
-  const text = msg.text;
-
-  if (!text || text.startsWith("/")) return;
-  if (!deleteConfirm[id]) return;
-
-  if (text == deleteConfirm[id]) {
-
-    const snap = await db.collection("produtos").get();
-    const batch = db.batch();
-
-    snap.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-
-    delete deleteConfirm[id];
-
-    return bot.sendMessage(msg.chat.id, "⚡ Produtos deletados com sucesso!");
-  }
-
-  if (deleteConfirm[id]) {
-    return bot.sendMessage(msg.chat.id, "⚡ Código inválido");
-  }
+Digite para confirmar exclusão total`);
 });
 
 // ================= STATUS =================
@@ -269,5 +284,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("⚡ BOT COMPLETO ATIVO (ADMIN + DELETE + PIX + WHATSAPP)");
+  console.log("⚡ BOT START ATUALIZADO COM NOVO LAYOUT");
 });
