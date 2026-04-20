@@ -27,106 +27,64 @@ app.post("/webhook", (req, res) => {
 const OWNER = "Faelzin Vendas";
 const BOT_VERSION = "v1";
 
-// ================= ÁUDIO =================
-const AUDIO_URL = "https://files.catbox.moe/p6wlxb.mp3";
+// ================= WHATSAPP =================
+const WHATSAPP_NUMBER = "5551981528372";
+
+// ================= PIX =================
+const PIX_KEY = "51981528372";
+const CPF_MASK = "060***31**";
 
 // ================= CONTROLES =================
 const deleteConfirm = {};
 const addStep = {};
 const addData = {};
 
-// ================= MENU =================
+// ================= LAYOUT =================
 const MENU_TEXT = `⬛⬛⬛ INFINITY STORE ⬛⬛⬛
 
 ━━━━━━━━━━━━━━━━━━
 
 💎 BEM-VINDO AO SISTEMA VIP
 
-⚡ Acesso liberado com sucesso
-⚡ Produtos atualizados diariamente
-⚡ Plataforma segura e estável
-
-━━━━━━━━━━━━━━━━━━
-
-📦 SERVIÇOS DISPONÍVEIS:
-
 ⚡ /produtos
 ⚡ /addproduto
 ⚡ /deletarprodutos
-⚡ /importarprodutos
 ⚡ /status
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━`;
 
-🛡️ Proteção ativa
-📢 Suporte direto
-💰 Melhor custo benefício
-
-━━━━━━━━━━━━━━━━━━
-
-🔥 POWERED BY INFINITY SYSTEM`;
-
-// ================= START TEXTO =================
-const START_TEXT = `⚡ Nick Dono: Faelzin Vendas
-⚡ Validad day: 25.04.2026
-⚡ Expires: 99.99.9999
-⚡ Type: VIP
-
-━━━━━━━━━━━━━━━━━━
-
-⚡ Parcerias: ATIVO
-⚡ Redes sociais: ATIVO
-⚡ WhatsApp desenvolvedor: 51981528372
-
-━━━━━━━━━━━━━━━━━━
-
-⚡ Vendedores: no momento não tenho
-⚡ Divulgadores: no momento não tenho
-
-━━━━━━━━━━━━━━━━━━
-
-⚡ Bot criado por: Faelzin Dono
-⚡ Suporte: Direto chat PV
-
-━━━━━━━━━━━━━━━━━━
-
-📢 Redes sociais atuais:
-
-⚡ WhatsApp
-⚡ Facebook
-⚡ Instagram
-⚡ TikTok
-⚡ Kwai
-⚡ Telegram
-⚡ Twitter`;
+// ================= START =================
+const START_TEXT = `⚡ Faelzin Vendas
+⚡ Sistema Online
+⚡ Status: ATIVO`;
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const chatId = msg.chat.id;
 
-  // 🎧 ÁUDIO PRIMEIRO
-  try {
-    await bot.sendAudio(chatId, AUDIO_URL);
-  } catch (e) {
-    console.log("Erro áudio:", e.message);
-  }
+  bot.sendMessage(chatId, START_TEXT);
 
-  // 📝 TEXTO
-  setTimeout(() => {
-    bot.sendMessage(chatId, START_TEXT);
-  }, 2000);
-
-  // ⏳ LIBERA MENU (tempo do áudio)
   setTimeout(() => {
     bot.sendMessage(chatId, MENU_TEXT);
-  }, 15000);
+  }, 2500);
 });
 
-// ================= MENU =================
-bot.onText(/\/menu/, (msg) => {
-  bot.sendMessage(msg.chat.id, MENU_TEXT);
-});
+// ================= BOTÃO =================
+function buyButton(nome, valor) {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: "🛒 Adquirir agora",
+            callback_data: `buy_${nome}_${valor}`
+          }
+        ]
+      ]
+    }
+  };
+}
 
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
@@ -137,27 +95,79 @@ bot.onText(/\/produtos/, async (msg) => {
     return bot.sendMessage(msg.chat.id, "⚡ Nenhum produto disponível");
   }
 
-  let text = "⬛⬛⬛ PRODUTOS ⬛⬛⬛\n\n";
-
-  snap.forEach(d => {
+  snap.forEach((d) => {
     const p = d.data();
 
-    text +=
-`⚡ Nome: ${p.nome}
-⚡ Valor: R$ ${p.valor}
-⚡ Descrição: ${p.descricao}
-⚡ Tipo: ${p.tipo}
-⚡ Categoria: ${p.categoria}
-⚡ WhatsApp: ${p.whatsapp}
-⚡ Instagram: ${p.instagram}
-━━━━━━━━━━━━━━━━━━
-`;
-  });
+    const text =
+`⚡ ${p.nome}
 
-  bot.sendMessage(msg.chat.id, text);
+💰 Valor: R$ ${p.valor}
+📦 ${p.descricao}
+`;
+
+    bot.sendMessage(
+      msg.chat.id,
+      text,
+      buyButton(p.nome, p.valor)
+    );
+  });
 });
 
-// ================= ADD PRODUTO =================
+// ================= FLUXO COMPRA =================
+bot.on("callback_query", async (query) => {
+
+  const data = query.data;
+  const chatId = query.message.chat.id;
+
+  if (!data.startsWith("buy_")) return;
+
+  const parts = data.split("_");
+  const nome = parts[1];
+  const valor = parts[2];
+
+  await bot.sendMessage(chatId,
+`⚡ PRODUTO SELECIONADO
+
+📦 Produto: ${nome}
+💰 Valor a pagar: R$ ${valor}
+
+━━━━━━━━━━━━━━
+
+🔐 CHAVE PIX: ${PIX_KEY}
+📄 CPF: ${CPF_MASK}
+
+━━━━━━━━━━━━━━
+
+📩 Envie o comprovante no WhatsApp e aguarde liberação!`);
+
+  const msgWhats = encodeURIComponent(
+`Olá! Quero finalizar meu pedido:
+
+📦 Produto: ${nome}
+💰 Valor: R$ ${valor}
+
+Segue comprovante para análise.`
+  );
+
+  setTimeout(() => {
+    bot.sendMessage(chatId,
+`👇 Clique abaixo para enviar comprovante:`,
+{
+  reply_markup: {
+    inline_keyboard: [
+      [
+        {
+          text: "📲 WhatsApp",
+          url: `https://wa.me/${WHATSAPP_NUMBER}?text=${msgWhats}`
+        }
+      ]
+    ]
+  }
+});
+  }, 2500);
+});
+
+// ================= ADD PRODUTO (ADMIN) =================
 bot.onText(/\/addproduto/, (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -165,7 +175,7 @@ bot.onText(/\/addproduto/, (msg) => {
   }
 
   addStep[msg.from.id] = "nome";
-  bot.sendMessage(msg.chat.id, "⚡ Digite o NOME do produto:");
+  bot.sendMessage(msg.chat.id, "⚡ Nome do produto:");
 });
 
 bot.on("message", async (msg) => {
@@ -181,52 +191,28 @@ bot.on("message", async (msg) => {
   if (addStep[id] === "nome") {
     addData[id].nome = text;
     addStep[id] = "valor";
-    return bot.sendMessage(msg.chat.id, "⚡ Digite o VALOR:");
+    return bot.sendMessage(msg.chat.id, "⚡ Valor:");
   }
 
   if (addStep[id] === "valor") {
     addData[id].valor = text;
     addStep[id] = "descricao";
-    return bot.sendMessage(msg.chat.id, "⚡ Digite a DESCRIÇÃO:");
+    return bot.sendMessage(msg.chat.id, "⚡ Descrição:");
   }
 
   if (addStep[id] === "descricao") {
     addData[id].descricao = text;
-    addStep[id] = "tipo";
-    return bot.sendMessage(msg.chat.id, "⚡ Digite o TIPO:");
-  }
-
-  if (addStep[id] === "tipo") {
-    addData[id].tipo = text;
-    addStep[id] = "categoria";
-    return bot.sendMessage(msg.chat.id, "⚡ Digite a CATEGORIA:");
-  }
-
-  if (addStep[id] === "categoria") {
-    addData[id].categoria = text;
-    addStep[id] = "whatsapp";
-    return bot.sendMessage(msg.chat.id, "⚡ Digite o WHATSAPP:");
-  }
-
-  if (addStep[id] === "whatsapp") {
-    addData[id].whatsapp = text;
-    addStep[id] = "instagram";
-    return bot.sendMessage(msg.chat.id, "⚡ Digite o INSTAGRAM:");
-  }
-
-  if (addStep[id] === "instagram") {
-    addData[id].instagram = text;
 
     await db.collection("produtos").add(addData[id]);
 
     delete addStep[id];
     delete addData[id];
 
-    return bot.sendMessage(msg.chat.id, "⚡ Produto cadastrado com sucesso!");
+    return bot.sendMessage(msg.chat.id, "⚡ Produto adicionado com sucesso!");
   }
 });
 
-// ================= DELETE PRODUTOS =================
+// ================= DELETE PRODUTOS (ADMIN) =================
 bot.onText(/\/deletarprodutos/, async (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -234,14 +220,15 @@ bot.onText(/\/deletarprodutos/, async (msg) => {
   }
 
   const code = Math.floor(10000 + Math.random() * 90000);
+
   deleteConfirm[msg.from.id] = code;
 
   bot.sendMessage(msg.chat.id,
 `⚠️ CONFIRMAÇÃO NECESSÁRIA
 
-🔐 Código: ${code}
+Código: ${code}
 
-⚡ Digite para confirmar`);
+Digite para confirmar exclusão total dos produtos`);
 });
 
 // ================= CONFIRMA DELETE =================
@@ -271,24 +258,6 @@ bot.on("message", async (msg) => {
   }
 });
 
-// ================= IMPORTAR PRODUTOS =================
-bot.onText(/\/importarprodutos/, async (msg) => {
-
-  if (!ADMINS.includes(String(msg.from.id))) {
-    return bot.sendMessage(msg.chat.id, "⚡ Sem permissão");
-  }
-
-  const produtos = [
-    { nome:"Pack FF", valor:"0,97", descricao:"Completo", tipo:"básico", categoria:"ff", whatsapp:"51981528372", instagram:"@Infinity" }
-  ];
-
-  for (const p of produtos) {
-    await db.collection("produtos").add(p);
-  }
-
-  bot.sendMessage(msg.chat.id, "⚡ Produtos importados!");
-});
-
 // ================= STATUS =================
 bot.onText(/\/status/, (msg) => {
   bot.sendMessage(msg.chat.id,
@@ -300,5 +269,5 @@ bot.onText(/\/status/, (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("⚡ BOT START NOVO ATIVO");
+  console.log("⚡ BOT COMPLETO ATIVO (ADMIN + DELETE + PIX + WHATSAPP)");
 });
