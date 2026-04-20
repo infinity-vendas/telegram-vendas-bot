@@ -28,30 +28,30 @@ const OWNER = "INFINITY CLIENTE";
 const BOT_VERSION = "v1";
 
 const WHATSAPP_NUMBER = "5551981528372";
-const PIX_KEY = "51981528372";
+const  PIX_KEY = "51981528372" ;
 
-// ================= MEMORY =================
-const cadastroStep = {};
-const cadastroData = {};
+// ================= MEMÓRIA =================
+const  cadastroStep = { } ;
+const  cadastroData = { } ;
 
-const addStep = {};
-const addData = {};
+const  addStep = { } ;
+const  addData = { } ;
 
-const deleteProductsConfirm = {};
-const deleteUsersConfirm = {};
+const  deleteProductsConfirm = { } ;
+const  deleteUsersConfirm = { } ;
 
 // ================= PLANOS =================
-const PLANOS = {
-  "1day": 1, "2day": 2, "3day": 3,
-  "4day": 4, "5day": 5, "6day": 6,
-  "7day": 7, "14day": 14,
-  "21day": 21, "30day": 30
-};
+const  PLANOS = {
+  "1 dia" : 1 , "2 dias" : 2 , "3 dias" : 3 ,
+  "4 dias" : 4 , "5 dias" : 5 , "6 dias" : 6 ,
+  "7 dias" : 7 , "14 dias" : 14 ,
+  "21 dias" : 21 , "30 dias" : 30
+} ;
 
 // ================= LAYOUT =================
-const START_TEXT = `
-Dono: INFINITY CLIENTE
-Validity: 25,00
+const  TEXTO_INICIAR = `
+Doar: CLIENTE INFINITO
+Validade: 25,00
 Created by: @Infity_cliente_oficial
 Parcerias: nenhuma
 vendedores (1) admin
@@ -82,12 +82,10 @@ INFINITY STORE
 `;
 
 // ================= CHECK USER =================
-async function isBlocked(userId, chatId) {
-
+async function checkCadastro(userId, chatId) {
   const doc = await db.collection("users").doc(String(userId)).get();
 
   if (!doc.exists) {
-
     cadastroStep[userId] = "nome";
     cadastroData[userId] = {};
 
@@ -95,22 +93,18 @@ async function isBlocked(userId, chatId) {
 `🚀 CADASTRO OBRIGATÓRIO
 
 Digite seu nome:`);
-
-    return true;
+    return false;
   }
 
-  return false;
+  return true;
 }
 
 // ================= CHECK PLANO =================
-async function checkAcesso(userId, chatId) {
+async function checkPlano(userId) {
 
   const doc = await db.collection("alugueis").doc(String(userId)).get();
 
-  if (!doc.exists || !doc.data().ativo) {
-    bot.sendMessage(chatId, "Sem plano ativo.");
-    return false;
-  }
+  if (!doc.exists || !doc.data().ativo) return false;
 
   if (Date.now() > doc.data().expiraEm) {
 
@@ -118,7 +112,6 @@ async function checkAcesso(userId, chatId) {
       ativo: false
     });
 
-    bot.sendMessage(chatId, "Plano expirado.");
     return false;
   }
 
@@ -130,29 +123,25 @@ bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
 
-  const doc = await db.collection("users").doc(id).get();
+  const okCadastro = await checkCadastro(id, msg.chat.id);
+  if (!okCadastro) return;
 
-  if (!doc.exists) {
-
-    cadastroStep[id] = "nome";
-    cadastroData[id] = {};
-
-    return bot.sendMessage(msg.chat.id,
-`🚀 BEM-VINDO AO SISTEMA
-
-SEU ID: ${id}
-
-Digite seu nome:`);
-  }
-
-  const ok = await checkAcesso(id, msg.chat.id);
-  if (!ok) return;
+  const hasPlano = await checkPlano(id);
 
   bot.sendMessage(msg.chat.id, START_TEXT);
 
   setTimeout(() => {
-    bot.sendMessage(msg.chat.id, MENU_TEXT);
-  }, 3000);
+
+    if (hasPlano) {
+      bot.sendMessage(msg.chat.id, MENU_TEXT);
+    } else {
+      bot.sendMessage(msg.chat.id,
+`⚠️ Você não possui plano ativo
+
+Fale com o administrador para ativação.`);
+    }
+
+  }, 2000);
 });
 
 // ================= MESSAGE HANDLER =================
@@ -286,11 +275,13 @@ User: @${msg.from.username || "nenhum"}`);
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
-  const block = await isBlocked(msg.from.id, msg.chat.id);
-  if (block) return;
-
-  const ok = await checkAcesso(msg.from.id, msg.chat.id);
+  const ok = await checkCadastro(msg.from.id, msg.chat.id);
   if (!ok) return;
+
+  const hasPlano = await checkPlano(msg.from.id);
+  if (!hasPlano) {
+    return bot.sendMessage(msg.chat.id, "❌ Sem plano ativo");
+  }
 
   const snap = await db.collection("produtos").get();
 
@@ -347,7 +338,7 @@ bot.onText(/\/deletarusuarios/, (msg) => {
 // ================= STATUS =================
 bot.onText(/\/status/, async (msg) => {
 
-  const ok = await checkAcesso(msg.from.id, msg.chat.id);
+  const ok = await checkCadastro(msg.from.id, msg.chat.id);
   if (!ok) return;
 
   bot.sendMessage(msg.chat.id,
@@ -359,5 +350,5 @@ versão ${BOT_VERSION}`);
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("BOT ONLINE 🚀");
+  console.log("BOT ESTÁVEL ONLINE 🚀");
 });
