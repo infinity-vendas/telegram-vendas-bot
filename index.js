@@ -23,71 +23,58 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
-// ================= IDENTIDADE =================
+// ================= CONTROLE =================
 const OWNER = "INFINITY CLIENTE";
 const BOT_VERSION = "v1";
 
-// ================= WHATSAPP =================
 const WHATSAPP_NUMBER = "5551981528372";
-
-// ================= PIX =================
 const PIX_KEY = "51981528372";
 
-// ================= CONTROLES =================
 const deleteConfirm = {};
 const addStep = {};
 const addData = {};
 
 // ================= START =================
-const START_TEXT = `⚡Dono: INFINITY CLIENTE
-✍️Validity: 25.04.2026 - 23:50
-🔔Created by: @Infity_cliente_oficial
-🌠Parcerias: nenhuma
-👀vendedores (1) admin
-🎁divulgadores: nenhum
-🔥Instagram: disponível
-📢YouTube: em breve
-💻TikTok: indisponível
-⚠️Kwai: indisponível
-❌patrocinadores: nenhum
+const START_TEXT = `Dono: INFINITY CLIENTE
+Validity: 25.04.2026
+Created by: @Infity_cliente_oficial
+Parcerias: nenhuma
+vendedores (1) admin
+divulgadores: nenhum
+Instagram: disponível
+YouTube: em breve
+TikTok: indisponível
+Kwai: indisponível
 
-💵Pix / cartão: em breve!
-🔐Transações seguras e manuais
+Pagamento Pix / cartão: em breve
+Transações manuais seguras
 
-🤝 Unidos venceremos !`;
+Unidos venceremos`;
 
-const MENU_TEXT = `⬛⬛⬛ INFINITY STORE ⬛⬛⬛
+// ================= MENU =================
+const MENU_TEXT = `INFINITY STORE
 
-━━━━━━━━━━━━━━━━━━
-
-💎 SISTEMA ATIVO
-
-⚡ /produtos
-⚡ /addproduto
-⚡ /deletarprodutos
-⚡ /status
-
-━━━━━━━━━━━━━━━━━━`;
+/produtos
+/addprodutos
+/deletarprodutos
+/status`;
 
 // ================= START =================
-bot.onText(/\/start/, async (msg) => {
-
-  const chatId = msg.chat.id;
-
-  bot.sendMessage(chatId, START_TEXT);
+bot.onText(/\/start/, (msg) => {
+  bot.sendMessage(msg.chat.id, START_TEXT);
 
   setTimeout(() => {
-    bot.sendMessage(chatId, MENU_TEXT);
-  }, 4000);
+    bot.sendMessage(msg.chat.id, MENU_TEXT);
+  }, 3000);
 });
 
-// ================= PRODUTOS (LISTA CAMADAS) =================
+// ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
   const snap = await db.collection("produtos").get();
 
   if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "⚡ Nenhum produto disponível");
+    return bot.sendMessage(msg.chat.id, "Nenhum produto disponível");
   }
 
   let buttons = [];
@@ -97,84 +84,67 @@ bot.onText(/\/produtos/, async (msg) => {
 
     buttons.push([
       {
-        text: `⚡ ${p.nome}`,
+        text: p.nome,
         callback_data: `produto_${d.id}`
       }
     ]);
   });
 
-  bot.sendMessage(msg.chat.id,
-`⚡ SELECIONE UM PRODUTO`,
-{
-  reply_markup: {
-    inline_keyboard: buttons
-  }
-});
+  bot.sendMessage(msg.chat.id, "SELECIONE UM PRODUTO", {
+    reply_markup: { inline_keyboard: buttons }
+  });
 });
 
-// ================= DETALHE PRODUTO + WHATSAPP =================
+// ================= DETALHE PRODUTO =================
 bot.on("callback_query", async (query) => {
 
-  const data = query.data;
-  const chatId = query.message.chat.id;
+  if (!query.data.startsWith("produto_")) return;
 
-  if (data.startsWith("produto_")) {
+  const id = query.data.split("_")[1];
+  const doc = await db.collection("produtos").doc(id).get();
 
-    const id = data.split("_")[1];
-    const doc = await db.collection("produtos").doc(id).get();
+  if (!doc.exists) return;
 
-    if (!doc.exists) {
-      return bot.sendMessage(chatId, "⚡ Produto não encontrado");
-    }
+  const p = doc.data();
 
-    const p = doc.data();
+  const msgWhats = encodeURIComponent(
+`Produto: ${p.nome}
+Valor: R$ ${p.valor}`
+  );
 
-    const whatsappMsg = encodeURIComponent(
-`Olá! Quero adquirir:
+  bot.sendMessage(query.message.chat.id,
+`PRODUTO
 
-📦 Produto: ${p.nome}
-💰 Valor: R$ ${p.valor}
-`
-    );
+${p.nome}
+R$ ${p.valor}
+${p.descricao}
 
-    return bot.sendMessage(chatId,
-`⚡ PRODUTO SELECIONADO
-
-📦 Produto: ${p.nome}
-💰 Valor: R$ ${p.valor}
-🔐 PIX: ${PIX_KEY}
-
-━━━━━━━━━━━━━━
-
-📩 Envie comprovante após pagamento`,
-{
-  reply_markup: {
-    inline_keyboard: [
-      [
+PIX: ${PIX_KEY}`, {
+    reply_markup: {
+      inline_keyboard: [[
         {
-          text: "🛒 Adquirir agora",
-          url: `https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMsg}`
+          text: "Adquirir agora",
+          url: `https://wa.me/${WHATSAPP_NUMBER}?text=${msgWhats}`
         }
-      ]
-    ]
-  }
-});
-  }
+      ]]
+    }
+  });
 });
 
-// ================= ADD PRODUTO (10 CAMPOS) =================
-bot.onText(/\/addproduto/, (msg) => {
+// ================= ADD PRODUTO (PRO 10 CAMPOS) =================
+bot.onText(/\/addprodutos/, (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
-    return bot.sendMessage(msg.chat.id, "⚡ Sem permissão");
+    return bot.sendMessage(msg.chat.id, "Sem permissão");
   }
 
   addStep[msg.from.id] = "nome";
   addData[msg.from.id] = {};
 
-  bot.sendMessage(msg.chat.id, "⚡ Nome do produto:");
+  bot.sendMessage(msg.chat.id, "Nome do produto:");
 });
 
+// ================= FLUXO ADD =================
 bot.on("message", async (msg) => {
 
   const id = msg.from.id;
@@ -188,55 +158,55 @@ bot.on("message", async (msg) => {
   if (step === "nome") {
     addData[id].nome = text;
     addStep[id] = "valor";
-    return bot.sendMessage(msg.chat.id, "⚡ Valor:");
+    return bot.sendMessage(msg.chat.id, "Valor:");
   }
 
   if (step === "valor") {
     addData[id].valor = text;
     addStep[id] = "descricao";
-    return bot.sendMessage(msg.chat.id, "⚡ Descrição:");
+    return bot.sendMessage(msg.chat.id, "Descrição:");
   }
 
   if (step === "descricao") {
     addData[id].descricao = text;
     addStep[id] = "tipo";
-    return bot.sendMessage(msg.chat.id, "⚡ Tipo:");
+    return bot.sendMessage(msg.chat.id, "Tipo:");
   }
 
   if (step === "tipo") {
     addData[id].tipo = text;
     addStep[id] = "plano";
-    return bot.sendMessage(msg.chat.id, "⚡ Plano:");
+    return bot.sendMessage(msg.chat.id, "Plano:");
   }
 
   if (step === "plano") {
     addData[id].plano = text;
     addStep[id] = "estoque";
-    return bot.sendMessage(msg.chat.id, "⚡ Estoque:");
+    return bot.sendMessage(msg.chat.id, "Estoque:");
   }
 
   if (step === "estoque") {
     addData[id].estoque = text;
     addStep[id] = "cupom";
-    return bot.sendMessage(msg.chat.id, "⚡ Cupom:");
+    return bot.sendMessage(msg.chat.id, "Cupom:");
   }
 
   if (step === "cupom") {
     addData[id].cupom = text;
     addStep[id] = "produtoId";
-    return bot.sendMessage(msg.chat.id, "⚡ Produto ID:");
+    return bot.sendMessage(msg.chat.id, "Produto ID:");
   }
 
   if (step === "produtoId") {
     addData[id].produtoId = text;
     addStep[id] = "instagram";
-    return bot.sendMessage(msg.chat.id, "⚡ Instagram:");
+    return bot.sendMessage(msg.chat.id, "Instagram:");
   }
 
   if (step === "instagram") {
     addData[id].instagram = text;
     addStep[id] = "whatsapp";
-    return bot.sendMessage(msg.chat.id, "⚡ WhatsApp:");
+    return bot.sendMessage(msg.chat.id, "WhatsApp:");
   }
 
   if (step === "whatsapp") {
@@ -248,7 +218,7 @@ bot.on("message", async (msg) => {
     delete addStep[id];
     delete addData[id];
 
-    return bot.sendMessage(msg.chat.id, "⚡ Produto cadastrado com sucesso!");
+    return bot.sendMessage(msg.chat.id, "Produto cadastrado com sucesso!");
   }
 
   // ================= DELETE CONFIRM =================
@@ -260,22 +230,23 @@ bot.on("message", async (msg) => {
       const batch = db.batch();
 
       snap.forEach(doc => batch.delete(doc.ref));
+
       await batch.commit();
 
       delete deleteConfirm[id];
 
-      return bot.sendMessage(msg.chat.id, "⚡ Produtos deletados com sucesso!");
+      return bot.sendMessage(msg.chat.id, "Produtos deletados com sucesso!");
     }
 
-    return bot.sendMessage(msg.chat.id, "⚡ Código inválido");
+    return bot.sendMessage(msg.chat.id, "Código inválido");
   }
 });
 
 // ================= DELETE PRODUTOS =================
-bot.onText(/\/deletarprodutos/, async (msg) => {
+bot.onText(/\/deletarprodutos/, (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
-    return bot.sendMessage(msg.chat.id, "⚡ Sem permissão");
+    return bot.sendMessage(msg.chat.id, "Sem permissão");
   }
 
   const code = Math.floor(10000 + Math.random() * 90000);
@@ -283,23 +254,22 @@ bot.onText(/\/deletarprodutos/, async (msg) => {
   deleteConfirm[msg.from.id] = code;
 
   bot.sendMessage(msg.chat.id,
-`⚠️ CONFIRMAÇÃO NECESSÁRIA
+`CONFIRMAÇÃO
 
 Código: ${code}
 
-Digite para confirmar exclusão`);
+Digite para deletar tudo`);
 });
 
 // ================= STATUS =================
 bot.onText(/\/status/, (msg) => {
   bot.sendMessage(msg.chat.id,
-`⚡ Bot online
-⚡ DEV: ${OWNER}
-⚡ versão: ${BOT_VERSION}`);
+`Bot online
+${OWNER}`);
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("⚡ BOT COMPLETO ATUALIZADO ONLINE");
+  console.log("BOT PRO ATUALIZADO ONLINE");
 });
