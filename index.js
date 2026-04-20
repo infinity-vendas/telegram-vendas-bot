@@ -131,7 +131,7 @@ PIX: ${PIX_KEY}`, {
   });
 });
 
-// ================= ADD PRODUTO (PRO 10 CAMPOS) =================
+// ================= ADD PRODUTO =================
 bot.onText(/\/addprodutos/, (msg) => {
 
   if (!ADMINS.includes(String(msg.from.id))) {
@@ -150,78 +150,9 @@ bot.on("message", async (msg) => {
   const id = msg.from.id;
   const text = msg.text;
 
-  if (!text || text.startsWith("/")) return;
-  if (!addStep[id]) return;
+  if (!text) return;
 
-  const step = addStep[id];
-
-  if (step === "nome") {
-    addData[id].nome = text;
-    addStep[id] = "valor";
-    return bot.sendMessage(msg.chat.id, "Valor:");
-  }
-
-  if (step === "valor") {
-    addData[id].valor = text;
-    addStep[id] = "descricao";
-    return bot.sendMessage(msg.chat.id, "Descrição:");
-  }
-
-  if (step === "descricao") {
-    addData[id].descricao = text;
-    addStep[id] = "tipo";
-    return bot.sendMessage(msg.chat.id, "Tipo:");
-  }
-
-  if (step === "tipo") {
-    addData[id].tipo = text;
-    addStep[id] = "plano";
-    return bot.sendMessage(msg.chat.id, "Plano:");
-  }
-
-  if (step === "plano") {
-    addData[id].plano = text;
-    addStep[id] = "estoque";
-    return bot.sendMessage(msg.chat.id, "Estoque:");
-  }
-
-  if (step === "estoque") {
-    addData[id].estoque = text;
-    addStep[id] = "cupom";
-    return bot.sendMessage(msg.chat.id, "Cupom:");
-  }
-
-  if (step === "cupom") {
-    addData[id].cupom = text;
-    addStep[id] = "produtoId";
-    return bot.sendMessage(msg.chat.id, "Produto ID:");
-  }
-
-  if (step === "produtoId") {
-    addData[id].produtoId = text;
-    addStep[id] = "instagram";
-    return bot.sendMessage(msg.chat.id, "Instagram:");
-  }
-
-  if (step === "instagram") {
-    addData[id].instagram = text;
-    addStep[id] = "whatsapp";
-    return bot.sendMessage(msg.chat.id, "WhatsApp:");
-  }
-
-  if (step === "whatsapp") {
-
-    addData[id].whatsapp = text;
-
-    await db.collection("produtos").add(addData[id]);
-
-    delete addStep[id];
-    delete addData[id];
-
-    return bot.sendMessage(msg.chat.id, "Produto cadastrado com sucesso!");
-  }
-
-  // ================= DELETE CONFIRM =================
+  // ================= CORREÇÃO AQUI (DELETE PRIORITÁRIO) =================
   if (deleteConfirm[id]) {
 
     if (text == deleteConfirm[id]) {
@@ -239,6 +170,38 @@ bot.on("message", async (msg) => {
     }
 
     return bot.sendMessage(msg.chat.id, "Código inválido");
+  }
+
+  // ================= IGNORA COMANDOS =================
+  if (text.startsWith("/")) return;
+
+  // ================= ADD PRODUTO =================
+  if (!addStep[id]) return;
+
+  const step = addStep[id];
+
+  if (step === "nome") {
+    addData[id].nome = text;
+    addStep[id] = "valor";
+    return bot.sendMessage(msg.chat.id, "Valor:");
+  }
+
+  if (step === "valor") {
+    addData[id].valor = text;
+    addStep[id] = "descricao";
+    return bot.sendMessage(msg.chat.id, "Descrição:");
+  }
+
+  if (step === "descricao") {
+
+    addData[id].descricao = text;
+
+    await db.collection("produtos").add(addData[id]);
+
+    delete addStep[id];
+    delete addData[id];
+
+    return bot.sendMessage(msg.chat.id, "Produto cadastrado com sucesso!");
   }
 });
 
@@ -271,5 +234,5 @@ ${OWNER}`);
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("BOT PRO ATUALIZADO ONLINE");
+  console.log("BOT PRO CORRIGIDO ONLINE");
 });
