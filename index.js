@@ -5,7 +5,6 @@ const admin = require("firebase-admin");
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
 const ADMINS = ["6863505946"];
-
 const ADMIN_WHATSAPP = "5551981528372";
 
 const serviceAccount = require("./firebase.json");
@@ -19,7 +18,6 @@ const bot = new TelegramBot(TOKEN);
 const app = express();
 
 app.use(express.json());
-
 app.post("/webhook", (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
@@ -36,7 +34,7 @@ const PLANOS = {
   mensal: 30
 };
 
-// ================= LAYOUT (MANTIDO 100%) =================
+// ================= LAYOUT ORIGINAL =================
 const START_TEXT = `
 Dono: INFINITY CLIENTE
 Validity: 25,00
@@ -58,28 +56,25 @@ Transições 100% manual e seguras
 Unidos , fortes venceremos !
 `;
 
-// ================= MENU COMPLETO =================
+// ================= MENU =================
 const MENU_TEXT = `
 📦 INFINITY STORE
 
-📌 USUÁRIO:
+👤 USUÁRIO:
 /produtos
 /status
 /id
 
 🛠 ADMIN:
-/listarusuarios
-/verusuario ID
-/deletarusuario ID
-/deletarusuarios
-/deletarprodutos
-/liberar ID plano
-/setexpira ID data
+/admin
 `;
 
 // ================= MEMORY =================
 const cadastroStep = {};
 const cadastroData = {};
+
+const adminState = {};
+const productState = {};
 
 // ================= UTIL =================
 function isAdmin(id) {
@@ -90,16 +85,15 @@ function formatar(ms) {
   return new Date(ms).toLocaleString("pt-BR");
 }
 
-function gerarExpiracao(dias) {
-  return Date.now() + dias * 86400000;
+function gerarExpiracao(ms) {
+  return Date.now() + ms;
 }
 
-// dd/mm/yyyy hh:mm:ss
+// ================= PARSE DATA =================
 function parseDataBR(input) {
   const [d1, t1] = input.split(" ");
   const [d, m, y] = d1.split("/");
   const [h, mi, s] = (t1 || "00:00:00").split(":");
-
   return new Date(y, m - 1, d, h, mi, s).getTime();
 }
 
@@ -107,7 +101,6 @@ function parseDataBR(input) {
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
-
   const doc = await db.collection("users").doc(id).get();
 
   if (!doc.exists) {
@@ -123,7 +116,7 @@ Digite seu nome:`);
   }
 
   bot.sendMessage(msg.chat.id, START_TEXT);
-  setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 2000);
+  setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 1500);
 });
 
 // ================= CADASTRO =================
@@ -164,9 +157,7 @@ bot.onText(/\/produtos/, async (msg) => {
 
   const snap = await db.collection("produtos").get();
 
-  if (snap.empty) return bot.sendMessage(msg.chat.id, "Nenhum produto.");
-
-  let txt = "📦 Produtos:\n\n";
+  let txt = "📦 PRODUTOS:\n\n";
 
   snap.forEach(d => {
     const p = d.data();
@@ -181,13 +172,10 @@ bot.onText(/\/status/, async (msg) => {
 
   const doc = await db.collection("alugueis").doc(String(msg.from.id)).get();
 
-  if (!doc.exists) {
-    return bot.sendMessage(msg.chat.id, "Sem plano ativo ⚠️");
-  }
+  if (!doc.exists) return bot.sendMessage(msg.chat.id, "Sem plano");
 
   bot.sendMessage(msg.chat.id,
-`📅 PLANO
-Plano: ${doc.data().plano}
+`Plano: ${doc.data().plano}
 Expira: ${formatar(doc.data().expiraEm)}`);
 });
 
@@ -196,93 +184,83 @@ bot.onText(/\/id/, (msg) => {
   bot.sendMessage(msg.chat.id, `ID: ${msg.from.id}`);
 });
 
-// ================= ADMIN CHECK =================
-function checkAdmin(msg) {
-  return isAdmin(msg.from.id);
-}
+// =====================================================
+// 🔥 PAINEL ADMIN (BOTÕES)
+// =====================================================
+bot.onText(/\/admin/, async (msg) => {
 
-// ================= LISTAR USUÁRIOS =================
-bot.onText(/\/listarusuarios/, async (msg) => {
+  if (!isAdmin(msg.from.id)) return;
 
-  if (!checkAdmin(msg)) return;
-
-  const snap = await db.collection("users").get();
-
-  let txt = "👥 USUÁRIOS:\n\n";
-
-  snap.forEach(doc => {
-    const d = doc.data();
-    txt += `ID: ${doc.id}\nNome: ${d.nome}\nWhatsApp: ${d.whatsapp}\n\n`;
+  bot.sendMessage(msg.chat.id, "⚙ PAINEL ADMIN", {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "👥 Usuários", callback_data: "users" }],
+        [{ text: "📦 Produtos", callback_data: "products" }],
+        [{ text: "➕ Add Produto", callback_data: "add_product" }],
+        [{ text: "➕ Add Usuário", callback_data: "add_user" }],
+        [{ text: "❌ Deletar Users", callback_data: "del_users" }],
+        [{ text: "❌ Deletar Produtos", callback_data: "del_products" }]
+      ]
+    }
   });
-
-  bot.sendMessage(msg.chat.id, txt);
 });
 
-// ================= VER USUÁRIO =================
-bot.onText(/\/verusuario (.+)/, async (msg, match) => {
+// ================= CALLBACKS =================
+bot.on("callback_query", async (cb) => {
 
-  if (!checkAdmin(msg)) return;
+  const id = cb.from.id;
+  const data = cb.data;
 
-  const id = match[1];
+  if (!isAdmin(id)) return;
 
-  const doc = await db.collection("users").doc(id).get();
+  // USUÁRIOS
+  if (data === "users") {
+    const snap = await db.collection("users").get();
+    let txt = "👥 USERS:\n\n";
 
-  if (!doc.exists) return bot.sendMessage(msg.chat.id, "Não encontrado");
+    snap.forEach(d => {
+      txt += `ID: ${d.id}\nNome: ${d.data().nome}\n\n`;
+    });
 
-  const d = doc.data();
+    return bot.sendMessage(id, txt);
+  }
 
-  bot.sendMessage(msg.chat.id,
-`👤 USUÁRIO
-ID: ${id}
-Nome: ${d.nome}
-WhatsApp: ${d.whatsapp}
-Criado: ${formatar(d.criadoEm)}`);
-});
+  // PRODUTOS
+  if (data === "products") {
+    const snap = await db.collection("produtos").get();
+    let txt = "📦 PRODUTOS:\n\n";
 
-// ================= DELETAR USUÁRIO =================
-bot.onText(/\/deletarusuario (.+)/, async (msg, match) => {
+    snap.forEach(d => {
+      txt += `${d.data().nome} - R$ ${d.data().valor}\n`;
+    });
 
-  if (!checkAdmin(msg)) return;
+    return bot.sendMessage(id, txt);
+  }
 
-  await db.collection("users").doc(match[1]).delete();
+  // DELETE USERS
+  if (data === "del_users") {
+    const snap = await db.collection("users").get();
+    const batch = db.batch();
+    snap.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    return bot.sendMessage(id, "✔ Users deletados");
+  }
 
-  bot.sendMessage(msg.chat.id, "✔ Usuário deletado");
-});
+  // DELETE PRODUCTS
+  if (data === "del_products") {
+    const snap = await db.collection("produtos").get();
+    const batch = db.batch();
+    snap.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    return bot.sendMessage(id, "✔ Produtos deletados");
+  }
 
-// ================= DELETAR TODOS USUÁRIOS =================
-bot.onText(/\/deletarusuarios/, async (msg) => {
-
-  if (!checkAdmin(msg)) return;
-
-  const snap = await db.collection("users").get();
-  const batch = db.batch();
-
-  snap.forEach(d => batch.delete(d.ref));
-
-  await batch.commit();
-
-  bot.sendMessage(msg.chat.id, "✔ Todos usuários deletados");
-});
-
-// ================= DELETAR PRODUTOS =================
-bot.onText(/\/deletarprodutos/, async (msg) => {
-
-  if (!checkAdmin(msg)) return;
-
-  const snap = await db.collection("produtos").get();
-  const batch = db.batch();
-
-  snap.forEach(d => batch.delete(d.ref));
-
-  await batch.commit();
-
-  bot.sendMessage(msg.chat.id, "✔ Produtos deletados");
 });
 
 // ================= LIBERAR PLANO =================
 bot.onText(/\/liberar (.+) (.+)/, async (msg, match) => {
 
-  if (!checkAdmin(msg)) return;
+  if (!isAdmin(msg.from.id)) return;
 
   const userId = match[1];
   const plano = match[2];
@@ -290,38 +268,16 @@ bot.onText(/\/liberar (.+) (.+)/, async (msg, match) => {
   const dias = PLANOS[plano];
   if (!dias) return;
 
-  const expiraEm = gerarExpiracao(dias);
+  const expiraEm = gerarExpiracao(dias * 86400000);
 
   await db.collection("alugueis").doc(userId).set({
     ativo: true,
     plano,
     expiraEm,
-    avisos: { h24: false, h1: false }
+    avisos: {}
   });
 
-  await bot.sendMessage(userId,
-`✔ Plano liberado
-
-Envie print para análise:
-WhatsApp: ${ADMIN_WHATSAPP}`);
-
-  bot.sendMessage(msg.chat.id, "✔ Liberado");
-});
-
-// ================= SET EXPIRAÇÃO MANUAL =================
-bot.onText(/\/setexpira (.+) (.+)/, async (msg, match) => {
-
-  if (!checkAdmin(msg)) return;
-
-  const userId = match[1];
-  const data = parseDataBR(match[2]);
-
-  await db.collection("alugueis").doc(userId).set({
-    ativo: true,
-    expiraEm: data
-  }, { merge: true });
-
-  bot.sendMessage(msg.chat.id, `✔ Expiração alterada: ${formatar(data)}`);
+  bot.sendMessage(userId, "✔ Plano liberado");
 });
 
 // ================= ALERTAS =================
@@ -336,19 +292,20 @@ setInterval(async () => {
     const diff = d.expiraEm - now;
 
     if (diff < 86400000 && !d.avisos?.h24) {
-      await bot.sendMessage(doc.id, "⚠️ Expira em 24h");
+      bot.sendMessage(doc.id, "⚠ 24h restantes");
       await db.collection("alugueis").doc(doc.id).update({ "avisos.h24": true });
     }
 
     if (diff < 3600000 && !d.avisos?.h1) {
-      await bot.sendMessage(doc.id, "⚠️ Expira em 1h");
+      bot.sendMessage(doc.id, "⚠ 1h restante");
       await db.collection("alugueis").doc(doc.id).update({ "avisos.h1": true });
     }
 
     if (d.ativo && now > d.expiraEm) {
       await db.collection("alugueis").doc(doc.id).update({ ativo: false });
-      bot.sendMessage(doc.id, "❌ Plano expirado");
+      bot.sendMessage(doc.id, "❌ Expirado");
     }
+
   });
 
 }, 60000);
@@ -356,5 +313,5 @@ setInterval(async () => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("BOT PRO FINAL COMPLETO 🚀");
+  console.log("BOT PRO PAINEL ATIVO 🚀");
 });
