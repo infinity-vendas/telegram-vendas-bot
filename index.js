@@ -10,6 +10,9 @@ const ADMINS = ["6863505946"];
 // 🔥 LOGO
 const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 
+// 🎤 ÁUDIO
+const AUDIO = "https://files.catbox.moe/9dv9ln.mp3";
+
 const serviceAccount = require("./firebase.json");
 
 admin.initializeApp({
@@ -41,34 +44,28 @@ const TEMPOS = {
   "90d": 7776000000
 };
 
-// ================= LAYOUT =================
+// ================= LAYOUT (SEU ORIGINAL MANTIDO) =================
 const START_TEXT = `
-━━━━━━━━━━━━━━━━━━
-⚡ INFINITY CLIENTES IC ⚡
-━━━━━━━━━━━━━━━━━━
-
 Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
 
-Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente.
+Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
 
-Nosso compromisso é com a transparência, a segurança e a satisfação.
+Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade. Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
 
-━━━━━━━━━━━━━━━━━━
+Se você está chegando agora, seja muito bem-vindo! Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade. Explore, conheça nossos serviços e aproveite tudo o que preparamos para você.
+
 INFINITY CLIENTES – confiança, organização e resultado em um só lugar
-━━━━━━━━━━━━━━━━━━
 `;
 
 const MENU_TEXT = `
 ━━━━━━━━━━━━━━━━━━
-📦 INFINITY STORE
+📦 MENU PRINCIPAL
 ━━━━━━━━━━━━━━━━━━
 
-🆔 USUÁRIO:
 /produtos
 /status
 /id
-
-⚡ ADMIN:
 /admin
 ━━━━━━━━━━━━━━━━━━
 `;
@@ -86,22 +83,20 @@ function formatDate(ms) {
   return new Date(ms).toLocaleString("pt-BR");
 }
 
-// ================= START (CORRIGIDO) =================
+// ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
   const user = await db.collection("users").doc(id).get();
 
-  // 🔥 NOVO USUÁRIO
   if (!user.exists) {
     cadastro[id] = { step: "nome" };
 
     return bot.sendPhoto(msg.chat.id, LOGO, {
-      caption: "👤 Bem-vindo! Digite seu nome:"
+      caption: "👤 Digite seu nome:"
     });
   }
 
-  // 🔥 USUÁRIO NORMAL
   await bot.sendPhoto(msg.chat.id, LOGO, {
     caption: START_TEXT
   });
@@ -111,45 +106,82 @@ bot.onText(/\/start/, async (msg) => {
   }, 1200);
 });
 
-// ================= CADASTRO (CORRIGIDO) =================
+// ================= CADASTRO =================
 bot.on("message", async (msg) => {
 
   const id = String(msg.from.id);
   const text = msg.text;
 
   if (!text || text.startsWith("/")) return;
-  if (!cadastro[id]) return;
 
-  if (cadastro[id].step === "nome") {
+  // ===== CADASTRO =====
+  if (cadastro[id]) {
 
-    cadastro[id].nome = text;
-    cadastro[id].step = "whatsapp";
+    if (cadastro[id].step === "nome") {
+      cadastro[id].nome = text;
+      cadastro[id].step = "whatsapp";
+      return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
+    }
 
-    return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
+    if (cadastro[id].step === "whatsapp") {
+
+      cadastro[id].whatsapp = text;
+
+      await db.collection("users").doc(id).set({
+        nome: cadastro[id].nome,
+        whatsapp: cadastro[id].whatsapp,
+        criadoEm: Date.now()
+      });
+
+      delete cadastro[id];
+
+      // 🎤 ÁUDIO
+      bot.sendAudio(msg.chat.id, AUDIO);
+
+      // ⏳ LOADING
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, "⏳ Aguarde a liberação...");
+      }, 3000);
+
+      // 📄 LIBERAÇÃO
+      setTimeout(() => {
+        bot.sendPhoto(msg.chat.id, LOGO, {
+          caption: START_TEXT
+        });
+      }, 15000);
+
+      // 📦 MENU
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, MENU_TEXT);
+      }, 20000);
+
+      return;
+    }
   }
 
-  if (cadastro[id].step === "whatsapp") {
+  // ===== ADMIN ADD PRODUCT FLOW =====
+  if (adminState[id]) {
 
-    cadastro[id].whatsapp = text;
+    if (!isAdmin(id)) return;
 
-    await db.collection("users").doc(id).set({
-      nome: cadastro[id].nome,
-      whatsapp: cadastro[id].whatsapp,
-      criadoEm: Date.now()
-    });
+    if (adminState[id].step === "nome") {
+      adminState[id].nome = text;
+      adminState[id].step = "valor";
+      return bot.sendMessage(id, "💰 Valor:");
+    }
 
-    delete cadastro[id];
+    if (adminState[id].step === "valor") {
 
-    // 🔥 MOSTRA SISTEMA APÓS CADASTRO
-    await bot.sendPhoto(msg.chat.id, LOGO, {
-      caption: START_TEXT
-    });
+      await db.collection("produtos").add({
+        nome: adminState[id].nome,
+        valor: text,
+        criadoEm: Date.now()
+      });
 
-    setTimeout(() => {
-      bot.sendMessage(msg.chat.id, MENU_TEXT);
-    }, 1200);
+      delete adminState[id];
 
-    return;
+      return bot.sendMessage(id, "✔ Produto adicionado");
+    }
   }
 });
 
@@ -192,12 +224,12 @@ bot.onText(/\/admin/, async (msg) => {
 
   if (!isAdmin(msg.from.id)) return;
 
-  const users = await db.collection("users").get();
-
   let buttons = [
-    [{ text: "➕ Adicionar Produto", callback_data: "add_product" }],
+    [{ text: "➕ Add Produto", callback_data: "add_product" }],
     [{ text: "❌ Deletar TODOS Produtos", callback_data: "del_products" }]
   ];
+
+  const users = await db.collection("users").get();
 
   users.forEach(u => {
     buttons.push([{
@@ -230,7 +262,7 @@ bot.on("callback_query", async (cb) => {
       callback_data: `set_${t}_${userId}`
     }]));
 
-    return bot.sendMessage(adminId, "⏳ RESET VALIDADE:", {
+    return bot.sendMessage(adminId, "⏳ Reset:", {
       reply_markup: { inline_keyboard: buttons }
     });
   }
@@ -240,18 +272,16 @@ bot.on("callback_query", async (cb) => {
 
     const [, tempo, userId] = data.split("_");
 
-    const expiraEm = Date.now() + TEMPOS[tempo];
-
     await db.collection("alugueis").doc(userId).set({
       ativo: true,
-      expiraEm,
+      expiraEm: Date.now() + TEMPOS[tempo],
       plano: tempo
     }, { merge: true });
 
-    return bot.sendMessage(adminId, `✔ Reset aplicado: ${tempo}`);
+    return bot.sendMessage(adminId, "✔ Reset aplicado");
   }
 
-  // DELETE ALL PRODUCTS
+  // DELETE PRODUCTS
   if (data === "del_products") {
 
     const snap = await db.collection("produtos").get();
@@ -261,42 +291,13 @@ bot.on("callback_query", async (cb) => {
 
     await batch.commit();
 
-    return bot.sendMessage(adminId, "❌ Todos produtos deletados");
+    return bot.sendMessage(adminId, "❌ Produtos deletados");
   }
 
   // ADD PRODUCT
   if (data === "add_product") {
     adminState[adminId] = { step: "nome" };
     return bot.sendMessage(adminId, "Nome do produto:");
-  }
-});
-
-// ================= ADD PRODUCT FLOW =================
-bot.on("message", async (msg) => {
-
-  const id = String(msg.from.id);
-  const text = msg.text;
-
-  if (!adminState[id]) return;
-  if (!isAdmin(id)) return;
-
-  if (adminState[id].step === "nome") {
-    adminState[id].nome = text;
-    adminState[id].step = "valor";
-    return bot.sendMessage(id, "Valor:");
-  }
-
-  if (adminState[id].step === "valor") {
-
-    await db.collection("produtos").add({
-      nome: adminState[id].nome,
-      valor: text,
-      criadoEm: Date.now()
-    });
-
-    delete adminState[id];
-
-    return bot.sendMessage(id, "✔ Produto adicionado");
   }
 });
 
@@ -314,7 +315,7 @@ setInterval(async () => {
         ativo: false
       });
 
-      bot.sendMessage(doc.id, "❌ Seu acesso expirou");
+      bot.sendMessage(doc.id, "❌ Acesso expirado");
     }
   });
 
