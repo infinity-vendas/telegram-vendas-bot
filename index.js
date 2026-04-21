@@ -7,6 +7,9 @@ const URL = "https://telegram-vendas-bot-1.onrender.com";
 
 const ADMINS = ["6863505946"];
 
+// 🔥 SUA LOGO
+const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
+
 const serviceAccount = require("./firebase.json");
 
 admin.initializeApp({
@@ -38,7 +41,7 @@ const TEMPOS = {
   "90d": 7776000000
 };
 
-// ================= LAYOUT START =================
+// ================= LAYOUT =================
 const START_TEXT = `
 ━━━━━━━━━━━━━━━━━━
 🏆 INFINITY CLIENTES
@@ -48,28 +51,10 @@ Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, p
 
 Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente.
 
-Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
+Nosso compromisso é com a transparência, a segurança e a satisfação.
 
 ━━━━━━━━━━━━━━━━━━
-
-Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente.
-
-Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
-
-━━━━━━━━━━━━━━━━━━
-
-Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade.
-
-Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
-
-━━━━━━━━━━━━━━━━━━
-
-Se você está chegando agora, seja muito bem-vindo!
-
-Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade.
-
-━━━━━━━━━━━━━━━━━━
-INFINITY CLIENTES – confiança, organização e resultado em um só lugar
+INFINITY CLIENTES – confiança, organização e resultado
 ━━━━━━━━━━━━━━━━━━
 `;
 
@@ -101,17 +86,6 @@ function formatDate(ms) {
   return new Date(ms).toLocaleString("pt-BR");
 }
 
-// ================= CHECK =================
-async function checkAccess(id) {
-  const doc = await db.collection("alugueis").doc(id).get();
-
-  if (!doc.exists) return false;
-  if (!doc.data().ativo) return false;
-  if (Date.now() > doc.data().expiraEm) return false;
-
-  return true;
-}
-
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
@@ -123,8 +97,14 @@ bot.onText(/\/start/, async (msg) => {
     return bot.sendMessage(msg.chat.id, "👤 Digite seu nome:");
   }
 
-  bot.sendMessage(msg.chat.id, START_TEXT);
-  setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 1200);
+  // 🔥 ENVIA LOGO + TEXTO
+  await bot.sendPhoto(msg.chat.id, LOGO, {
+    caption: START_TEXT
+  });
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, MENU_TEXT);
+  }, 1200);
 });
 
 // ================= CADASTRO =================
@@ -160,9 +140,6 @@ bot.on("message", async (msg) => {
 
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
-
-  const ok = await checkAccess(String(msg.from.id));
-  if (!ok) return bot.sendMessage(msg.chat.id, "❌ Acesso bloqueado ou expirado");
 
   const snap = await db.collection("produtos").get();
 
@@ -203,20 +180,18 @@ bot.onText(/\/admin/, async (msg) => {
   const users = await db.collection("users").get();
 
   let buttons = [
-    [{ text: "👥 Usuários", callback_data: "users" }],
-    [{ text: "📦 Produtos", callback_data: "products" }],
-    [{ text: "🗑 Deletar TODOS usuários", callback_data: "del_all_users" }],
-    [{ text: "🗑 Deletar TODOS produtos", callback_data: "del_all_products" }]
+    [{ text: "➕ Adicionar Produto", callback_data: "add_product" }],
+    [{ text: "❌ Deletar TODOS Produtos", callback_data: "del_products" }],
   ];
 
   users.forEach(u => {
     buttons.push([{
-      text: `👤 ${u.data().nome}`,
+      text: `⏱ Reset ${u.data().nome}`,
       callback_data: `user_${u.id}`
     }]);
   });
 
-  bot.sendMessage(msg.chat.id, "⚙ PAINEL ADMIN COMPLETO", {
+  bot.sendMessage(msg.chat.id, "⚙ PAINEL ADMIN:", {
     reply_markup: { inline_keyboard: buttons }
   });
 });
@@ -245,7 +220,7 @@ bot.on("callback_query", async (cb) => {
     });
   }
 
-  // SET RESET
+  // APLICAR RESET
   if (data.startsWith("set_")) {
 
     const [, tempo, userId] = data.split("_");
@@ -261,21 +236,8 @@ bot.on("callback_query", async (cb) => {
     return bot.sendMessage(adminId, `✔ Reset aplicado: ${tempo}`);
   }
 
-  // DELETE ALL USERS
-  if (data === "del_all_users") {
-
-    const snap = await db.collection("users").get();
-    const batch = db.batch();
-
-    snap.forEach(d => batch.delete(d.ref));
-
-    await batch.commit();
-
-    return bot.sendMessage(adminId, "🗑 Todos usuários deletados");
-  }
-
-  // DELETE ALL PRODUCTS
-  if (data === "del_all_products") {
+  // DELETAR TODOS PRODUTOS
+  if (data === "del_products") {
 
     const snap = await db.collection("produtos").get();
     const batch = db.batch();
@@ -284,8 +246,68 @@ bot.on("callback_query", async (cb) => {
 
     await batch.commit();
 
-    return bot.sendMessage(adminId, "🗑 Todos produtos deletados");
+    return bot.sendMessage(adminId, "❌ Todos produtos deletados");
   }
+
+  // ADD PRODUTO
+  if (data === "add_product") {
+    adminState[adminId] = { step: "nome" };
+    return bot.sendMessage(adminId, "Nome do produto:");
+  }
+});
+
+// ================= ADD PRODUTO =================
+bot.on("message", async (msg) => {
+
+  const id = String(msg.from.id);
+  const text = msg.text;
+
+  if (!adminState[id]) return;
+  if (!isAdmin(id)) return;
+
+  if (adminState[id].step === "nome") {
+    adminState[id].nome = text;
+    adminState[id].step = "valor";
+    return bot.sendMessage(id, "Valor:");
+  }
+
+  if (adminState[id].step === "valor") {
+
+    await db.collection("produtos").add({
+      nome: adminState[id].nome,
+      valor: text,
+      criadoEm: Date.now()
+    });
+
+    delete adminState[id];
+
+    return bot.sendMessage(id, "✔ Produto adicionado");
+  }
+});
+
+// ================= DELETAR PRODUTO POR ID =================
+bot.onText(/\/deletarproduto (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const id = match[1];
+
+  await db.collection("produtos").doc(id).delete();
+
+  bot.sendMessage(msg.chat.id, "✔ Produto deletado");
+});
+
+// ================= DELETAR USUÁRIO =================
+bot.onText(/\/deletarusuario (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const id = match[1];
+
+  await db.collection("users").doc(id).delete();
+  await db.collection("alugueis").doc(id).delete();
+
+  bot.sendMessage(msg.chat.id, "✔ Usuário deletado");
 });
 
 // ================= BLOQUEIO =================
@@ -311,5 +333,5 @@ setInterval(async () => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 INFINITY CLIENTES FULL PAINEL ONLINE");
+  console.log("🚀 INFINITY CLIENTES PRO ONLINE");
 });
