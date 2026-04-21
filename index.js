@@ -23,14 +23,7 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
-// ================= CONFIG =================
-const OWNER = "INFINITY CLIENTE";
-const BOT_VERSION = "v1";
-
-const WHATSAPP_NUMBER = "5551981528372";
-const PIX_KEY = "51981528372";
-
-// ================= MEMORY =================
+// ================= CONTROLE =================
 const cadastroStep = {};
 const cadastroData = {};
 
@@ -38,100 +31,21 @@ const addStep = {};
 const addData = {};
 
 const deleteProductsConfirm = {};
-const deleteUsersConfirm = {};
-
-// ================= LAYOUT =================
-const START_TEXT = `
-Dono: INFINITY CLIENTE
-Validity: 25,00
-Created by: @Infity_cliente_oficial
-Parcerias: nenhuma
-vendedores (1) admin
-divulgadores: nenhum
-Facebook: indisponível
-Instagram: disponível
-YouTube: Em Breve
-TikTok: indisponível
-Kwai: indisponível
-patrocinadores: nenhum
-
-Aceitamos pagamento Pix / cartão: em breve!
-Transições 100% manual e seguras
-¡compre somente comigo atualmente!
-
-Unidos , fortes venceremos !
-`;
-
-const MENU_TEXT = `
-INFINITY STORE
-
-/produtos
-/addprodutos
-/deletarprodutos
-/deletarusuarios
-/status
-/id
-`;
-
-// ================= CHECK CADASTRO =================
-async function checkCadastro(userId, chatId) {
-
-  const doc = await db.collection("users").doc(String(userId)).get();
-
-  if (!doc.exists) {
-
-    cadastroStep[userId] = "nome";
-    cadastroData[userId] = {};
-
-    bot.sendMessage(chatId,
-`🚀 CADASTRO OBRIGATÓRIO
-
-Seu ID: ${userId}
-
-Digite seu nome:`);
-
-    return false;
-  }
-
-  return true;
-}
-
-// ================= CHECK PLANO (FIREBASE) =================
-async function checkPlano(userId, chatId) {
-
-  const doc = await db.collection("alugueis").doc(String(userId)).get();
-
-  if (!doc.exists || !doc.data().ativo) {
-    bot.sendMessage(chatId, "⚠️ Você não possui plano ativo.");
-    return false;
-  }
-
-  if (Date.now() > doc.data().expiraEm) {
-
-    await db.collection("alugueis").doc(String(userId)).update({
-      ativo: false
-    });
-
-    bot.sendMessage(chatId, "❌ Seu plano expirou.");
-    return false;
-  }
-
-  return true;
-}
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
 
-  const okCadastro = await checkCadastro(id, msg.chat.id);
-  if (!okCadastro) return;
+  cadastroStep[id] = "nome";
+  cadastroData[id] = {};
 
-  bot.sendMessage(msg.chat.id, START_TEXT);
+  bot.sendMessage(msg.chat.id,
+`🚀 Cadastro
 
-  setTimeout(() => {
-    bot.sendMessage(msg.chat.id, MENU_TEXT);
-  }, 3000);
+Seu ID: ${id}
+
+Digite seu nome:`);
 });
 
 // ================= MESSAGE =================
@@ -143,48 +57,43 @@ bot.on("message", async (msg) => {
   if (!text) return;
   if (text.startsWith("/")) return;
 
-  // ===== CADASTRO =====
+  // ================= CADASTRO =================
   if (cadastroStep[id]) {
 
     if (cadastroStep[id] === "nome") {
       cadastroData[id].nome = text;
       cadastroStep[id] = "whatsapp";
-      return bot.sendMessage(msg.chat.id, "Digite seu WhatsApp:");
+      return bot.sendMessage(msg.chat.id, "WhatsApp:");
     }
 
     if (cadastroStep[id] === "whatsapp") {
+
       cadastroData[id].whatsapp = text;
-      cadastroStep[id] = "confirm";
-      return bot.sendMessage(msg.chat.id, `Confirme seu ID:\n${id}`);
-    }
 
-    if (cadastroStep[id] === "confirm") {
+      try {
+        await db.collection("users").doc(id).set({
+          ...cadastroData[id],
+          userId: id,
+          criadoEm: Date.now()
+        });
 
-      if (text !== id) {
-        return bot.sendMessage(msg.chat.id, "❌ ID incorreto.");
+        console.log("SALVO FIREBASE:", id);
+
+      } catch (e) {
+        console.log("ERRO FIREBASE:", e);
+        return bot.sendMessage(msg.chat.id, "Erro ao salvar cadastro.");
       }
-
-      await db.collection("users").doc(id).set({
-        nome: cadastroData[id].nome,
-        whatsapp: cadastroData[id].whatsapp,
-        userId: id,
-        username: msg.from.username || "sem_username",
-        criadoEm: Date.now()
-      });
 
       delete cadastroStep[id];
       delete cadastroData[id];
 
-      bot.sendMessage(msg.chat.id, "✔ Cadastro concluído");
-
-      setTimeout(() => bot.sendMessage(msg.chat.id, START_TEXT), 1500);
-      setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 3000);
+      return bot.sendMessage(msg.chat.id, "✔ Cadastro salvo no Firebase");
     }
 
     return;
   }
 
-  // ===== ADD PRODUTO =====
+  // ================= ADD PRODUTO =================
   if (addStep[id]) {
 
     if (addStep[id] === "nome") {
@@ -203,99 +112,67 @@ bot.on("message", async (msg) => {
 
       addData[id].descricao = text;
 
-      await db.collection("produtos").add(addData[id]);
+      try {
+        await db.collection("produtos").add(addData[id]);
+        console.log("PRODUTO SALVO");
+      } catch (e) {
+        console.log("ERRO PRODUTO:", e);
+        return bot.sendMessage(msg.chat.id, "Erro ao salvar produto.");
+      }
 
       delete addStep[id];
       delete addData[id];
 
-      return bot.sendMessage(msg.chat.id, "✔ Produto adicionado");
+      return bot.sendMessage(msg.chat.id, "✔ Produto salvo");
     }
 
     return;
   }
 
-  // ===== DELETE PRODUTOS =====
+  // ================= DELETE CONFIRM =================
   if (deleteProductsConfirm[id]) {
 
     if (text === String(deleteProductsConfirm[id])) {
 
-      const snap = await db.collection("produtos").get();
-      const batch = db.batch();
+      try {
+        const snap = await db.collection("produtos").get();
 
-      snap.forEach(d => batch.delete(d.ref));
+        if (snap.empty) {
+          delete deleteProductsConfirm[id];
+          return bot.sendMessage(msg.chat.id, "Nenhum produto.");
+        }
 
-      await batch.commit();
+        const batch = db.batch();
 
-      delete deleteProductsConfirm[id];
+        snap.forEach(doc => {
+          batch.delete(doc.ref);
+        });
 
-      return bot.sendMessage(msg.chat.id, "✔ Produtos deletados");
+        await batch.commit();
+
+        console.log("PRODUTOS DELETADOS");
+
+        delete deleteProductsConfirm[id];
+
+        return bot.sendMessage(msg.chat.id, "✔ Todos produtos deletados");
+
+      } catch (e) {
+        console.log("ERRO DELETE:", e);
+        return bot.sendMessage(msg.chat.id, "Erro ao deletar.");
+      }
     }
 
-    return bot.sendMessage(msg.chat.id, "❌ Código inválido");
+    return bot.sendMessage(msg.chat.id, "Código inválido.");
   }
 
-  // ===== DELETE USERS =====
-  if (deleteUsersConfirm[id]) {
-
-    if (text === String(deleteUsersConfirm[id])) {
-
-      const snap = await db.collection("users").get();
-      const batch = db.batch();
-
-      snap.forEach(d => batch.delete(d.ref));
-
-      await batch.commit();
-
-      delete deleteUsersConfirm[id];
-
-      return bot.sendMessage(msg.chat.id, "✔ Usuários deletados");
-    }
-
-    return bot.sendMessage(msg.chat.id, "❌ Código inválido");
-  }
 });
 
-// ================= ID =================
-bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(msg.chat.id,
-`ID: ${msg.from.id}
-User: @${msg.from.username || "nenhum"}`);
-});
-
-// ================= PRODUTOS =================
-bot.onText(/\/produtos/, async (msg) => {
-
-  const okCadastro = await checkCadastro(msg.from.id, msg.chat.id);
-  if (!okCadastro) return;
-
-  const okPlano = await checkPlano(msg.from.id, msg.chat.id);
-  if (!okPlano) return;
-
-  const snap = await db.collection("produtos").get();
-
-  let buttons = [];
-
-  snap.forEach(d => {
-    const p = d.data();
-
-    buttons.push([{
-      text: p.nome,
-      callback_data: `produto_${d.id}`
-    }]);
-  });
-
-  if (buttons.length === 0) {
-    return bot.sendMessage(msg.chat.id, "Nenhum produto.");
-  }
-
-  bot.sendMessage(msg.chat.id, "Selecione:", {
-    reply_markup: { inline_keyboard: buttons }
-  });
-});
-
-// ================= ADMIN =================
+// ================= ADD PRODUTO =================
 bot.onText(/\/addprodutos/, (msg) => {
-  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  if (!ADMINS.includes(String(msg.from.id))) {
+    return bot.sendMessage(msg.chat.id, "Sem permissão");
+  }
 
   addStep[msg.from.id] = "nome";
   addData[msg.from.id] = {};
@@ -305,41 +182,25 @@ bot.onText(/\/addprodutos/, (msg) => {
 
 // ================= DELETE PRODUTOS =================
 bot.onText(/\/deletarprodutos/, (msg) => {
-  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  if (!ADMINS.includes(String(msg.from.id))) {
+    return bot.sendMessage(msg.chat.id, "Sem permissão");
+  }
 
   const code = Math.floor(100000 + Math.random() * 900000);
+
   deleteProductsConfirm[msg.from.id] = code;
 
-  bot.sendMessage(msg.chat.id, `Código: ${code}`);
-});
-
-// ================= DELETE USERS =================
-bot.onText(/\/deletarusuarios/, (msg) => {
-  if (!ADMINS.includes(String(msg.from.id))) return;
-
-  const code = Math.floor(100000 + Math.random() * 900000);
-  deleteUsersConfirm[msg.from.id] = code;
-
-  bot.sendMessage(msg.chat.id, `Código: ${code}`);
-});
-
-// ================= STATUS =================
-bot.onText(/\/status/, async (msg) => {
-
-  const okCadastro = await checkCadastro(msg.from.id, msg.chat.id);
-  if (!okCadastro) return;
-
-  const okPlano = await checkPlano(msg.from.id, msg.chat.id);
-  if (!okPlano) return;
-
   bot.sendMessage(msg.chat.id,
-`Bot online
-${OWNER}
-versão ${BOT_VERSION}`);
+`⚠️ CONFIRMAÇÃO
+
+Código: ${code}
+
+Digite o código para deletar tudo`);
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("BOT FIREBASE MANUAL 🚀");
+  console.log("BOT FUNCIONANDO FIREBASE 🚀");
 });
