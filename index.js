@@ -23,6 +23,49 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
+// ================= CONFIG =================
+const OWNER = "INFINITY CLIENTE";
+const BOT_VERSION = "PRO FINAL";
+
+const ADMIN_WHATSAPP = "5551981528372";
+
+// ================= PLANOS =================
+const PLANOS = {
+  trial: 1,
+  semanal: 7,
+  mensal: 30
+};
+
+// ================= LAYOUT (MANTIDO) =================
+const START_TEXT = `
+Dono: INFINITY CLIENTE
+Validity: 25,00
+Created by: @Infity_cliente_oficial
+Parcerias: nenhuma
+vendedores (1) admin
+divulgadores: nenhum
+Facebook: indisponível
+Instagram: disponível
+YouTube: Em Breve
+TikTok: indisponível
+Kwai: indisponível
+patrocinadores: nenhum
+
+Aceitamos pagamento Pix / cartão: em breve!
+Transições 100% manual e seguras
+¡compre somente comigo atualmente!
+
+Unidos , fortes venceremos !
+`;
+
+const MENU_TEXT = `
+INFINITY STORE
+
+/produtos
+/status
+/id
+`;
+
 // ================= CONTROLE =================
 const cadastroStep = {};
 const cadastroData = {};
@@ -31,33 +74,48 @@ const addStep = {};
 const addData = {};
 
 const deleteProductsConfirm = {};
+const deleteUsersConfirm = {};
+
+// ================= UTIL =================
+function formatar(ms) {
+  return new Date(ms).toLocaleString("pt-BR");
+}
+
+function gerarExpiracao(dias) {
+  return Date.now() + dias * 86400000;
+}
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
 
-  cadastroStep[id] = "nome";
-  cadastroData[id] = {};
+  const doc = await db.collection("users").doc(id).get();
 
-  bot.sendMessage(msg.chat.id,
-`🚀 Cadastro
+  if (!doc.exists) {
+    cadastroStep[id] = "nome";
+    cadastroData[id] = {};
+
+    return bot.sendMessage(msg.chat.id,
+`🚀 Cadastro obrigatório
 
 Seu ID: ${id}
 
 Digite seu nome:`);
+  }
+
+  bot.sendMessage(msg.chat.id, START_TEXT);
+  setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 2000);
 });
 
-// ================= MESSAGE =================
+// ================= CADASTRO =================
 bot.on("message", async (msg) => {
 
   const id = String(msg.from.id);
   const text = msg.text;
 
-  if (!text) return;
-  if (text.startsWith("/")) return;
+  if (!text || text.startsWith("/")) return;
 
-  // ================= CADASTRO =================
   if (cadastroStep[id]) {
 
     if (cadastroStep[id] === "nome") {
@@ -70,109 +128,43 @@ bot.on("message", async (msg) => {
 
       cadastroData[id].whatsapp = text;
 
-      try {
-        await db.collection("users").doc(id).set({
-          ...cadastroData[id],
-          userId: id,
-          criadoEm: Date.now()
-        });
-
-        console.log("SALVO FIREBASE:", id);
-
-      } catch (e) {
-        console.log("ERRO FIREBASE:", e);
-        return bot.sendMessage(msg.chat.id, "Erro ao salvar cadastro.");
-      }
+      await db.collection("users").doc(id).set({
+        ...cadastroData[id],
+        userId: id,
+        criadoEm: Date.now()
+      });
 
       delete cadastroStep[id];
       delete cadastroData[id];
 
-      return bot.sendMessage(msg.chat.id, "✔ Cadastro salvo no Firebase");
+      return bot.sendMessage(msg.chat.id, "✔ Cadastro concluído");
     }
+  }
+});
 
-    return;
+// ================= PRODUTOS =================
+bot.onText(/\/produtos/, async (msg) => {
+
+  const snap = await db.collection("produtos").get();
+
+  if (snap.empty) {
+    return bot.sendMessage(msg.chat.id, "Nenhum produto.");
   }
 
-  // ================= ADD PRODUTO =================
-  if (addStep[id]) {
+  let txt = "📦 Produtos:\n\n";
 
-    if (addStep[id] === "nome") {
-      addData[id].nome = text;
-      addStep[id] = "valor";
-      return bot.sendMessage(msg.chat.id, "Valor:");
-    }
+  snap.forEach(d => {
+    const p = d.data();
+    txt += `${p.nome} - R$ ${p.valor}\n`;
+  });
 
-    if (addStep[id] === "valor") {
-      addData[id].valor = text;
-      addStep[id] = "descricao";
-      return bot.sendMessage(msg.chat.id, "Descrição:");
-    }
-
-    if (addStep[id] === "descricao") {
-
-      addData[id].descricao = text;
-
-      try {
-        await db.collection("produtos").add(addData[id]);
-        console.log("PRODUTO SALVO");
-      } catch (e) {
-        console.log("ERRO PRODUTO:", e);
-        return bot.sendMessage(msg.chat.id, "Erro ao salvar produto.");
-      }
-
-      delete addStep[id];
-      delete addData[id];
-
-      return bot.sendMessage(msg.chat.id, "✔ Produto salvo");
-    }
-
-    return;
-  }
-
-  // ================= DELETE CONFIRM =================
-  if (deleteProductsConfirm[id]) {
-
-    if (text === String(deleteProductsConfirm[id])) {
-
-      try {
-        const snap = await db.collection("produtos").get();
-
-        if (snap.empty) {
-          delete deleteProductsConfirm[id];
-          return bot.sendMessage(msg.chat.id, "Nenhum produto.");
-        }
-
-        const batch = db.batch();
-
-        snap.forEach(doc => {
-          batch.delete(doc.ref);
-        });
-
-        await batch.commit();
-
-        console.log("PRODUTOS DELETADOS");
-
-        delete deleteProductsConfirm[id];
-
-        return bot.sendMessage(msg.chat.id, "✔ Todos produtos deletados");
-
-      } catch (e) {
-        console.log("ERRO DELETE:", e);
-        return bot.sendMessage(msg.chat.id, "Erro ao deletar.");
-      }
-    }
-
-    return bot.sendMessage(msg.chat.id, "Código inválido.");
-  }
-
+  bot.sendMessage(msg.chat.id, txt);
 });
 
 // ================= ADD PRODUTO =================
 bot.onText(/\/addprodutos/, (msg) => {
 
-  if (!ADMINS.includes(String(msg.from.id))) {
-    return bot.sendMessage(msg.chat.id, "Sem permissão");
-  }
+  if (!ADMINS.includes(String(msg.from.id))) return;
 
   addStep[msg.from.id] = "nome";
   addData[msg.from.id] = {};
@@ -181,26 +173,145 @@ bot.onText(/\/addprodutos/, (msg) => {
 });
 
 // ================= DELETE PRODUTOS =================
-bot.onText(/\/deletarprodutos/, (msg) => {
+bot.onText(/\/deletarprodutos/, async (msg) => {
 
-  if (!ADMINS.includes(String(msg.from.id))) {
-    return bot.sendMessage(msg.chat.id, "Sem permissão");
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  const snap = await db.collection("produtos").get();
+  const batch = db.batch();
+
+  snap.forEach(d => batch.delete(d.ref));
+
+  await batch.commit();
+
+  bot.sendMessage(msg.chat.id, "✔ Produtos deletados");
+});
+
+// ================= DELETE USERS =================
+bot.onText(/\/deletarusuarios/, async (msg) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  const snap = await db.collection("users").get();
+  const batch = db.batch();
+
+  snap.forEach(d => batch.delete(d.ref));
+
+  await batch.commit();
+
+  bot.sendMessage(msg.chat.id, "✔ Usuários deletados");
+});
+
+// ================= LISTAR USUÁRIOS =================
+bot.onText(/\/listarusuarios/, async (msg) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  const snap = await db.collection("users").get();
+
+  let txt = "👥 USUÁRIOS REGISTRADOS:\n\n";
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    txt += `ID: ${doc.id}\nNome: ${d.nome}\nWhatsApp: ${d.whatsapp}\n\n`;
+  });
+
+  bot.sendMessage(msg.chat.id, txt);
+});
+
+// ================= VER USUÁRIO =================
+bot.onText(/\/verusuario (.+)/, async (msg, match) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  const id = match[1];
+
+  const doc = await db.collection("users").doc(id).get();
+
+  if (!doc.exists) {
+    return bot.sendMessage(msg.chat.id, "Usuário não encontrado");
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000);
-
-  deleteProductsConfirm[msg.from.id] = code;
+  const d = doc.data();
 
   bot.sendMessage(msg.chat.id,
-`⚠️ CONFIRMAÇÃO
+`👤 USUÁRIO
 
-Código: ${code}
-
-Digite o código para deletar tudo`);
+ID: ${id}
+Nome: ${d.nome}
+WhatsApp: ${d.whatsapp}
+Criado: ${formatar(d.criadoEm)}`);
 });
+
+// ================= LIBERAR PLANO =================
+bot.onText(/\/liberar (.+) (.+)/, async (msg, match) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  const userId = match[1];
+  const plano = match[2];
+
+  const dias = PLANOS[plano];
+
+  if (!dias) return bot.sendMessage(msg.chat.id, "Plano inválido");
+
+  await db.collection("alugueis").doc(userId).set({
+    ativo: true,
+    plano,
+    expiraEm: gerarExpiracao(dias)
+  });
+
+  bot.sendMessage(userId,
+`✔ Plano liberado
+
+Envie print para análise:
+WhatsApp: ${ADMIN_WHATSAPP}`);
+
+  bot.sendMessage(msg.chat.id, "✔ Liberado");
+});
+
+// ================= STATUS =================
+bot.onText(/\/status/, async (msg) => {
+
+  const doc = await db.collection("alugueis").doc(String(msg.from.id)).get();
+
+  if (!doc.exists) {
+    return bot.sendMessage(msg.chat.id, "Sem plano ativo ⚠️");
+  }
+
+  bot.sendMessage(msg.chat.id,
+`Plano: ${doc.data().plano}
+Expira: ${formatar(doc.data().expiraEm)}`);
+});
+
+// ================= ID =================
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(msg.chat.id, `ID: ${msg.from.id}`);
+});
+
+// ================= EXPIRA AUTOMÁTICO =================
+setInterval(async () => {
+
+  const snap = await db.collection("alugueis").get();
+
+  snap.forEach(async (doc) => {
+
+    const d = doc.data();
+
+    if (d.ativo && Date.now() > d.expiraEm) {
+
+      await db.collection("alugueis").doc(doc.id).update({
+        ativo: false
+      });
+
+      bot.sendMessage(doc.id, "❌ Seu plano expirou.");
+    }
+  });
+
+}, 60000);
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("BOT FUNCIONANDO FIREBASE 🚀");
+  console.log("BOT PRO FINAL 🚀");
 });
