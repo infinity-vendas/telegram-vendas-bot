@@ -7,8 +7,9 @@ const URL = "https://telegram-vendas-bot-1.onrender.com";
 
 const ADMINS = ["6863505946"];
 
-// 🔥 LOGO
+// 🔥 ASSETS
 const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
+const BANNER = "https://i.postimg.cc/LsBBWs6Y/tabela.jpg";
 
 // 🎤 ÁUDIO
 const AUDIO = "https://files.catbox.moe/9dv9ln.mp3";
@@ -26,8 +27,8 @@ admin.initializeApp({
 
 const db = admin.firestore();
 const bot = new TelegramBot(TOKEN);
-
 const app = express();
+
 app.use(express.json());
 
 // ================= WEBHOOK =================
@@ -52,160 +53,129 @@ const TEMPOS = {
   "30d": 2592000000
 };
 
-// ================= LAYOUT =================
-const START_TEXT = `
+// ================= TEXTOS =================
+const TEXTO1 = `📊 Confira nossa tabela de preços atualizada!
+
+Chegou a hora de você divulgar seus produtos em nosso servidor Telegram.
+
+📅 Empresa cadastrada: 22/04/2026  
+🚀 Estamos em busca de novos clientes e parceiros.
+
+Em breve você receberá nossos produtos oficiais.`;
+
+const TEXTO2 = `
 Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
 
-Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente.
+Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência.
 
 INFINITY CLIENTES – confiança, organização e resultado em um só lugar.
 `;
 
-const MENU_TEXT = `
-📦 MENU PRINCIPAL
+// ================= MENUS =================
+const MENU_USER = `
+📦 MENU COMPLETO
 
-/produtos
-/status
-/id
-/admin
+/Adquirir produto
+/Suporte
 `;
 
-// ================= EXPIRADO =================
-function expiredMessage() {
-  return `
-❌ PLANO EXPIRADO OU INEXISTENTE
+const MENU_ADMIN = `
+⚙ MENU ADMIN
 
-💳 PIX: ${PIX_KEY}
-👤 ${PIX_NAME}
-
-📷 QR CODE:
-${PIX_QR}
-
-Envie:
-- Comprovante
-- Data
-- Horário
-
-Após confirmação seu acesso será reativado automaticamente.
+/Deletar_users
+/Deletar_produtos
+/Adicionar_produto
 `;
-}
 
-// ================= MEMORY =================
-const cadastro = {};
-const adminState = {};
-
-// ================= UTIL =================
-function isAdmin(id) {
-  return ADMINS.includes(String(id));
-}
-
-// ================= START =================
+// ================= START FLOW =================
 bot.onText(/\/start/, async (msg) => {
-  const id = String(msg.from.id);
+
+  const chatId = msg.chat.id;
 
   try {
-    const user = await db.collection("users").doc(id).get();
 
-    if (!user.exists) {
-      cadastro[id] = { step: "nome" };
+    // 1️⃣ LOGO
+    await bot.sendPhoto(chatId, LOGO);
 
-      return bot.sendPhoto(msg.chat.id, LOGO, {
-        caption: "👤 Digite seu nome:"
-      });
-    }
+    // delay 6s
+    await new Promise(r => setTimeout(r, 6000));
 
-    await bot.sendPhoto(msg.chat.id, LOGO, {
-      caption: START_TEXT
+    // 2️⃣ TEXTO 1
+    await bot.sendMessage(chatId, TEXTO1);
+
+    await new Promise(r => setTimeout(r, 6000));
+
+    // 3️⃣ TEXTO 2
+    await bot.sendMessage(chatId, TEXTO2);
+
+    await new Promise(r => setTimeout(r, 6000));
+
+    // 4️⃣ BANNER
+    await bot.sendPhoto(chatId, BANNER);
+
+    await new Promise(r => setTimeout(r, 6000));
+
+    // 5️⃣ BOTÃO CATALOGO
+    await bot.sendMessage(chatId, "👇 Escolha seu plano abaixo:", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📦 Abrir Catálogo", callback_data: "catalogo" }]
+        ]
+      }
     });
 
-    setTimeout(() => {
-      bot.sendMessage(msg.chat.id, MENU_TEXT);
-    }, 1000);
+    await new Promise(r => setTimeout(r, 6000));
 
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, "Erro no sistema.");
+    // 6️⃣ LISTA PRODUTOS
+    await bot.sendMessage(chatId,
+`🔥 Mais vendidos:
+
+• Contas Google
+• Contas Free Fire
+• Pack Sensibilidade
+`);
+
+    await new Promise(r => setTimeout(r, 6000));
+
+    // 7️⃣ LOADING
+    await bot.sendMessage(chatId, "⏳ Carregando sistema...");
+
+    await new Promise(r => setTimeout(r, 6000));
+
+    // 8️⃣ MENU FINAL
+    await bot.sendMessage(chatId, MENU_USER);
+
+    // admin menu extra
+    if (ADMINS.includes(String(msg.from.id))) {
+      await bot.sendMessage(chatId, MENU_ADMIN);
+    }
+
+  } catch (err) {
+    console.log(err);
+    bot.sendMessage(chatId, "Erro ao iniciar sistema.");
   }
 });
 
-// ================= CADASTRO =================
-bot.on("message", async (msg) => {
+// ================= CALLBACK =================
+bot.on("callback_query", async (cb) => {
 
-  const id = String(msg.from.id);
-  const text = msg.text;
+  const chatId = cb.message.chat.id;
 
-  if (!text || text.startsWith("/")) return;
+  if (cb.data === "catalogo") {
+    return bot.sendMessage(chatId,
+`📦 CATÁLOGO:
 
-  if (cadastro[id]) {
-
-    if (cadastro[id].step === "nome") {
-      cadastro[id].nome = text;
-      cadastro[id].step = "whatsapp";
-      return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
-    }
-
-    if (cadastro[id].step === "whatsapp") {
-
-      cadastro[id].whatsapp = text;
-
-      await db.collection("users").doc(id).set({
-        nome: cadastro[id].nome,
-        whatsapp: cadastro[id].whatsapp,
-        criadoEm: Date.now()
-      });
-
-      delete cadastro[id];
-
-      // 🎤 ÁUDIO (SÓ APÓS CADASTRO)
-      bot.sendAudio(msg.chat.id, AUDIO);
-
-      setTimeout(() => {
-        bot.sendMessage(msg.chat.id, "⏳ Aguarde a liberação...");
-      }, 3000);
-
-      setTimeout(() => {
-        bot.sendPhoto(msg.chat.id, LOGO, {
-          caption: START_TEXT
-        });
-      }, 12000);
-
-      setTimeout(() => {
-        bot.sendMessage(msg.chat.id, MENU_TEXT);
-      }, 17000);
-
-      return;
-    }
-  }
-
-  // ================= ADMIN FLOW =================
-  if (adminState[id] && isAdmin(id)) {
-
-    if (adminState[id].step === "nome") {
-      adminState[id].nome = text;
-      adminState[id].step = "valor";
-      return bot.sendMessage(id, "💰 Valor:");
-    }
-
-    if (adminState[id].step === "valor") {
-
-      await db.collection("produtos").add({
-        nome: adminState[id].nome,
-        valor: text,
-        criadoEm: Date.now()
-      });
-
-      delete adminState[id];
-
-      return bot.sendMessage(id, "✔ Produto adicionado");
-    }
+/Adquirir produto
+/Suporte`);
   }
 });
 
 // ================= PRODUTOS =================
-bot.onText(/\/produtos/, async (msg) => {
+bot.onText(/\/Adquirir produto/, async (msg) => {
 
   const snap = await db.collection("produtos").get();
 
-  let txt = "📦 PRODUTOS:\n\n";
+  let txt = "📦 PRODUTOS DISPONÍVEIS:\n\n";
 
   snap.forEach(p => {
     const d = p.data();
@@ -215,81 +185,21 @@ bot.onText(/\/produtos/, async (msg) => {
   bot.sendMessage(msg.chat.id, txt);
 });
 
-// ================= STATUS =================
-bot.onText(/\/status/, async (msg) => {
+// ================= SUPORTE =================
+bot.onText(/\/Suporte/, (msg) => {
+  bot.sendMessage(msg.chat.id,
+`📞 SUPORTE
 
-  const doc = await db.collection("alugueis").doc(String(msg.from.id)).get();
-
-  if (!doc.exists || !doc.data()?.ativo) {
-    return bot.sendMessage(msg.chat.id, expiredMessage());
-  }
-
-  bot.sendMessage(msg.chat.id, `📊 STATUS\n\nPlano: ${doc.data().plano}`);
-});
-
-// ================= ADMIN =================
-bot.onText(/\/admin/, async (msg) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  const buttons = [
-    [{ text: "➕ Add Produto", callback_data: "add_product" }],
-    [{ text: "❌ Deletar Produtos", callback_data: "del_products" }]
-  ];
-
-  Object.keys(TEMPOS).forEach(t => {
-    buttons.push([{
-      text: `⏱ Reset ${t}`,
-      callback_data: `reset_${t}`
-    }]);
-  });
-
-  bot.sendMessage(msg.chat.id, "⚙ PAINEL ADMIN:", {
-    reply_markup: { inline_keyboard: buttons }
-  });
-});
-
-// ================= CALLBACK =================
-bot.on("callback_query", async (cb) => {
-
-  const id = cb.from.id;
-  const data = cb.data;
-
-  if (!isAdmin(id)) return;
-
-  if (data === "add_product") {
-    adminState[id] = { step: "nome" };
-    return bot.sendMessage(id, "Nome do produto:");
-  }
-
-  if (data === "del_products") {
-    const snap = await db.collection("produtos").get();
-    const batch = db.batch();
-    snap.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-    return bot.sendMessage(id, "❌ Produtos deletados");
-  }
-
-  if (data.startsWith("reset_")) {
-
-    const tempo = data.replace("reset_", "");
-
-    const users = await db.collection("users").get();
-
-    users.forEach(async (u) => {
-      await db.collection("alugueis").doc(u.id).set({
-        ativo: true,
-        expiraEm: Date.now() + TEMPOS[tempo],
-        plano: tempo
-      }, { merge: true });
-    });
-
-    return bot.sendMessage(id, `✔ Reset aplicado: ${tempo}`);
-  }
+WhatsApp:
+https://wa.me/${PIX_KEY}`);
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
-  await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 INFINITY CLIENTES ONLINE");
+  try {
+    await bot.setWebHook(`${URL}/webhook`);
+    console.log("🚀 BOT ONLINE:", `${URL}/webhook`);
+  } catch (e) {
+    console.log("Erro webhook:", e);
+  }
 });
