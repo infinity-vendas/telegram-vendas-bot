@@ -7,7 +7,7 @@ const URL = "https://telegram-vendas-bot-1.onrender.com";
 
 const ADMINS = ["6863505946"];
 
-// 🔥 SUA LOGO
+// 🔥 LOGO
 const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 
 const serviceAccount = require("./firebase.json");
@@ -44,7 +44,7 @@ const TEMPOS = {
 // ================= LAYOUT =================
 const START_TEXT = `
 ━━━━━━━━━━━━━━━━━━
-🏆 INFINITY CLIENTES
+⚡ INFINITY CLIENTES IC ⚡
 ━━━━━━━━━━━━━━━━━━
 
 Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
@@ -54,7 +54,7 @@ Aqui você encontra um ambiente totalmente estruturado para facilitar sua experi
 Nosso compromisso é com a transparência, a segurança e a satisfação.
 
 ━━━━━━━━━━━━━━━━━━
-INFINITY CLIENTES – confiança, organização e resultado
+INFINITY CLIENTES – confiança, organização e resultado em um só lugar
 ━━━━━━━━━━━━━━━━━━
 `;
 
@@ -63,12 +63,12 @@ const MENU_TEXT = `
 📦 INFINITY STORE
 ━━━━━━━━━━━━━━━━━━
 
-👤 USUÁRIO:
+🆔 USUÁRIO:
 /produtos
 /status
 /id
 
-🛠 ADMIN:
+⚡ ADMIN:
 /admin
 ━━━━━━━━━━━━━━━━━━
 `;
@@ -86,18 +86,22 @@ function formatDate(ms) {
   return new Date(ms).toLocaleString("pt-BR");
 }
 
-// ================= START =================
+// ================= START (CORRIGIDO) =================
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
   const user = await db.collection("users").doc(id).get();
 
+  // 🔥 NOVO USUÁRIO
   if (!user.exists) {
     cadastro[id] = { step: "nome" };
-    return bot.sendMessage(msg.chat.id, "👤 Digite seu nome:");
+
+    return bot.sendPhoto(msg.chat.id, LOGO, {
+      caption: "👤 Bem-vindo! Digite seu nome:"
+    });
   }
 
-  // 🔥 ENVIA LOGO + TEXTO
+  // 🔥 USUÁRIO NORMAL
   await bot.sendPhoto(msg.chat.id, LOGO, {
     caption: START_TEXT
   });
@@ -107,7 +111,7 @@ bot.onText(/\/start/, async (msg) => {
   }, 1200);
 });
 
-// ================= CADASTRO =================
+// ================= CADASTRO (CORRIGIDO) =================
 bot.on("message", async (msg) => {
 
   const id = String(msg.from.id);
@@ -117,8 +121,10 @@ bot.on("message", async (msg) => {
   if (!cadastro[id]) return;
 
   if (cadastro[id].step === "nome") {
+
     cadastro[id].nome = text;
     cadastro[id].step = "whatsapp";
+
     return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
   }
 
@@ -134,7 +140,16 @@ bot.on("message", async (msg) => {
 
     delete cadastro[id];
 
-    return bot.sendMessage(msg.chat.id, "✔ Cadastro concluído");
+    // 🔥 MOSTRA SISTEMA APÓS CADASTRO
+    await bot.sendPhoto(msg.chat.id, LOGO, {
+      caption: START_TEXT
+    });
+
+    setTimeout(() => {
+      bot.sendMessage(msg.chat.id, MENU_TEXT);
+    }, 1200);
+
+    return;
   }
 });
 
@@ -181,7 +196,7 @@ bot.onText(/\/admin/, async (msg) => {
 
   let buttons = [
     [{ text: "➕ Adicionar Produto", callback_data: "add_product" }],
-    [{ text: "❌ Deletar TODOS Produtos", callback_data: "del_products" }],
+    [{ text: "❌ Deletar TODOS Produtos", callback_data: "del_products" }]
   ];
 
   users.forEach(u => {
@@ -220,7 +235,7 @@ bot.on("callback_query", async (cb) => {
     });
   }
 
-  // APLICAR RESET
+  // APPLY RESET
   if (data.startsWith("set_")) {
 
     const [, tempo, userId] = data.split("_");
@@ -236,7 +251,7 @@ bot.on("callback_query", async (cb) => {
     return bot.sendMessage(adminId, `✔ Reset aplicado: ${tempo}`);
   }
 
-  // DELETAR TODOS PRODUTOS
+  // DELETE ALL PRODUCTS
   if (data === "del_products") {
 
     const snap = await db.collection("produtos").get();
@@ -249,14 +264,14 @@ bot.on("callback_query", async (cb) => {
     return bot.sendMessage(adminId, "❌ Todos produtos deletados");
   }
 
-  // ADD PRODUTO
+  // ADD PRODUCT
   if (data === "add_product") {
     adminState[adminId] = { step: "nome" };
     return bot.sendMessage(adminId, "Nome do produto:");
   }
 });
 
-// ================= ADD PRODUTO =================
+// ================= ADD PRODUCT FLOW =================
 bot.on("message", async (msg) => {
 
   const id = String(msg.from.id);
@@ -285,31 +300,6 @@ bot.on("message", async (msg) => {
   }
 });
 
-// ================= DELETAR PRODUTO POR ID =================
-bot.onText(/\/deletarproduto (.+)/, async (msg, match) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  const id = match[1];
-
-  await db.collection("produtos").doc(id).delete();
-
-  bot.sendMessage(msg.chat.id, "✔ Produto deletado");
-});
-
-// ================= DELETAR USUÁRIO =================
-bot.onText(/\/deletarusuario (.+)/, async (msg, match) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  const id = match[1];
-
-  await db.collection("users").doc(id).delete();
-  await db.collection("alugueis").doc(id).delete();
-
-  bot.sendMessage(msg.chat.id, "✔ Usuário deletado");
-});
-
 // ================= BLOQUEIO =================
 setInterval(async () => {
 
@@ -333,5 +323,5 @@ setInterval(async () => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 INFINITY CLIENTES PRO ONLINE");
+  console.log("🚀 INFINITY CLIENTES ONLINE");
 });
