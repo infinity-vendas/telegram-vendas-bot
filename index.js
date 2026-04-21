@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
+
 const ADMINS = ["6863505946"];
 
 const serviceAccount = require("./firebase.json");
@@ -23,16 +24,52 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
+// ================= TEMPOS =================
+const TEMPOS = {
+  "1h": 3600000,
+  "2h": 7200000,
+  "1d": 86400000,
+  "3d": 259200000,
+  "7d": 604800000,
+  "14d": 1209600000,
+  "21d": 1814400000,
+  "30d": 2592000000,
+  "60d": 5184000000,
+  "90d": 7776000000
+};
 
-// ================= LAYOUT =================
+// ================= LAYOUT START =================
 const START_TEXT = `
 ━━━━━━━━━━━━━━━━━━
-🏆 INFINITY CLIENTE
+🏆 INFINITY CLIENTES
 ━━━━━━━━━━━━━━━━━━
-✔ Sistema ativo
-✔ Painel liberado
 
-Bem-vindo ao sistema oficial
+Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+
+Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente.
+
+Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
+
+━━━━━━━━━━━━━━━━━━
+
+Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente.
+
+Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
+
+━━━━━━━━━━━━━━━━━━
+
+Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade.
+
+Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
+
+━━━━━━━━━━━━━━━━━━
+
+Se você está chegando agora, seja muito bem-vindo!
+
+Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade.
+
+━━━━━━━━━━━━━━━━━━
+INFINITY CLIENTES – confiança, organização e resultado em um só lugar
 ━━━━━━━━━━━━━━━━━━
 `;
 
@@ -51,26 +88,9 @@ const MENU_TEXT = `
 ━━━━━━━━━━━━━━━━━━
 `;
 
-
-// ================= TEMPO =================
-const TEMPO = {
-  "1h": 3600000,
-  "2h": 7200000,
-  "1d": 86400000,
-  "3d": 259200000,
-  "7d": 604800000,
-  "14d": 1209600000,
-  "21d": 1814400000,
-  "30d": 2592000000,
-  "60d": 5184000000,
-  "90d": 7776000000
-};
-
-
 // ================= MEMORY =================
 const cadastro = {};
-const adminSession = {};
-
+const adminState = {};
 
 // ================= UTIL =================
 function isAdmin(id) {
@@ -80,7 +100,6 @@ function isAdmin(id) {
 function formatDate(ms) {
   return new Date(ms).toLocaleString("pt-BR");
 }
-
 
 // ================= CHECK ACESSO =================
 async function checkAccess(id) {
@@ -92,7 +111,6 @@ async function checkAccess(id) {
 
   return true;
 }
-
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
@@ -106,9 +124,8 @@ bot.onText(/\/start/, async (msg) => {
   }
 
   bot.sendMessage(msg.chat.id, START_TEXT);
-  setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 1000);
+  setTimeout(() => bot.sendMessage(msg.chat.id, MENU_TEXT), 1200);
 });
-
 
 // ================= CADASTRO =================
 bot.on("message", async (msg) => {
@@ -141,7 +158,6 @@ bot.on("message", async (msg) => {
   }
 });
 
-
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
@@ -160,13 +176,12 @@ bot.onText(/\/produtos/, async (msg) => {
   bot.sendMessage(msg.chat.id, txt);
 });
 
-
 // ================= STATUS =================
 bot.onText(/\/status/, async (msg) => {
 
   const doc = await db.collection("alugueis").doc(String(msg.from.id)).get();
 
-  if (!doc.exists) return bot.sendMessage(msg.chat.id, "Sem plano ativo");
+  if (!doc.exists) return bot.sendMessage(msg.chat.id, "Sem plano");
 
   bot.sendMessage(msg.chat.id,
 `📊 STATUS
@@ -175,12 +190,10 @@ Plano: ${doc.data().plano}
 Expira: ${formatDate(doc.data().expiraEm)}`);
 });
 
-
 // ================= ID =================
 bot.onText(/\/id/, (msg) => {
   bot.sendMessage(msg.chat.id, `Seu ID: ${msg.from.id}`);
 });
-
 
 // ================= ADMIN =================
 bot.onText(/\/admin/, async (msg) => {
@@ -198,11 +211,10 @@ bot.onText(/\/admin/, async (msg) => {
     }]);
   });
 
-  bot.sendMessage(msg.chat.id, "👥 Selecionar usuário:", {
+  bot.sendMessage(msg.chat.id, "👥 SELECIONAR USUÁRIO:", {
     reply_markup: { inline_keyboard: buttons }
   });
 });
-
 
 // ================= CALLBACK =================
 bot.on("callback_query", async (cb) => {
@@ -212,41 +224,40 @@ bot.on("callback_query", async (cb) => {
 
   if (!isAdmin(adminId)) return;
 
-  // escolher usuário
+  // RESET USUÁRIO
   if (data.startsWith("user_")) {
 
     const userId = data.replace("user_", "");
-    adminSession[adminId] = { userId };
+    adminState[adminId] = { userId };
 
-    const buttons = Object.keys(TEMPO).map(t => ([{
+    const buttons = Object.keys(TEMPOS).map(t => ([{
       text: `⏱ ${t}`,
       callback_data: `set_${t}_${userId}`
     }]));
 
-    return bot.sendMessage(adminId, "⏳ Definir tempo:", {
+    return bot.sendMessage(adminId, "⏳ RESET VALIDADE:", {
       reply_markup: { inline_keyboard: buttons }
     });
   }
 
-  // aplicar tempo
+  // APLICAR RESET
   if (data.startsWith("set_")) {
 
-    const [, t, userId] = data.split("_");
+    const [, tempo, userId] = data.split("_");
 
-    const expiraEm = Date.now() + TEMPO[t];
+    const expiraEm = Date.now() + TEMPOS[tempo];
 
     await db.collection("alugueis").doc(userId).set({
       ativo: true,
       expiraEm,
-      plano: t
+      plano: tempo
     }, { merge: true });
 
-    return bot.sendMessage(adminId, `✔ Aplicado: ${t}`);
+    return bot.sendMessage(adminId, `✔ Reset aplicado: ${tempo}`);
   }
 });
 
-
-// ================= BLOQUEIO =================
+// ================= BLOQUEIO AUTOMÁTICO =================
 setInterval(async () => {
 
   const snap = await db.collection("alugueis").get();
@@ -266,9 +277,8 @@ setInterval(async () => {
 
 }, 60000);
 
-
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 INFINITY STORE BASE LIMPA ONLINE");
+  console.log("🚀 INFINITY CLIENTES ONLINE");
 });
