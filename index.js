@@ -28,30 +28,30 @@ const OWNER = "INFINITY CLIENTE";
 const BOT_VERSION = "v1";
 
 const WHATSAPP_NUMBER = "5551981528372";
-const  PIX_KEY = "51981528372" ;
+const PIX_KEY = "51981528372";
 
-// ================= MEMÓRIA =================
-const  cadastroStep = { } ;
-const  cadastroData = { } ;
+// ================= MEMORY =================
+const cadastroStep = {};
+const cadastroData = {};
 
-const  addStep = { } ;
-const  addData = { } ;
+const addStep = {};
+const addData = {};
 
-const  deleteProductsConfirm = { } ;
-const  deleteUsersConfirm = { } ;
+const deleteProductsConfirm = {};
+const deleteUsersConfirm = {};
 
 // ================= PLANOS =================
-const  PLANOS = {
-  "1 dia" : 1 , "2 dias" : 2 , "3 dias" : 3 ,
-  "4 dias" : 4 , "5 dias" : 5 , "6 dias" : 6 ,
-  "7 dias" : 7 , "14 dias" : 14 ,
-  "21 dias" : 21 , "30 dias" : 30
-} ;
+const PLANOS = {
+  "1day": 1, "2day": 2, "3day": 3,
+  "4day": 4, "5day": 5, "6day": 6,
+  "7day": 7, "14day": 14,
+  "21day": 21, "30day": 30
+};
 
 // ================= LAYOUT =================
-const  TEXTO_INICIAR = `
-Doar: CLIENTE INFINITO
-Validade: 25,00
+const START_TEXT = `
+Dono: INFINITY CLIENTE
+Validity: 25,00
 Created by: @Infity_cliente_oficial
 Parcerias: nenhuma
 vendedores (1) admin
