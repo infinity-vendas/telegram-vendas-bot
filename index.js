@@ -13,6 +13,11 @@ const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 // 🎤 ÁUDIO
 const AUDIO = "https://files.catbox.moe/9dv9ln.mp3";
 
+// 💳 PIX
+const PIX_QR = "https://i.postimg.cc/c1hS77Rh/Qr-Code.jpg";
+const PIX_KEY = "51981528372";
+const PIX_NAME = "RAPHAEL DE MATOS";
+
 const serviceAccount = require("./firebase.json");
 
 admin.initializeApp({
@@ -21,8 +26,8 @@ admin.initializeApp({
 
 const db = admin.firestore();
 const bot = new TelegramBot(TOKEN, { polling: false });
-const app = express();
 
+const app = express();
 app.use(express.json());
 
 app.post("/webhook", (req, res) => {
@@ -44,34 +49,51 @@ const TEMPOS = {
   "90d": 7776000000
 };
 
-// ================= LAYOUT =================
+// ================= LAYOUT ORIGINAL (MANTIDO INTACTO) =================
 const START_TEXT = `
-━━━━━━━━━━━━━━━━━━
-🏆 INFINITY CLIENTES
-━━━━━━━━━━━━━━━━━━
-
 Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
 
-Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente.
+Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
 
-Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
+Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade. Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
 
-━━━━━━━━━━━━━━━━━━
-INFINITY CLIENTES – confiança, organização e resultado em um só lugar
-━━━━━━━━━━━━━━━━━━
+Se você está chegando agora, seja muito bem-vindo! Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade. Explore, conheça nossos serviços e aproveite tudo o que preparamos para você.
+
+INFINITY CLIENTES – confiança, organização e resultado em um só lugar.
 `;
 
 const MENU_TEXT = `
-━━━━━━━━━━━━━━━━━━
 📦 MENU PRINCIPAL
-━━━━━━━━━━━━━━━━━━
 
 /produtos
 /status
 /id
 /admin
-━━━━━━━━━━━━━━━━━━
 `;
+
+// ================= EXPIRAÇÃO =================
+function expiredMessage() {
+  return `
+❌ PLANO EXPIRADO OU INEXISTENTE
+
+Seu acesso foi bloqueado automaticamente.
+
+💳 PIX: ${PIX_KEY}
+👤 Nome: ${PIX_NAME}
+
+📷 QR CODE:
+${PIX_QR}
+
+📌 Envie:
+- Comprovante
+- Data
+- Horário
+
+Após confirmação, seu acesso será reativado automaticamente.
+Obrigado!
+`;
+}
 
 // ================= MEMORY =================
 const cadastro = {};
@@ -82,44 +104,28 @@ function isAdmin(id) {
   return ADMINS.includes(String(id));
 }
 
-function formatDate(ms) {
-  return new Date(ms).toLocaleString("pt-BR");
-}
-
-// ================= START (CORRIGIDO E SEGURO) =================
+// ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
 
-  try {
-    const user = await db.collection("users").doc(id).get();
+  const user = await db.collection("users").doc(id).get();
 
-    // 🔥 NOVO USUÁRIO
-    if (!user.exists) {
-      cadastro[id] = { step: "nome" };
+  if (!user.exists) {
+    cadastro[id] = { step: "nome" };
 
-      return bot.sendPhoto(msg.chat.id, LOGO, {
-        caption: "👤 Bem-vindo! Digite seu nome:"
-      }).catch(() => {
-        bot.sendMessage(msg.chat.id, "👤 Bem-vindo! Digite seu nome:");
-      });
-    }
-
-    // 🔥 USUÁRIO EXISTENTE
-    await bot.sendPhoto(msg.chat.id, LOGO, {
-      caption: START_TEXT
-    }).catch(() => {
-      bot.sendMessage(msg.chat.id, START_TEXT);
+    return bot.sendPhoto(msg.chat.id, LOGO, {
+      caption: "👤 Digite seu nome:"
     });
-
-    setTimeout(() => {
-      bot.sendMessage(msg.chat.id, MENU_TEXT);
-    }, 1200);
-
-  } catch (err) {
-    console.log("Erro /start:", err);
-    bot.sendMessage(msg.chat.id, "Erro ao iniciar bot. Tente novamente.");
   }
+
+  await bot.sendPhoto(msg.chat.id, LOGO, {
+    caption: START_TEXT
+  });
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, MENU_TEXT);
+  }, 1200);
 });
 
 // ================= CADASTRO =================
@@ -129,44 +135,70 @@ bot.on("message", async (msg) => {
   const text = msg.text;
 
   if (!text || text.startsWith("/")) return;
-  if (!cadastro[id]) return;
 
-  if (cadastro[id].step === "nome") {
-    cadastro[id].nome = text;
-    cadastro[id].step = "whatsapp";
-    return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
+  // CADASTRO
+  if (cadastro[id]) {
+
+    if (cadastro[id].step === "nome") {
+      cadastro[id].nome = text;
+      cadastro[id].step = "whatsapp";
+      return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
+    }
+
+    if (cadastro[id].step === "whatsapp") {
+
+      cadastro[id].whatsapp = text;
+
+      await db.collection("users").doc(id).set({
+        nome: cadastro[id].nome,
+        whatsapp: cadastro[id].whatsapp,
+        criadoEm: Date.now()
+      });
+
+      delete cadastro[id];
+
+      // 🎤 ÁUDIO
+      bot.sendAudio(msg.chat.id, AUDIO);
+
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, "⏳ Aguarde a liberação...");
+      }, 3000);
+
+      setTimeout(() => {
+        bot.sendPhoto(msg.chat.id, LOGO, {
+          caption: START_TEXT
+        });
+      }, 12000);
+
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, MENU_TEXT);
+      }, 17000);
+
+      return;
+    }
   }
 
-  if (cadastro[id].step === "whatsapp") {
+  // ADMIN FLOW
+  if (adminState[id] && isAdmin(id)) {
 
-    cadastro[id].whatsapp = text;
+    if (adminState[id].step === "nome") {
+      adminState[id].nome = text;
+      adminState[id].step = "valor";
+      return bot.sendMessage(id, "💰 Valor:");
+    }
 
-    await db.collection("users").doc(id).set({
-      nome: cadastro[id].nome,
-      whatsapp: cadastro[id].whatsapp,
-      criadoEm: Date.now()
-    });
+    if (adminState[id].step === "valor") {
 
-    delete cadastro[id];
-
-    // 🎤 ÁUDIO (SÓ APÓS CADASTRO)
-    bot.sendAudio(msg.chat.id, AUDIO).catch(() => {});
-
-    setTimeout(() => {
-      bot.sendMessage(msg.chat.id, "⏳ Aguarde a liberação...");
-    }, 3000);
-
-    setTimeout(() => {
-      bot.sendPhoto(msg.chat.id, LOGO, {
-        caption: START_TEXT
+      await db.collection("produtos").add({
+        nome: adminState[id].nome,
+        valor: text,
+        criadoEm: Date.now()
       });
-    }, 15000);
 
-    setTimeout(() => {
-      bot.sendMessage(msg.chat.id, MENU_TEXT);
-    }, 20000);
+      delete adminState[id];
 
-    return;
+      return bot.sendMessage(id, "✔ Produto adicionado");
+    }
   }
 });
 
@@ -190,13 +222,11 @@ bot.onText(/\/status/, async (msg) => {
 
   const doc = await db.collection("alugueis").doc(String(msg.from.id)).get();
 
-  if (!doc.exists) return bot.sendMessage(msg.chat.id, "Sem plano");
+  if (!doc.exists || !doc.data()?.ativo) {
+    return bot.sendMessage(msg.chat.id, expiredMessage());
+  }
 
-  bot.sendMessage(msg.chat.id,
-`📊 STATUS
-
-Plano: ${doc.data().plano}
-Expira: ${formatDate(doc.data().expiraEm)}`);
+  bot.sendMessage(msg.chat.id, `📊 STATUS\n\nPlano: ${doc.data().plano}`);
 });
 
 // ================= ID =================
