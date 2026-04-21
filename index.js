@@ -101,7 +101,7 @@ function formatDate(ms) {
   return new Date(ms).toLocaleString("pt-BR");
 }
 
-// ================= CHECK ACESSO =================
+// ================= CHECK =================
 async function checkAccess(id) {
   const doc = await db.collection("alugueis").doc(id).get();
 
@@ -202,7 +202,12 @@ bot.onText(/\/admin/, async (msg) => {
 
   const users = await db.collection("users").get();
 
-  let buttons = [];
+  let buttons = [
+    [{ text: "👥 Usuários", callback_data: "users" }],
+    [{ text: "📦 Produtos", callback_data: "products" }],
+    [{ text: "🗑 Deletar TODOS usuários", callback_data: "del_all_users" }],
+    [{ text: "🗑 Deletar TODOS produtos", callback_data: "del_all_products" }]
+  ];
 
   users.forEach(u => {
     buttons.push([{
@@ -211,7 +216,7 @@ bot.onText(/\/admin/, async (msg) => {
     }]);
   });
 
-  bot.sendMessage(msg.chat.id, "👥 SELECIONAR USUÁRIO:", {
+  bot.sendMessage(msg.chat.id, "⚙ PAINEL ADMIN COMPLETO", {
     reply_markup: { inline_keyboard: buttons }
   });
 });
@@ -224,7 +229,7 @@ bot.on("callback_query", async (cb) => {
 
   if (!isAdmin(adminId)) return;
 
-  // RESET USUÁRIO
+  // RESET USER
   if (data.startsWith("user_")) {
 
     const userId = data.replace("user_", "");
@@ -240,7 +245,7 @@ bot.on("callback_query", async (cb) => {
     });
   }
 
-  // APLICAR RESET
+  // SET RESET
   if (data.startsWith("set_")) {
 
     const [, tempo, userId] = data.split("_");
@@ -255,9 +260,35 @@ bot.on("callback_query", async (cb) => {
 
     return bot.sendMessage(adminId, `✔ Reset aplicado: ${tempo}`);
   }
+
+  // DELETE ALL USERS
+  if (data === "del_all_users") {
+
+    const snap = await db.collection("users").get();
+    const batch = db.batch();
+
+    snap.forEach(d => batch.delete(d.ref));
+
+    await batch.commit();
+
+    return bot.sendMessage(adminId, "🗑 Todos usuários deletados");
+  }
+
+  // DELETE ALL PRODUCTS
+  if (data === "del_all_products") {
+
+    const snap = await db.collection("produtos").get();
+    const batch = db.batch();
+
+    snap.forEach(d => batch.delete(d.ref));
+
+    await batch.commit();
+
+    return bot.sendMessage(adminId, "🗑 Todos produtos deletados");
+  }
 });
 
-// ================= BLOQUEIO AUTOMÁTICO =================
+// ================= BLOQUEIO =================
 setInterval(async () => {
 
   const snap = await db.collection("alugueis").get();
@@ -280,5 +311,5 @@ setInterval(async () => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 INFINITY CLIENTES ONLINE");
+  console.log("🚀 INFINITY CLIENTES FULL PAINEL ONLINE");
 });
