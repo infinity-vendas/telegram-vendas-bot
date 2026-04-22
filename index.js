@@ -10,6 +10,9 @@ const MP_TOKEN = "APP_USR-4934588586838432-XXXXXXXX-241983636";
 
 const ADMINS = ["6863505946"];
 
+// ===== IMAGEM =====
+const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
+
 // ===== FIREBASE =====
 const serviceAccount = require("./firebase.json");
 
@@ -25,43 +28,86 @@ const bot = new TelegramBot(TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
-// ================= WEBHOOK TELEGRAM =================
+// ================= TELEGRAM WEBHOOK =================
 app.post("/webhook", (req, res) => {
-  bot.processUpdate(req.body);
+  try {
+    bot.processUpdate(req.body);
+  } catch (e) {
+    console.log("Erro Telegram:", e.message);
+  }
   res.sendStatus(200);
 });
 
-// ================= WEBHOOK MERCADO PAGO =================
-app.post("/mp-webhook", async (req, res) => {
+// ================= START =================
+bot.onText(/\/start/, async (msg) => {
+
+  const id = String(msg.from.id);
 
   try {
-    const paymentId = req.body.data.id;
 
-    const payment = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${paymentId}`,
-      {
-        headers: { Authorization: `Bearer ${MP_TOKEN}` }
-      }
-    );
+    const userRef = db.collection("users").doc(id);
+    const userDoc = await userRef.get();
 
-    const data = payment.data;
+    bot.sendPhoto(msg.chat.id, LOGO);
 
-    if (data.status === "approved") {
+    const TEXTO = `
+Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
 
-      const userId = data.metadata.user_id;
+Aqui você encontra um ambiente totalmente estruturado, com atendimento rápido, organizado e seguro.
 
-      await db.collection("users").doc(userId).update({
-        vip: true
+INFINITY CLIENTES – confiança, organização e resultado em um só lugar 🚀
+`;
+
+    // NOVO USUÁRIO
+    if (!userDoc.exists) {
+
+      await userRef.set({
+        id,
+        criadoEm: Date.now(),
+        vip: false
       });
 
-      bot.sendMessage(userId, "✅ Pagamento aprovado! VIP liberado!");
+      return setTimeout(() => {
+        bot.sendMessage(msg.chat.id, TEXTO + "\n\n✅ Cadastro automático concluído!");
+      }, 2000);
     }
 
+    // USUÁRIO EXISTENTE
+    setTimeout(() => {
+      bot.sendMessage(msg.chat.id, TEXTO);
+    }, 2000);
+
+    setTimeout(() => {
+      bot.sendMessage(msg.chat.id, `
+📦 MENU PRINCIPAL
+
+/comprar - Comprar VIP
+/status - Ver status
+`);
+    }, 4000);
+
   } catch (err) {
-    console.log("Erro MP:", err.message);
+    console.log("Erro /start:", err.message);
+  }
+});
+
+// ================= STATUS =================
+bot.onText(/\/status/, async (msg) => {
+
+  const id = String(msg.from.id);
+
+  const user = await db.collection("users").doc(id).get();
+
+  if (!user.exists) {
+    return bot.sendMessage(msg.chat.id, "❌ Faça /start primeiro");
   }
 
-  res.sendStatus(200);
+  const data = user.data();
+
+  bot.sendMessage(msg.chat.id, `
+👤 ID: ${id}
+⭐ VIP: ${data.vip ? "SIM" : "NÃO"}
+`);
 });
 
 // ================= GERAR PAGAMENTO =================
@@ -78,12 +124,57 @@ bot.onText(/\/comprar/, async (msg) => {
         description: "Plano VIP",
         payment_method_id: "pix",
         payer: {
-          email: "cliente@email.com"
+          email: `user${userId}@teste.com`
         },
         metadata: {
           user_id: userId
-        }
+        },
+        notification_url: `${URL}/mp-webhook`
       },
+      {
+        headers: {
+          Authorization: `Bearer ${MP_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    const link =
+      payment.data?.point_of_interaction?.transaction_data?.ticket_url;
+
+    if (!link) {
+      return bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX");
+    }
+
+    bot.sendMessage(msg.chat.id, `
+💰 PAGAMENTO GERADO
+
+🔗 Pague aqui:
+${link}
+
+⏳ Após pagamento, liberação automática 🚀
+`);
+
+  } catch (err) {
+    console.log("Erro pagamento:", err.response?.data || err.message);
+    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar pagamento");
+  }
+});
+
+// ================= WEBHOOK MERCADO PAGO =================
+app.post("/mp-webhook", async (req, res) => {
+
+  try {
+
+    const type = req.body?.type;
+    const paymentId = req.body?.data?.id || req.query?.id;
+
+    if (type !== "payment" || !paymentId) {
+      return res.sendStatus(200);
+    }
+
+    const response = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
         headers: {
           Authorization: `Bearer ${MP_TOKEN}`
@@ -91,30 +182,93 @@ bot.onText(/\/comprar/, async (msg) => {
       }
     );
 
-    const link = payment.data.point_of_interaction.transaction_data.ticket_url;
+    const payment = response.data;
 
-    bot.sendMessage(msg.chat.id, `
-💰 PAGAMENTO GERADO
+    if (payment.status !== "approved") {
+      return res.sendStatus(200);
+    }
 
-Pague aqui:
-${link}
+    const userId = payment.metadata?.user_id;
 
-Após pagamento, liberação automática 🚀
-`);
+    if (!userId) return res.sendStatus(200);
+
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) return res.sendStatus(200);
+
+    if (userDoc.data().vip === true) return res.sendStatus(200);
+
+    await userRef.update({
+      vip: true,
+      pagoEm: Date.now()
+    });
+
+    bot.sendMessage(userId, "✅ Pagamento aprovado! VIP liberado 🚀");
+
+    console.log("VIP liberado:", userId);
 
   } catch (err) {
-    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar pagamento");
+    console.log("Erro MP:", err.response?.data || err.message);
   }
+
+  res.sendStatus(200);
 });
 
-// ================= RESTO DO SEU BOT =================
+// ================= ADMIN =================
+bot.onText(/\/admin/, (msg) => {
 
-// (mantém tudo igual ao seu código atual aqui)
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  bot.sendMessage(msg.chat.id, `
+⚙ PAINEL ADMIN
+
+/ids - listar usuários
+/vip ID - dar VIP
+/removervip ID - remover VIP
+`);
+});
+
+// LISTAR IDS
+bot.onText(/\/ids/, async (msg) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  const snap = await db.collection("users").get();
+
+  let txt = "🆔 IDS:\n\n";
+
+  snap.forEach(u => {
+    txt += `${u.id}\n`;
+  });
+
+  bot.sendMessage(msg.chat.id, txt);
+});
+
+// DAR VIP
+bot.onText(/\/vip (.+)/, async (msg, match) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  await db.collection("users").doc(match[1]).update({ vip: true });
+
+  bot.sendMessage(msg.chat.id, "✅ VIP aplicado");
+});
+
+// REMOVER VIP
+bot.onText(/\/removervip (.+)/, async (msg, match) => {
+
+  if (!ADMINS.includes(String(msg.from.id))) return;
+
+  await db.collection("users").doc(match[1]).update({ vip: false });
+
+  bot.sendMessage(msg.chat.id, "❌ VIP removido");
+});
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
   await bot.setWebHook(`${URL}/webhook`);
 
-  console.log("🚀 BOT COM PAGAMENTO ONLINE");
+  console.log("🚀 BOT FINAL ONLINE COM PAGAMENTO");
 });
