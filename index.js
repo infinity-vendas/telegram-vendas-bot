@@ -12,11 +12,10 @@ const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 const BANNER2 = "https://i.postimg.cc/kXXL9B2z/farias.jpg";
 const BANNER3 = "https://i.postimg.cc/LsBBWs6Y/tabela.jpg";
 
-// 💬 WHATSAPP
-const WHATSAPP1 = "https://wa.me/5595991314453";
-const WHATSAPP2 = "https://wa.me/551981528372";
+// 🔥 WHATSAPP LINKS
+const WA1 = "https://wa.me/5595991314453";
+const WA2 = "https://wa.me/5551981528372";
 
-// ================= FIREBASE =================
 const serviceAccount = require("./firebase.json");
 
 admin.initializeApp({
@@ -25,8 +24,8 @@ admin.initializeApp({
 
 const db = admin.firestore();
 const bot = new TelegramBot(TOKEN);
-const app = express();
 
+const app = express();
 app.use(express.json());
 
 // ================= WEBHOOK =================
@@ -34,121 +33,217 @@ app.post("/webhook", (req, res) => {
   try {
     bot.processUpdate(req.body);
   } catch (e) {
-    console.log("Webhook error:", e);
+    console.log("Erro webhook:", e);
   }
   res.sendStatus(200);
 });
 
-// ================= TEXTO PRINCIPAL =================
-const TEXTO1 = `
-Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+// ================= MEMORY =================
+const cadastro = {};
 
-Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
-
-Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
-
-Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade. Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
-
-Se você está chegando agora, seja muito bem-vindo! Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade. Explore, conheça nossos serviços e aproveite tudo o que preparamos para você.
-
-INFINITY CLIENTES – confiança, organização e resultado em um só lugar
-`;
-
-const TEXTO2 = `
-Selecione o tipo de serviço que deseja iniciar atendimento:
-
-Farias criação de sites rápido e avançados (Profissional)
-`;
+// ================= CHECK CADASTRO =================
+async function isRegistered(id) {
+  const user = await db.collection("users").doc(id).get();
+  return user.exists;
+}
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
-  const chatId = msg.chat.id;
+  const id = String(msg.from.id);
 
-  try {
+  const user = await db.collection("users").doc(id).get();
 
-    // 1️⃣ LOGO PRINCIPAL
-    await bot.sendPhoto(chatId, LOGO);
+  // 🔥 NOVO USUÁRIO
+  if (!user.exists) {
 
-    // 2️⃣ TEXTO 1
-    await bot.sendMessage(chatId, TEXTO1);
+    cadastro[id] = { step: "nome" };
 
-    // 3️⃣ TEXTO 2
-    await bot.sendMessage(chatId, TEXTO2, {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "📌 Mais informações", callback_data: "info1" }]
-        ]
-      }
-    });
+    bot.sendPhoto(msg.chat.id, LOGO);
 
-  } catch (err) {
-    console.log(err);
-    bot.sendMessage(chatId, "Erro ao iniciar.");
+    setTimeout(() => {
+      bot.sendMessage(msg.chat.id, `
+Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
+
+Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença.
+
+Digite seu nome para iniciar cadastro:
+`);
+    }, 2000);
+
+    return;
   }
+
+  // 🔥 USUÁRIO JÁ CADASTRADO
+  bot.sendPhoto(msg.chat.id, LOGO);
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, "Carregando sistema atualizado v1.4...");
+  }, 3000);
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, `
+📦 MENU PRINCIPAL
+
+/produtos
+/Lista_users_VIP
+/users
+/afiliado
+/moderadores
+/denunciar_produto
+/denunciar_vendedor
+`);
+  }, 6000);
+
+});
+
+// ================= CADASTRO =================
+bot.on("message", async (msg) => {
+
+  const id = String(msg.from.id);
+  const text = msg.text;
+
+  if (!text || text.startsWith("/")) return;
+
+  if (cadastro[id]) {
+
+    if (cadastro[id].step === "nome") {
+      cadastro[id].nome = text;
+      cadastro[id].step = "whatsapp";
+      return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
+    }
+
+    if (cadastro[id].step === "whatsapp") {
+      cadastro[id].whatsapp = text;
+      cadastro[id].step = "instagram";
+      return bot.sendMessage(msg.chat.id, "📸 Instagram:");
+    }
+
+    if (cadastro[id].step === "instagram") {
+
+      cadastro[id].instagram = text;
+
+      await db.collection("users").doc(id).set({
+        id,
+        nome: cadastro[id].nome,
+        whatsapp: cadastro[id].whatsapp,
+        instagram: cadastro[id].instagram,
+        criadoEm: Date.now()
+      });
+
+      delete cadastro[id];
+
+      bot.sendMessage(msg.chat.id, "✅ Cadastro concluído!");
+
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, "Carregando sistema atualizado v1.4...");
+      }, 3000);
+
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, `
+📦 MENU PRINCIPAL
+
+/produtos
+/Lista_users_VIP
+/users
+/afiliado
+/moderadores
+/denunciar_produto
+/denunciar_vendedor
+`);
+      }, 6000);
+
+      return;
+    }
+  }
+});
+
+// ================= BLOQUEIO =================
+async function checkAccess(msg) {
+  const ok = await isRegistered(String(msg.from.id));
+  if (!ok) {
+    bot.sendMessage(msg.chat.id, "❌ Complete seu cadastro primeiro com /start");
+    return false;
+  }
+  return true;
+}
+
+// ================= PRODUTOS =================
+bot.onText(/\/produtos/, async (msg) => {
+
+  if (!(await checkAccess(msg))) return;
+
+  const snap = await db.collection("produtos").get();
+
+  let txt = "📦 PRODUTOS:\n\n";
+
+  snap.forEach(p => {
+    const d = p.data();
+    txt += `• ${d.nome} - R$ ${d.valor}\n`;
+  });
+
+  bot.sendMessage(msg.chat.id, txt || "Sem produtos");
+});
+
+// ================= VIP =================
+bot.onText(/\/Lista_users_VIP/, async (msg) => {
+
+  if (!(await checkAccess(msg))) return;
+
+  bot.sendMessage(msg.chat.id, `
+🔥 Top Melhores Serviços ⭐⭐⭐⭐⭐
+
+Farias criação de sites rápido e avançados (Profissional)
+`, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🔥 Adquirir serviço", callback_data: "vip1" }]
+      ]
+    }
+  });
+
 });
 
 // ================= CALLBACK =================
 bot.on("callback_query", async (cb) => {
 
-  const chatId = cb.message.chat.id;
+  const data = cb.data;
+  const id = cb.from.id;
 
-  // ===== BANNER 2 =====
-  if (cb.data === "info1") {
+  if (data === "vip1") {
 
-    return bot.sendPhoto(chatId, BANNER2, {
-      caption: `
-💬 Atendimento online rápido e seguro
+    bot.sendPhoto(id, BANNER2, {
+      caption: "Atendimento rápido e profissional."
+    });
 
-Fale agora com:
-👤 Jesus Farias
-
-Desenvolvimento profissional de sites
-Sem burocracia, suporte direto
-      `,
+    return bot.sendMessage(id, "Contato:", {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "💬 WhatsApp", url: WHATSAPP1 }],
-          [{ text: "📌 Mais informações", callback_data: "info2" }]
+          [{ text: "📲 WhatsApp", url: WA1 }],
+          [{ text: "➡ Próximo", callback_data: "vip2" }]
         ]
       }
     });
   }
 
-  // ===== BANNER 3 =====
-  if (cb.data === "info2") {
+  if (data === "vip2") {
 
-    return bot.sendPhoto(chatId, BANNER3, {
-      caption: `
-💬 Atendimento online rápido e seguro
+    bot.sendPhoto(id, BANNER3);
 
-Fale agora com dono oficial:
-🔥 INFINITY CLIENTES
-
-📦 Bots Telegram + aluguel semanal, trial e mensal
-
-📢 Planos:
-• Mensal: $60
-• Semanal: $30
-• Trial: $15
-
-🚀 Sistemas automáticos e suporte 24h
-      `,
+    return bot.sendMessage(id, "INFINITY CLIENTES planos:", {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "💬 WhatsApp", url: WHATSAPP2 }]
+          [{ text: "📲 WhatsApp", url: WA2 }]
         ]
       }
     });
   }
+
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
-  try {
-    await bot.setWebHook(`${URL}/webhook`);
-    console.log("🚀 BOT ONLINE:", `${URL}/webhook`);
-  } catch (e) {
-    console.log("Webhook error:", e);
-  }
+  await bot.setWebHook(`${URL}/webhook`);
+  console.log("🚀 BOT ONLINE V1.4");
 });
