@@ -3,12 +3,14 @@ const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
 const axios = require("axios");
 
-// ================= CONFIG =================
+// ===== CONFIG =====
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
+const URL = "https://telegram-vendas-bot-1.onrender.com";
 const MP_TOKEN = "APP_USR-4934588586838432-XXXXXXXX-241983636";
-const URL = "https://seu-app.onrender.com";
 
-// ================= FIREBASE =================
+const ADMINS = ["6863505946"];
+
+// ===== FIREBASE =====
 const serviceAccount = require("./firebase.json");
 
 admin.initializeApp({
@@ -17,231 +19,70 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// ================= BOT =================
-const bot = new TelegramBot(TOKEN);
+// ===== BOT =====
+const bot = new TelegramBot(TOKEN, { webHook: true });
+
 const app = express();
 app.use(express.json());
 
-// ================= LOGO =================
-const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
-
-// ================= MEMÓRIA =================
-const cadastro = {};
-const adminState = {};
-const iaTimer = {};
-
-// ================= ADMIN =================
-const ADMINS = ["6863505946"];
-
-function isAdmin(id) {
-  return ADMINS.includes(String(id));
-}
-
-// ================= CHECK USER =================
-async function isRegistered(id) {
-  const doc = await db.collection("users").doc(id).get();
-  return doc.exists;
-}
-
-// ================= START =================
-bot.onText(/\/start/, async (msg) => {
-
-  const id = String(msg.from.id);
-  const user = await db.collection("users").doc(id).get();
-
-  bot.sendPhoto(msg.chat.id, LOGO);
-
-  const TEXTO = `
-Bem-vindo à INFINITY CLIENTES 🚀
-Seu sistema de serviços e produtos.
-
-Digite seu nome para continuar:
-`;
-
-  if (!user.exists) {
-    cadastro[id] = { step: "nome" };
-
-    setTimeout(() => {
-      bot.sendMessage(msg.chat.id, TEXTO);
-    }, 2000);
-
-    return;
-  }
-
-  setTimeout(() => {
-    bot.sendMessage(msg.chat.id, menu());
-  }, 2000);
-
-  iniciarIA(msg.chat.id);
+// ================= WEBHOOK TELEGRAM =================
+app.post("/webhook", (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
 });
 
-// ================= CADASTRO =================
-bot.on("message", async (msg) => {
+// ================= WEBHOOK MERCADO PAGO =================
+app.post("/mp-webhook", async (req, res) => {
 
-  const id = String(msg.from.id);
-  const text = msg.text;
+  try {
+    const paymentId = req.body.data.id;
 
-  if (!text || text.startsWith("/")) return;
+    const payment = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      {
+        headers: { Authorization: `Bearer ${MP_TOKEN}` }
+      }
+    );
 
-  if (cadastro[id]) {
+    const data = payment.data;
 
-    if (cadastro[id].step === "nome") {
-      cadastro[id].nome = text;
-      cadastro[id].step = "whatsapp";
-      return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
-    }
+    if (data.status === "approved") {
 
-    if (cadastro[id].step === "whatsapp") {
-      cadastro[id].whatsapp = text;
-      cadastro[id].step = "instagram";
-      return bot.sendMessage(msg.chat.id, "📸 Instagram:");
-    }
+      const userId = data.metadata.user_id;
 
-    if (cadastro[id].step === "instagram") {
-
-      await db.collection("users").doc(id).set({
-        id,
-        nome: cadastro[id].nome,
-        whatsapp: cadastro[id].whatsapp,
-        instagram: text,
-        vip: false,
-        criadoEm: Date.now()
+      await db.collection("users").doc(userId).update({
+        vip: true
       });
 
-      delete cadastro[id];
-
-      bot.sendMessage(msg.chat.id, "✅ Cadastro concluído!");
-      setTimeout(() => bot.sendMessage(msg.chat.id, menu()), 2000);
-
-      iniciarIA(msg.chat.id);
+      bot.sendMessage(userId, "✅ Pagamento aprovado! VIP liberado!");
     }
+
+  } catch (err) {
+    console.log("Erro MP:", err.message);
   }
 
-  // ================= ADMIN ADD PRODUTO =================
-  if (adminState[id] && isAdmin(id)) {
-
-    const s = adminState[id];
-
-    if (s.step === "nome") {
-      s.nome = text;
-      s.step = "valor";
-      return bot.sendMessage(id, "💰 Valor:");
-    }
-
-    if (s.step === "valor") {
-      s.valor = text;
-      s.step = "descricao";
-      return bot.sendMessage(id, "📝 Descrição:");
-    }
-
-    if (s.step === "descricao") {
-      s.descricao = text;
-      s.step = "vendedor";
-      return bot.sendMessage(id, "👤 Vendedor:");
-    }
-
-    if (s.step === "vendedor") {
-      s.vendedor = text;
-      s.step = "contato";
-      return bot.sendMessage(id, "📲 WhatsApp:");
-    }
-
-    if (s.step === "contato") {
-
-      await db.collection("produtos").add({
-        nome: s.nome,
-        valor: s.valor,
-        descricao: s.descricao,
-        vendedor: s.vendedor,
-        whatsapp: text,
-        criadoEm: Date.now()
-      });
-
-      delete adminState[id];
-
-      return bot.sendMessage(id, "✅ Produto cadastrado!");
-    }
-  }
+  res.sendStatus(200);
 });
 
-// ================= MENU =================
-function menu() {
-  return `
-📦 MENU
-
-/produtos
-/vip
-/comprar
-/me
-/suporte
-`;
-}
-
-// ================= PRODUTOS =================
-bot.onText(/\/produtos/, async (msg) => {
-
-  const snap = await db.collection("produtos").get();
-
-  if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "Sem produtos.");
-  }
-
-  let txt = "📦 PRODUTOS:\n\n";
-
-  snap.forEach(p => {
-    const d = p.data();
-    txt += `• ${d.nome} - R$ ${d.valor}\n`;
-  });
-
-  bot.sendMessage(msg.chat.id, txt);
-});
-
-// ================= VIP =================
-bot.onText(/\/vip/, async (msg) => {
-
-  const doc = await db.collection("users").doc(String(msg.from.id)).get();
-
-  if (!doc.exists) return;
-
-  const vip = doc.data().vip;
-
-  bot.sendMessage(msg.chat.id, vip ? "🔥 Você é VIP" : "❌ Não é VIP");
-});
-
-// ================= PAGAMENTO =================
+// ================= GERAR PAGAMENTO =================
 bot.onText(/\/comprar/, async (msg) => {
 
-  const link = await criarPagamento(msg.chat.id, 30, "VIP INFINITY CLIENTES");
-
-  if (!link) {
-    return bot.sendMessage(msg.chat.id, "Erro ao gerar pagamento.");
-  }
-
-  bot.sendMessage(msg.chat.id, `
-💳 PAGAMENTO GERADO
-
-${link}
-`);
-});
-
-// ================= MERCADO PAGO =================
-async function criarPagamento(chatId, valor, descricao) {
+  const userId = String(msg.from.id);
 
   try {
 
-    const res = await axios.post(
-      "https://api.mercadopago.com/checkout/preferences",
+    const payment = await axios.post(
+      "https://api.mercadopago.com/v1/payments",
       {
-        items: [{
-          title: descricao,
-          quantity: 1,
-          currency_id: "BRL",
-          unit_price: Number(valor)
-        }],
-        metadata: {
-          chat_id: String(chatId)
+        transaction_amount: 30,
+        description: "Plano VIP",
+        payment_method_id: "pix",
+        payer: {
+          email: "cliente@email.com"
         },
-        notification_url: `${URL}/webhook-mp`
+        metadata: {
+          user_id: userId
+        }
       },
       {
         headers: {
@@ -250,72 +91,30 @@ async function criarPagamento(chatId, valor, descricao) {
       }
     );
 
-    return res.data.init_point;
+    const link = payment.data.point_of_interaction.transaction_data.ticket_url;
 
-  } catch (e) {
-    console.log(e.message);
-    return null;
+    bot.sendMessage(msg.chat.id, `
+💰 PAGAMENTO GERADO
+
+Pague aqui:
+${link}
+
+Após pagamento, liberação automática 🚀
+`);
+
+  } catch (err) {
+    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar pagamento");
   }
-}
-
-// ================= WEBHOOK MP =================
-app.post("/webhook-mp", async (req, res) => {
-
-  try {
-
-    const payment = req.body;
-
-    if (payment.type === "payment") {
-
-      const id = payment.data.id;
-
-      const info = await axios.get(
-        `https://api.mercadopago.com/v1/payments/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${MP_TOKEN}`
-          }
-        }
-      );
-
-      const data = info.data;
-
-      if (data.status === "approved") {
-
-        const chatId = data.metadata.chat_id;
-
-        await db.collection("users").doc(String(chatId)).set({
-          vip: true
-        }, { merge: true });
-
-        bot.sendMessage(chatId, "✅ Pagamento aprovado! VIP liberado.");
-      }
-    }
-
-  } catch (e) {
-    console.log("MP ERROR:", e.message);
-  }
-
-  res.sendStatus(200);
 });
 
-// ================= SUPORTE =================
-bot.onText(/\/suporte/, (msg) => {
-  bot.sendMessage(msg.chat.id, "📲 Suporte ativo 24h");
-});
+// ================= RESTO DO SEU BOT =================
 
-// ================= IA =================
-function iniciarIA(chatId) {
-
-  if (iaTimer[chatId]) return;
-
-  iaTimer[chatId] = setInterval(() => {
-    bot.sendMessage(chatId, "🤖 Precisa de ajuda? Use /suporte");
-  }, 60000);
-}
+// (mantém tudo igual ao seu código atual aqui)
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
+
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT COMPLETO ONLINE");
+
+  console.log("🚀 BOT COM PAGAMENTO ONLINE");
 });
