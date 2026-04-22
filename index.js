@@ -2,8 +2,7 @@ const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
 
-// ===== CONFIG =====
-const TOKEN = "SEU_TOKEN_NOVO";
+const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
 
 const ADMINS = ["6863505946"];
@@ -22,14 +21,12 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-
-// 🔥 IMPORTANTE
-const bot = new TelegramBot(TOKEN, { webHook: true });
+const bot = new TelegramBot(TOKEN);
 
 const app = express();
 app.use(express.json());
 
-// ===== WEBHOOK =====
+// ================= WEBHOOK =================
 app.post("/webhook", (req, res) => {
   try {
     bot.processUpdate(req.body);
@@ -39,41 +36,26 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
-// ===== MEMÓRIA =====
+// ================= STATES =================
 const cadastro = {};
 const adminState = {};
 const iaTimer = {};
+let restartLock = false;
+let shutdownLock = false;
 
-// ===== TEMPOS =====
-const TEMPOS = {
-  "1h": 3600000,
-  "24h": 86400000,
-  "3d": 259200000,
-  "7d": 604800000,
-  "14d": 1209600000,
-  "21d": 1814400000,
-  "30d": 2592000000,
-  "60d": 5184000000,
-  "90d": 7776000000
-};
-
-// ===== UTIL =====
+// ================= UTIL =================
 function isAdmin(id) {
   return ADMINS.includes(String(id));
 }
 
 async function isRegistered(id) {
-  try {
-    const doc = await db.collection("users").doc(id).get();
-    return doc.exists;
-  } catch {
-    return false;
-  }
+  const doc = await db.collection("users").doc(id).get();
+  return doc.exists;
 }
 
 async function checkAccess(msg) {
   if (!(await isRegistered(String(msg.from.id)))) {
-    bot.sendMessage(msg.chat.id, "❌ Faça cadastro com /start");
+    bot.sendMessage(msg.chat.id, "❌ Use /start e complete cadastro.");
     return false;
   }
   return true;
@@ -83,20 +65,16 @@ async function checkAccess(msg) {
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
-
-  let user;
-  try {
-    user = await db.collection("users").doc(id).get();
-  } catch (e) {
-    return bot.sendMessage(msg.chat.id, "Erro no banco.");
-  }
+  const user = await db.collection("users").doc(id).get();
 
   bot.sendPhoto(msg.chat.id, LOGO);
 
-  const TEXTO = `
+  const TEXT = `
 Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
 
-INFINITY CLIENTES – confiança, organização e resultado em um só lugar
+Aqui você encontra um ambiente estruturado, rápido e seguro.
+
+INFINITY CLIENTES – confiança, organização e resultado.
 `;
 
   if (!user.exists) {
@@ -104,19 +82,19 @@ INFINITY CLIENTES – confiança, organização e resultado em um só lugar
     cadastro[id] = { step: "nome" };
 
     setTimeout(() => {
-      bot.sendMessage(msg.chat.id, TEXTO + "\n\nDigite seu nome:");
-    }, 2000);
+      bot.sendMessage(msg.chat.id, TEXT + "\n\nDigite seu nome:");
+    }, 2500);
 
     return;
   }
 
   setTimeout(() => {
-    bot.sendMessage(msg.chat.id, TEXTO);
-  }, 2000);
+    bot.sendMessage(msg.chat.id, TEXT);
+  }, 2500);
 
   setTimeout(() => {
     bot.sendMessage(msg.chat.id, menuUser());
-  }, 4000);
+  }, 5000);
 
   iniciarIA(msg.chat.id);
 });
@@ -131,26 +109,24 @@ bot.on("message", async (msg) => {
 
   if (cadastro[id]) {
 
-    const s = cadastro[id];
-
-    if (s.step === "nome") {
-      s.nome = text;
-      s.step = "whatsapp";
+    if (cadastro[id].step === "nome") {
+      cadastro[id].nome = text;
+      cadastro[id].step = "whatsapp";
       return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
     }
 
-    if (s.step === "whatsapp") {
-      s.whatsapp = text;
-      s.step = "instagram";
+    if (cadastro[id].step === "whatsapp") {
+      cadastro[id].whatsapp = text;
+      cadastro[id].step = "instagram";
       return bot.sendMessage(msg.chat.id, "📸 Instagram:");
     }
 
-    if (s.step === "instagram") {
+    if (cadastro[id].step === "instagram") {
 
       await db.collection("users").doc(id).set({
         id,
-        nome: s.nome,
-        whatsapp: s.whatsapp,
+        nome: cadastro[id].nome,
+        whatsapp: cadastro[id].whatsapp,
         instagram: text,
         criadoEm: Date.now(),
         vip: false
@@ -159,10 +135,10 @@ bot.on("message", async (msg) => {
       delete cadastro[id];
 
       bot.sendMessage(msg.chat.id, "✅ Cadastro concluído!");
+
       setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 2000);
 
       iniciarIA(msg.chat.id);
-      return;
     }
   }
 
@@ -171,58 +147,41 @@ bot.on("message", async (msg) => {
 
     const s = adminState[id];
 
-    if (s.step === "nome") {
+    if (!s.nome) {
       s.nome = text;
-      s.step = "valor";
       return bot.sendMessage(id, "💰 Valor:");
     }
 
-    if (s.step === "valor") {
+    if (!s.valor) {
       s.valor = text;
-      s.step = "descricao";
       return bot.sendMessage(id, "📝 Descrição:");
     }
 
-    if (s.step === "descricao") {
+    if (!s.descricao) {
       s.descricao = text;
-      s.step = "vendedor";
       return bot.sendMessage(id, "👤 Vendedor:");
     }
 
-    if (s.step === "vendedor") {
+    if (!s.vendedor) {
       s.vendedor = text;
-      s.step = "instagram";
-      return bot.sendMessage(id, "📸 Instagram:");
-    }
-
-    if (s.step === "instagram") {
-      s.instagram = text;
-      s.step = "youtube";
-      return bot.sendMessage(id, "📺 YouTube:");
-    }
-
-    if (s.step === "youtube") {
-      s.youtube = text;
-      s.step = "whatsapp";
       return bot.sendMessage(id, "📲 WhatsApp:");
     }
 
-    if (s.step === "whatsapp") {
+    if (!s.whatsapp) {
+      s.whatsapp = text;
 
       await db.collection("produtos").add({
         nome: s.nome,
         valor: s.valor,
         descricao: s.descricao,
         vendedor: s.vendedor,
-        instagram: s.instagram,
-        youtube: s.youtube,
-        whatsapp: text,
+        whatsapp: s.whatsapp,
         criadoEm: Date.now()
       });
 
       delete adminState[id];
 
-      return bot.sendMessage(id, "✅ Produto cadastrado!");
+      return bot.sendMessage(id, "✅ Produto salvo no Firebase!");
     }
   }
 });
@@ -230,14 +189,15 @@ bot.on("message", async (msg) => {
 // ================= MENU =================
 function menuUser() {
   return `
-📦 MENU PRINCIPAL
+📦 MENU
 
 /produtos
 /clientes_premium
-/administradores
+/admin
 /suporte
 /status
-/admin
+/restart
+/shutdown
 `;
 }
 
@@ -248,28 +208,21 @@ bot.onText(/\/produtos/, async (msg) => {
 
   const snap = await db.collection("produtos").get();
 
-  if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "Sem produtos.");
-  }
+  if (snap.empty) return bot.sendMessage(msg.chat.id, "Sem produtos.");
 
   snap.forEach(p => {
     const d = p.data();
-
-    bot.sendMessage(msg.chat.id, `
-📦 ${d.nome}
-💰 R$ ${d.valor}
-
+    bot.sendMessage(msg.chat.id,
+`📦 ${d.nome}
+💰 ${d.valor}
 📝 ${d.descricao}
-
 👤 ${d.vendedor}
-📲 ${d.whatsapp}
-`);
+📲 ${d.whatsapp}`);
   });
 });
 
-// ================= ADMIN =================
+// ================= ADMIN PANEL =================
 bot.onText(/\/admin/, (msg) => {
-
   if (!isAdmin(msg.from.id)) return;
 
   bot.sendMessage(msg.chat.id, `
@@ -278,38 +231,57 @@ bot.onText(/\/admin/, (msg) => {
 /addproduto
 /delprodutos
 /deluser ID
-/ids
-/vip ID
-/removervip ID
-/reset ID tempo
-
-Ex: /reset 123456 7d
+/restart
+/shutdown
 `);
 });
 
-// ================= RESET =================
-bot.onText(/\/reset (.+) (.+)/, async (msg, match) => {
+// ================= ADD PRODUTO =================
+bot.onText(/\/addproduto/, (msg) => {
+  if (!isAdmin(msg.from.id)) return;
+
+  adminState[msg.from.id] = {};
+  bot.sendMessage(msg.chat.id, "📦 Nome do produto:");
+});
+
+// ================= RESET RESTART =================
+bot.onText(/\/restart/, (msg) => {
 
   if (!isAdmin(msg.from.id)) return;
 
-  const userId = match[1];
-  const tempo = match[2];
+  if (restartLock) return;
 
-  if (!TEMPOS[tempo]) {
-    return bot.sendMessage(msg.chat.id, "❌ Tempo inválido");
-  }
+  restartLock = true;
 
-  try {
-    await db.collection("alugueis").doc(userId).set({
-      ativo: true,
-      plano: tempo,
-      expiraEm: Date.now() + TEMPOS[tempo]
-    }, { merge: true });
+  bot.sendMessage(msg.chat.id, "🔄 Confirmar restart: /confirmar_restart");
+});
 
-    bot.sendMessage(msg.chat.id, "✅ Reset aplicado");
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, "Erro ao resetar");
-  }
+bot.onText(/\/confirmar_restart/, (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  bot.sendMessage(msg.chat.id, "♻ Reiniciando bot...");
+
+  setTimeout(() => process.exit(1), 3000);
+});
+
+// ================= SHUTDOWN =================
+bot.onText(/\/shutdown/, (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  shutdownLock = true;
+
+  bot.sendMessage(msg.chat.id, "🛑 Confirmar shutdown: /confirmar_shutdown");
+});
+
+bot.onText(/\/confirmar_shutdown/, (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  bot.sendMessage(msg.chat.id, "⛔ Desligando bot...");
+
+  setTimeout(() => process.exit(0), 3000);
 });
 
 // ================= IA =================
@@ -324,10 +296,6 @@ function iniciarIA(chatId) {
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
-  try {
-    await bot.setWebHook(`${URL}/webhook`);
-    console.log("🚀 BOT ONLINE V1.9 FIX");
-  } catch (e) {
-    console.log("Erro webhook:", e);
-  }
+  await bot.setWebHook(`${URL}/webhook`);
+  console.log("🚀 BOT PROFISSIONAL ONLINE");
 });
