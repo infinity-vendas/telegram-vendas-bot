@@ -2,7 +2,8 @@ const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
 
-const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
+// ===== CONFIG =====
+const TOKEN = "SEU_TOKEN_NOVO";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
 
 const ADMINS = ["6863505946"];
@@ -21,7 +22,9 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-const bot = new TelegramBot(TOKEN);
+
+// 🔥 IMPORTANTE
+const bot = new TelegramBot(TOKEN, { webHook: true });
 
 const app = express();
 app.use(express.json());
@@ -41,7 +44,7 @@ const cadastro = {};
 const adminState = {};
 const iaTimer = {};
 
-// ===== TEMPOS RESET =====
+// ===== TEMPOS =====
 const TEMPOS = {
   "1h": 3600000,
   "24h": 86400000,
@@ -60,13 +63,17 @@ function isAdmin(id) {
 }
 
 async function isRegistered(id) {
-  const doc = await db.collection("users").doc(id).get();
-  return doc.exists;
+  try {
+    const doc = await db.collection("users").doc(id).get();
+    return doc.exists;
+  } catch {
+    return false;
+  }
 }
 
 async function checkAccess(msg) {
   if (!(await isRegistered(String(msg.from.id)))) {
-    bot.sendMessage(msg.chat.id, "❌ Complete cadastro com /start");
+    bot.sendMessage(msg.chat.id, "❌ Faça cadastro com /start");
     return false;
   }
   return true;
@@ -76,16 +83,19 @@ async function checkAccess(msg) {
 bot.onText(/\/start/, async (msg) => {
 
   const id = String(msg.from.id);
-  const user = await db.collection("users").doc(id).get();
+
+  let user;
+  try {
+    user = await db.collection("users").doc(id).get();
+  } catch (e) {
+    return bot.sendMessage(msg.chat.id, "Erro no banco.");
+  }
 
   bot.sendPhoto(msg.chat.id, LOGO);
 
   const TEXTO = `
 Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
-Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
-Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
-Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade. Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
-Se você está chegando agora, seja muito bem-vindo! Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade. Explore, conheça nossos serviços e aproveite tudo o que preparamos para você.
+
 INFINITY CLIENTES – confiança, organização e resultado em um só lugar
 `;
 
@@ -95,18 +105,18 @@ INFINITY CLIENTES – confiança, organização e resultado em um só lugar
 
     setTimeout(() => {
       bot.sendMessage(msg.chat.id, TEXTO + "\n\nDigite seu nome:");
-    }, 3000);
+    }, 2000);
 
     return;
   }
 
   setTimeout(() => {
     bot.sendMessage(msg.chat.id, TEXTO);
-  }, 3000);
+  }, 2000);
 
   setTimeout(() => {
     bot.sendMessage(msg.chat.id, menuUser());
-  }, 6000);
+  }, 4000);
 
   iniciarIA(msg.chat.id);
 });
@@ -121,24 +131,26 @@ bot.on("message", async (msg) => {
 
   if (cadastro[id]) {
 
-    if (cadastro[id].step === "nome") {
-      cadastro[id].nome = text;
-      cadastro[id].step = "whatsapp";
+    const s = cadastro[id];
+
+    if (s.step === "nome") {
+      s.nome = text;
+      s.step = "whatsapp";
       return bot.sendMessage(msg.chat.id, "📱 WhatsApp:");
     }
 
-    if (cadastro[id].step === "whatsapp") {
-      cadastro[id].whatsapp = text;
-      cadastro[id].step = "instagram";
+    if (s.step === "whatsapp") {
+      s.whatsapp = text;
+      s.step = "instagram";
       return bot.sendMessage(msg.chat.id, "📸 Instagram:");
     }
 
-    if (cadastro[id].step === "instagram") {
+    if (s.step === "instagram") {
 
       await db.collection("users").doc(id).set({
         id,
-        nome: cadastro[id].nome,
-        whatsapp: cadastro[id].whatsapp,
+        nome: s.nome,
+        whatsapp: s.whatsapp,
         instagram: text,
         criadoEm: Date.now(),
         vip: false
@@ -147,12 +159,10 @@ bot.on("message", async (msg) => {
       delete cadastro[id];
 
       bot.sendMessage(msg.chat.id, "✅ Cadastro concluído!");
-
-      setTimeout(() => {
-        bot.sendMessage(msg.chat.id, menuUser());
-      }, 3000);
+      setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 2000);
 
       iniciarIA(msg.chat.id);
+      return;
     }
   }
 
@@ -200,7 +210,13 @@ bot.on("message", async (msg) => {
     if (s.step === "whatsapp") {
 
       await db.collection("produtos").add({
-        ...s,
+        nome: s.nome,
+        valor: s.valor,
+        descricao: s.descricao,
+        vendedor: s.vendedor,
+        instagram: s.instagram,
+        youtube: s.youtube,
+        whatsapp: text,
         criadoEm: Date.now()
       });
 
@@ -227,11 +243,14 @@ function menuUser() {
 
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
+
   if (!(await checkAccess(msg))) return;
 
   const snap = await db.collection("produtos").get();
 
-  if (snap.empty) return bot.sendMessage(msg.chat.id, "Sem produtos.");
+  if (snap.empty) {
+    return bot.sendMessage(msg.chat.id, "Sem produtos.");
+  }
 
   snap.forEach(p => {
     const d = p.data();
@@ -239,6 +258,7 @@ bot.onText(/\/produtos/, async (msg) => {
     bot.sendMessage(msg.chat.id, `
 📦 ${d.nome}
 💰 R$ ${d.valor}
+
 📝 ${d.descricao}
 
 👤 ${d.vendedor}
@@ -249,6 +269,7 @@ bot.onText(/\/produtos/, async (msg) => {
 
 // ================= ADMIN =================
 bot.onText(/\/admin/, (msg) => {
+
   if (!isAdmin(msg.from.id)) return;
 
   bot.sendMessage(msg.chat.id, `
@@ -266,7 +287,7 @@ Ex: /reset 123456 7d
 `);
 });
 
-// ===== RESET TEMPO =====
+// ================= RESET =================
 bot.onText(/\/reset (.+) (.+)/, async (msg, match) => {
 
   if (!isAdmin(msg.from.id)) return;
@@ -278,24 +299,22 @@ bot.onText(/\/reset (.+) (.+)/, async (msg, match) => {
     return bot.sendMessage(msg.chat.id, "❌ Tempo inválido");
   }
 
-  const userRef = db.collection("users").doc(userId);
-  const userDoc = await userRef.get();
+  try {
+    await db.collection("alugueis").doc(userId).set({
+      ativo: true,
+      plano: tempo,
+      expiraEm: Date.now() + TEMPOS[tempo]
+    }, { merge: true });
 
-  if (!userDoc.exists) {
-    return bot.sendMessage(msg.chat.id, "❌ Usuário não encontrado");
+    bot.sendMessage(msg.chat.id, "✅ Reset aplicado");
+  } catch (e) {
+    bot.sendMessage(msg.chat.id, "Erro ao resetar");
   }
-
-  await db.collection("alugueis").doc(userId).set({
-    ativo: true,
-    plano: tempo,
-    expiraEm: Date.now() + TEMPOS[tempo]
-  }, { merge: true });
-
-  bot.sendMessage(msg.chat.id, `✅ Reset aplicado (${tempo}) para ${userDoc.data().nome}`);
 });
 
 // ================= IA =================
 function iniciarIA(chatId) {
+
   if (iaTimer[chatId]) return;
 
   iaTimer[chatId] = setInterval(() => {
@@ -305,6 +324,10 @@ function iniciarIA(chatId) {
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
-  await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT V1.9 ONLINE");
+  try {
+    await bot.setWebHook(`${URL}/webhook`);
+    console.log("🚀 BOT ONLINE V1.9 FIX");
+  } catch (e) {
+    console.log("Erro webhook:", e);
+  }
 });
