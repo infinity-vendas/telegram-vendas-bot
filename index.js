@@ -1,12 +1,13 @@
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
-const axios = require("axios");
 
 // ================= CONFIG =================
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
-const URL = "https://telegram-vendas-bot-1.onrender.com"; // 🔥 SUA URL REAL
-const MP_TOKEN = "APP_USR-5364485461402569-042305-dd1c6f89e890b2996cba8b3d36f3b2db-2339435531"; // 🔥 APP_USR-
+const URL = "https://telegram-vendas-bot-1.onrender.com";
+
+// 🔥 SUA CHAVE PIX (email, CPF, aleatória, etc)
+const CHAVE_PIX = "infinitycliente.pay.oficial";
 
 const ADMINS = ["6863505946"];
 
@@ -25,73 +26,9 @@ const bot = new TelegramBot(TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
-// ================= TELEGRAM WEBHOOK =================
+// ================= WEBHOOK =================
 app.post("/webhook", (req, res) => {
   bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
-
-// ================= MERCADO PAGO WEBHOOK =================
-app.post("/mp-webhook", async (req, res) => {
-
-  try {
-    const paymentId = req.body?.data?.id;
-    if (!paymentId) return res.sendStatus(200);
-
-    const response = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${paymentId}`,
-      {
-        headers: { Authorization: `Bearer ${MP_TOKEN}` }
-      }
-    );
-
-    const payment = response.data;
-
-    console.log("STATUS:", payment.status);
-
-    if (payment.status === "approved") {
-
-      const userId = payment.metadata?.user_id;
-      const produtoId = payment.metadata?.produto_id;
-
-      if (!userId || !produtoId) return res.sendStatus(200);
-
-      const ref = db.collection("produtos").doc(produtoId);
-      const doc = await ref.get();
-      if (!doc.exists) return res.sendStatus(200);
-
-      const produto = doc.data();
-
-      // 🔻 BAIXAR ESTOQUE
-      await ref.update({
-        estoque: Math.max(0, Number(produto.estoque) - 1)
-      });
-
-      // 💾 SALVAR PAGAMENTO
-      await db.collection("pagamentos").doc(payment.id.toString()).set({
-        userId,
-        produtoId,
-        valor: payment.transaction_amount,
-        criadoEm: Date.now()
-      });
-
-      // 🚀 ENTREGA AUTOMÁTICA
-      bot.sendMessage(userId, `
-✅ PAGAMENTO APROVADO!
-
-📦 Produto: ${produto.nome}
-
-🔗 Acesse seu produto:
-${produto.link}
-
-Obrigado pela compra!
-`);
-    }
-
-  } catch (err) {
-    console.log("ERRO WEBHOOK:", JSON.stringify(err.response?.data || err.message));
-  }
-
   res.sendStatus(200);
 });
 
@@ -103,18 +40,22 @@ function isAdmin(id) {
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
-  const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
-
   const TEXTO = `
-Bem-vindo à INFINITY CLIENTES!
+🚀 Bem-vindo à INFINITY CLIENTES
 
-Sistema automatizado com entrega instantânea.
+Sistema de vendas via PIX manual.
+
+📌 Como funciona:
+1. Escolha um produto
+2. Faça o pagamento via PIX
+3. Envie "paguei"
+4. Aguarde liberação automática pelo admin
 `;
 
-  bot.sendPhoto(msg.chat.id, LOGO);
-
-  setTimeout(() => bot.sendMessage(msg.chat.id, TEXTO), 3000);
-  setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 6000);
+  bot.sendMessage(msg.chat.id, TEXTO);
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, menuUser());
+  }, 1500);
 });
 
 // ================= MENU =================
@@ -135,7 +76,7 @@ bot.onText(/\/id/, (msg) => {
 });
 
 bot.onText(/\/status/, (msg) => {
-  bot.sendMessage(msg.chat.id, "✅ BOT ONLINE - PIX OK");
+  bot.sendMessage(msg.chat.id, "✅ BOT ONLINE (modo manual)");
 });
 
 bot.onText(/\/admin/, (msg) => {
@@ -145,6 +86,8 @@ bot.onText(/\/admin/, (msg) => {
 ⚙️ ADMIN
 
 /adicionar
+/pedidos
+/liberar ID_PEDIDO
 `);
 });
 
@@ -165,93 +108,135 @@ bot.onText(/\/produtos/, async (msg) => {
 💰 R$ ${p.valor}
 📦 Estoque: ${p.estoque}
 
-🆔 ID: ${doc.id}
+🆔 ID Produto: ${doc.id}
 
 👉 /comprar_${doc.id}
 `);
   });
 });
 
-// ================= PIX (CORRIGIDO 100%) =================
+// ================= COMPRA =================
 bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
-  const idProduto = match[1];
+  const produtoId = match[1];
   const userId = String(msg.from.id);
 
-  const doc = await db.collection("produtos").doc(idProduto).get();
+  const doc = await db.collection("produtos").doc(produtoId).get();
   if (!doc.exists) return;
 
   const p = doc.data();
 
-  const valor = Number(String(p.valor).replace(",", "."));
+  // salva pedido automático
+  const pedidoRef = await db.collection("pedidos").add({
+    userId,
+    produtoId,
+    nomeProduto: p.nome,
+    valor: p.valor,
+    status: "pendente",
+    criadoEm: Date.now()
+  });
 
-  if (!valor || isNaN(valor) || valor <= 0) {
-    return bot.sendMessage(msg.chat.id, "❌ Valor inválido.");
-  }
-
-  try {
-
-    const pagamento = await axios.post(
-      "https://api.mercadopago.com/v1/payments",
-      {
-        transaction_amount: valor,
-        description: p.nome,
-        payment_method_id: "pix",
-
-        payer: {
-          email: "github.script.oficial@gmail.com" // 🔥 COLOQUE SEU EMAIL
-        },
-
-        metadata: {
-          user_id: userId,
-          produto_id: idProduto
-        },
-
-        notification_url: `${URL}/mp-webhook`,
-
-        date_of_expiration: new Date(Date.now() + 30 * 60 * 1000) // 🔥 CORREÇÃO
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${MP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-    const data = pagamento.data;
-
-    if (!data.point_of_interaction) {
-      console.log("ERRO MP:", data);
-      return bot.sendMessage(msg.chat.id, "❌ Erro no Mercado Pago.");
-    }
-
-    const qr = data.point_of_interaction.transaction_data.qr_code_base64;
-    const copia = data.point_of_interaction.transaction_data.qr_code;
-
-    const buffer = Buffer.from(qr, "base64");
-
-    await bot.sendPhoto(msg.chat.id, buffer, {
-      caption: `
+  bot.sendMessage(msg.chat.id, `
 💰 PAGAMENTO PIX
 
-📦 ${p.nome}
-💰 R$ ${valor}
+📦 Produto: ${p.nome}
+💰 Valor: R$ ${p.valor}
 
-📋 Copia e cola:
-${copia}
+🔑 Chave PIX:
+${CHAVE_PIX}
 
-⚡ Após pagar, liberação automática!
-`
-    });
+📩 Após pagar, envie:
+👉 paguei
 
-  } catch (err) {
+🧾 ID do Pedido:
+${pedidoRef.id}
+`);
+});
 
-    console.log("ERRO REAL PIX:");
-    console.log(JSON.stringify(err.response?.data, null, 2));
+// ================= PAGUEI =================
+bot.onText(/paguei/i, async (msg) => {
 
-    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX.");
+  bot.sendMessage(msg.chat.id, `
+⏳ Recebido!
+
+Seu pagamento será verificado e liberado em breve.
+`);
+});
+
+// ================= VER PEDIDOS =================
+bot.onText(/\/pedidos/, async (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const snap = await db.collection("pedidos")
+    .where("status", "==", "pendente")
+    .get();
+
+  if (snap.empty) {
+    return bot.sendMessage(msg.chat.id, "✅ Nenhum pedido pendente.");
   }
+
+  snap.forEach(doc => {
+    const p = doc.data();
+
+    bot.sendMessage(msg.chat.id, `
+🧾 Pedido: ${doc.id}
+
+👤 Cliente: ${p.userId}
+📦 Produto: ${p.nomeProduto}
+💰 Valor: R$ ${p.valor}
+
+👉 /liberar ${doc.id}
+`);
+  });
+});
+
+// ================= LIBERAR =================
+bot.onText(/\/liberar (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const pedidoId = match[1];
+
+  const pedidoRef = db.collection("pedidos").doc(pedidoId);
+  const pedidoDoc = await pedidoRef.get();
+
+  if (!pedidoDoc.exists) {
+    return bot.sendMessage(msg.chat.id, "❌ Pedido não encontrado.");
+  }
+
+  const pedido = pedidoDoc.data();
+
+  const produtoRef = db.collection("produtos").doc(pedido.produtoId);
+  const produtoDoc = await produtoRef.get();
+
+  if (!produtoDoc.exists) {
+    return bot.sendMessage(msg.chat.id, "❌ Produto não encontrado.");
+  }
+
+  const produto = produtoDoc.data();
+
+  // baixa estoque
+  await produtoRef.update({
+    estoque: Math.max(0, Number(produto.estoque) - 1)
+  });
+
+  // marca como entregue
+  await pedidoRef.update({
+    status: "entregue"
+  });
+
+  // entrega produto
+  bot.sendMessage(pedido.userId, `
+✅ PAGAMENTO CONFIRMADO!
+
+📦 Produto: ${produto.nome}
+
+🔗 Acesse:
+${produto.link}
+`);
+
+  bot.sendMessage(msg.chat.id, "✅ Produto liberado com sucesso!");
 });
 
 // ================= CADASTRO =================
@@ -261,13 +246,14 @@ bot.onText(/\/adicionar/, (msg) => {
   if (!isAdmin(msg.from.id)) return;
 
   adminState[msg.from.id] = { step: "produto" };
-  bot.sendMessage(msg.chat.id, "Produto:");
+  bot.sendMessage(msg.chat.id, "Nome do produto:");
 });
 
 bot.on("message", async (msg) => {
 
   const id = msg.from.id;
   const s = adminState[id];
+
   if (!s || !isAdmin(id)) return;
 
   const t = msg.text;
@@ -280,18 +266,6 @@ bot.on("message", async (msg) => {
 
   if (s.step === "valor") {
     s.valor = t;
-    s.step = "descricao";
-    return bot.sendMessage(id, "Descrição:");
-  }
-
-  if (s.step === "descricao") {
-    s.descricao = t;
-    s.step = "whatsapp";
-    return bot.sendMessage(id, "WhatsApp:");
-  }
-
-  if (s.step === "whatsapp") {
-    s.whatsapp = t;
     s.step = "estoque";
     return bot.sendMessage(id, "Estoque:");
   }
@@ -299,7 +273,7 @@ bot.on("message", async (msg) => {
   if (s.step === "estoque") {
     s.estoque = t;
     s.step = "link";
-    return bot.sendMessage(id, "Link produto:");
+    return bot.sendMessage(id, "Link do produto:");
   }
 
   if (s.step === "link") {
@@ -307,8 +281,6 @@ bot.on("message", async (msg) => {
     await db.collection("produtos").add({
       nome: s.nome,
       valor: Number(String(s.valor).replace(",", ".")),
-      descricao: s.descricao,
-      whatsapp: s.whatsapp,
       estoque: Number(s.estoque),
       link: t,
       criadoEm: Date.now()
@@ -323,5 +295,5 @@ bot.on("message", async (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT ONLINE COM PIX FUNCIONANDO");
+  console.log("🚀 BOT MANUAL ONLINE (100% FUNCIONANDO)");
 });
