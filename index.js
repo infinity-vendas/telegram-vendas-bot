@@ -34,8 +34,6 @@ app.post("/webhook", (req, res) => {
 // ================= MERCADO PAGO WEBHOOK =================
 app.post("/mp-webhook", async (req, res) => {
 
-  console.log("WEBHOOK:", JSON.stringify(req.body));
-
   try {
 
     const paymentId = req.body?.data?.id;
@@ -44,16 +42,13 @@ app.post("/mp-webhook", async (req, res) => {
     const response = await axios.get(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
-        headers: {
-          Authorization: `Bearer ${MP_TOKEN}`
-        }
+        headers: { Authorization: `Bearer ${MP_TOKEN}` }
       }
     );
 
     const payment = response.data;
 
-    const jaProcessado = await db.collection("pagamentos").doc(payment.id.toString()).get();
-    if (jaProcessado.exists) return res.sendStatus(200);
+    console.log("STATUS:", payment.status);
 
     if (payment.status === "approved") {
 
@@ -64,19 +59,15 @@ app.post("/mp-webhook", async (req, res) => {
 
       const ref = db.collection("produtos").doc(produtoId);
       const doc = await ref.get();
+
       if (!doc.exists) return res.sendStatus(200);
 
       const produto = doc.data();
 
-      await ref.update({
-        estoque: Math.max(0, Number(produto.estoque) - 1)
-      });
+      const novoEstoque = Math.max(0, Number(produto.estoque) - 1);
 
-      await db.collection("pagamentos").doc(payment.id.toString()).set({
-        userId,
-        produtoId,
-        valor: payment.transaction_amount,
-        criadoEm: Date.now()
+      await ref.update({
+        estoque: novoEstoque
       });
 
       bot.sendMessage(userId, `
@@ -89,10 +80,11 @@ ${produto.link}
 
 Obrigado pela compra!
 `);
+
     }
 
   } catch (err) {
-    console.log("ERRO WEBHOOK:", JSON.stringify(err.response?.data || err.message));
+    console.log("ERRO WEBHOOK:", err.response?.data || err.message);
   }
 
   res.sendStatus(200);
@@ -108,27 +100,25 @@ bot.onText(/\/start/, async (msg) => {
 
   const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 
-  const TEXTO = `
-Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+  const TEXTO = `Bem-vindo à INFINITY CLIENTES!
 
-Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
-
-Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
-
-Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade.
-
-Seja bem-vindo!
-`;
+Sistema automatizado com entrega instantânea.`;
 
   bot.sendPhoto(msg.chat.id, LOGO);
-  setTimeout(() => bot.sendMessage(msg.chat.id, TEXTO), 4000);
-  setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 8000);
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, TEXTO);
+  }, 3000);
+
+  setTimeout(() => {
+    bot.sendMessage(msg.chat.id, menuUser());
+  }, 6000);
 });
 
 // ================= MENU =================
 function menuUser() {
   return `
-📦 MENU PRINCIPAL
+📦 MENU
 
 /produtos
 /id
@@ -137,34 +127,13 @@ function menuUser() {
 `;
 }
 
-// ================= COMANDOS FALTANTES =================
-bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${msg.from.id}`);
-});
-
-bot.onText(/\/status/, (msg) => {
-  bot.sendMessage(msg.chat.id, "✅ BOT ONLINE - PIX OK");
-});
-
-bot.onText(/\/admin/, (msg) => {
-  if (!isAdmin(msg.from.id)) return;
-
-  bot.sendMessage(msg.chat.id, `
-⚙️ ADMIN
-
-/adicionar
-/deletar_produto ID
-/alterar_estoque ID VALOR
-`);
-});
-
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
   const snap = await db.collection("produtos").get();
 
   if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto.");
+    return bot.sendMessage(msg.chat.id, "❌ Sem produtos.");
   }
 
   snap.forEach(doc => {
@@ -174,8 +143,6 @@ bot.onText(/\/produtos/, async (msg) => {
 📦 ${p.nome}
 💰 R$ ${p.valor}
 📦 Estoque: ${p.estoque}
-
-🆔 ID: ${doc.id}
 
 👉 /comprar_${doc.id}
 `);
@@ -193,11 +160,11 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const p = doc.data();
 
-  // 🔥 CORREÇÃO DO ERRO PIX
+  // 🔥 CORREÇÃO DO VALOR
   const valor = Number(String(p.valor).replace(",", "."));
 
   if (!valor || isNaN(valor) || valor <= 0) {
-    return bot.sendMessage(msg.chat.id, "❌ Valor inválido do produto.");
+    return bot.sendMessage(msg.chat.id, "❌ Valor inválido.");
   }
 
   try {
@@ -209,7 +176,7 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
         description: p.nome,
         payment_method_id: "pix",
         payer: {
-          email: "comprador@email.com"
+          email: "github.script.oficial@gmail.com" // 🔥 COLOQUE SEU EMAIL AQUI
         },
         metadata: {
           user_id: userId,
@@ -226,10 +193,10 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
     const data = pagamento.data;
 
-    const buffer = Buffer.from(
-      data.point_of_interaction.transaction_data.qr_code_base64,
-      "base64"
-    );
+    const qr = data.point_of_interaction.transaction_data.qr_code_base64;
+    const copia = data.point_of_interaction.transaction_data.qr_code;
+
+    const buffer = Buffer.from(qr, "base64");
 
     await bot.sendPhoto(msg.chat.id, buffer, {
       caption: `
@@ -239,16 +206,31 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 💰 R$ ${valor}
 
 📋 Copia e cola:
-${data.point_of_interaction.transaction_data.qr_code}
+${copia}
 
 ⚡ Pagamento automático!
 `
     });
 
   } catch (err) {
-    console.log("ERRO PIX:", JSON.stringify(err.response?.data));
+    console.log("ERRO PIX DETALHADO:", err.response?.data || err.message);
+
     bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX.");
   }
+});
+
+// ================= ADMIN =================
+bot.onText(/\/admin/, (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  bot.sendMessage(msg.chat.id, `
+⚙️ ADMIN
+
+/adicionar
+/deletar_produto ID
+/alterar_estoque ID VALOR
+`);
 });
 
 // ================= CADASTRO =================
@@ -303,7 +285,7 @@ bot.on("message", async (msg) => {
 
     await db.collection("produtos").add({
       nome: s.nome,
-      valor: Number(String(s.valor).replace(",", ".")),
+      valor: Number(String(s.valor).replace(",", ".")), // 🔥 CORREÇÃO
       descricao: s.descricao,
       whatsapp: s.whatsapp,
       estoque: Number(s.estoque),
@@ -320,5 +302,5 @@ bot.on("message", async (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT ONLINE 100%");
+  console.log("🚀 BOT 100% AUTOMÁTICO");
 });
