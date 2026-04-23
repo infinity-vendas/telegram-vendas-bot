@@ -115,15 +115,12 @@ Aqui você encontra um ambiente totalmente estruturado para facilitar sua experi
 
 Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
 
-Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade. Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
+Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade.
 
-Se você está chegando agora, seja muito bem-vindo! Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade. Explore, conheça nossos serviços e aproveite tudo o que preparamos para você.
-
-INFINITY CLIENTES – confiança, organização e resultado em um só lugar
+Seja bem-vindo!
 `;
 
   bot.sendPhoto(msg.chat.id, LOGO);
-
   setTimeout(() => bot.sendMessage(msg.chat.id, TEXTO), 4000);
   setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 8000);
 });
@@ -139,6 +136,27 @@ function menuUser() {
 /admin
 `;
 }
+
+// ================= COMANDOS FALTANTES =================
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${msg.from.id}`);
+});
+
+bot.onText(/\/status/, (msg) => {
+  bot.sendMessage(msg.chat.id, "✅ BOT ONLINE - PIX OK");
+});
+
+bot.onText(/\/admin/, (msg) => {
+  if (!isAdmin(msg.from.id)) return;
+
+  bot.sendMessage(msg.chat.id, `
+⚙️ ADMIN
+
+/adicionar
+/deletar_produto ID
+/alterar_estoque ID VALOR
+`);
+});
 
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
@@ -164,7 +182,7 @@ bot.onText(/\/produtos/, async (msg) => {
   });
 });
 
-// ================= COMPRA =================
+// ================= COMPRA PIX =================
 bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const idProduto = match[1];
@@ -175,10 +193,11 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const p = doc.data();
 
+  // 🔥 CORREÇÃO DO ERRO PIX
   const valor = Number(String(p.valor).replace(",", "."));
 
-  if (isNaN(valor) || valor <= 0) {
-    return bot.sendMessage(msg.chat.id, "❌ Valor inválido.");
+  if (!valor || isNaN(valor) || valor <= 0) {
+    return bot.sendMessage(msg.chat.id, "❌ Valor inválido do produto.");
   }
 
   try {
@@ -189,7 +208,9 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
         transaction_amount: valor,
         description: p.nome,
         payment_method_id: "pix",
-        payer: { email: "comprador@email.com" },
+        payer: {
+          email: "comprador@email.com"
+        },
         metadata: {
           user_id: userId,
           produto_id: idProduto
@@ -230,7 +251,7 @@ ${data.point_of_interaction.transaction_data.qr_code}
   }
 });
 
-// ================= ADMIN =================
+// ================= CADASTRO =================
 const adminState = {};
 
 bot.onText(/\/adicionar/, (msg) => {
