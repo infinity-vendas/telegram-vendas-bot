@@ -6,7 +6,7 @@ const axios = require("axios");
 // ================= CONFIG =================
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com"; // 🔥 SUA URL REAL
-const MP_TOKEN = "APP_USR-5364485461402569-042206-d7728868cf6e70a9f34584e0584fdb22-2339435531"; // 🔥 APP_USR-
+const MP_TOKEN = "APP_USR-5364485461402569-042305-dd1c6f89e890b2996cba8b3d36f3b2db-2339435531"; // 🔥 APP_USR-
 
 const ADMINS = ["6863505946"];
 
