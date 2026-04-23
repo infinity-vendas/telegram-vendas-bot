@@ -6,8 +6,8 @@ const admin = require("firebase-admin");
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
 const URL = "https://telegram-vendas-bot-1.onrender.com";
 
-// 🔥 SUA CHAVE PIX (email, CPF, aleatória, etc)
-const CHAVE_PIX = "infinitycliente.pay.oficial";
+const CHAVE_PIX = "Infinitycliente.pay.oficial@gmail.com";
+const WHATSAPP = "https://wa.me/5551981528372";
 
 const ADMINS = ["6863505946"];
 
@@ -26,7 +26,6 @@ const bot = new TelegramBot(TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
-// ================= WEBHOOK =================
 app.post("/webhook", (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
@@ -40,54 +39,125 @@ function isAdmin(id) {
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
+  const chatId = msg.chat.id;
+
+  // LOGO
+  await bot.sendPhoto(chatId, "https://i.postimg.cc/cJktrZVw/logo.jpg");
+
+  // TEXTO
   const TEXTO = `
-🚀 Bem-vindo à INFINITY CLIENTES
+Olá, sou atendente virtual autorizado INFINITY CLIENTES.
 
-Sistema de vendas via PIX manual.
+Somos uma empresa especializada em atendimentos online, rápido e seguro.
 
-📌 Como funciona:
-1. Escolha um produto
-2. Faça o pagamento via PIX
-3. Envie "paguei"
-4. Aguarde liberação automática pelo admin
+Caso tenha interesse em adquirir nossos produtos 100% qualidade e entregas rápidas, é necessário informar seu login de acesso.
+
+Caso não tenha cadastro, clique em criar conta.
 `;
 
-  bot.sendMessage(msg.chat.id, TEXTO);
+  setTimeout(() => bot.sendMessage(chatId, TEXTO), 2000);
+
   setTimeout(() => {
-    bot.sendMessage(msg.chat.id, menuUser());
-  }, 1500);
+    bot.sendMessage(chatId, "Informe seu acesso:", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🔐 Logar", callback_data: "login" }],
+          [{ text: "🆕 Criar conta", callback_data: "criar" }]
+        ]
+      }
+    });
+  }, 5000);
+});
+
+// ================= LOGIN / CADASTRO =================
+const userState = {};
+
+bot.on("callback_query", async (query) => {
+
+  const id = query.from.id;
+  const data = query.data;
+
+  if (data === "criar") {
+    userState[id] = { step: "nome" };
+    bot.sendMessage(id, "Digite seu nome:");
+  }
+
+  if (data === "login") {
+    bot.sendMessage(id, "Digite seu nome cadastrado:");
+    userState[id] = { step: "login_nome" };
+  }
+});
+
+// ================= CAPTURA DADOS =================
+bot.on("message", async (msg) => {
+
+  const id = msg.from.id;
+  const s = userState[id];
+
+  if (!s) return;
+
+  const t = msg.text;
+
+  // CRIAR CONTA
+  if (s.step === "nome") {
+    s.nome = t;
+    s.step = "whatsapp";
+    return bot.sendMessage(id, "Digite seu WhatsApp:");
+  }
+
+  if (s.step === "whatsapp") {
+
+    await db.collection("usuarios").doc(String(id)).set({
+      nome: s.nome,
+      whatsapp: t,
+      criadoEm: Date.now()
+    });
+
+    delete userState[id];
+
+    bot.sendMessage(id, "✅ Cadastro realizado!");
+    return menuPrincipal(id);
+  }
+
+  // LOGIN
+  if (s.step === "login_nome") {
+
+    const doc = await db.collection("usuarios").doc(String(id)).get();
+
+    if (!doc.exists) {
+      return bot.sendMessage(id, "❌ Não encontrado. Crie uma conta.");
+    }
+
+    delete userState[id];
+
+    bot.sendMessage(id, "✅ Login realizado!");
+    return menuPrincipal(id);
+  }
 });
 
 // ================= MENU =================
-function menuUser() {
-  return `
+function menuPrincipal(chatId) {
+  setTimeout(() => {
+    bot.sendMessage(chatId, `
 📦 MENU
 
 /produtos
 /id
-/status
+/admin_contato
 /admin
-`;
+`);
+  }, 3000);
 }
 
 // ================= COMANDOS =================
 bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${msg.from.id}`);
+  bot.sendMessage(msg.chat.id, `🆔 ID: ${msg.from.id}`);
 });
 
-bot.onText(/\/status/, (msg) => {
-  bot.sendMessage(msg.chat.id, "✅ BOT ONLINE (modo manual)");
-});
-
-bot.onText(/\/admin/, (msg) => {
-  if (!isAdmin(msg.from.id)) return;
-
+bot.onText(/\/admin_contato/, (msg) => {
   bot.sendMessage(msg.chat.id, `
-⚙️ ADMIN
-
-/adicionar
-/pedidos
-/liberar ID_PEDIDO
+📞 Contato Admin:
+51981528372
 `);
 });
 
@@ -104,11 +174,10 @@ bot.onText(/\/produtos/, async (msg) => {
     const p = doc.data();
 
     bot.sendMessage(msg.chat.id, `
-📦 ${p.nome}
+📦 ${p.produto}
 💰 R$ ${p.valor}
-📦 Estoque: ${p.estoque}
 
-🆔 ID Produto: ${doc.id}
+🆔 ID: ${doc.id}
 
 👉 /comprar_${doc.id}
 `);
@@ -119,134 +188,56 @@ bot.onText(/\/produtos/, async (msg) => {
 bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const produtoId = match[1];
-  const userId = String(msg.from.id);
 
   const doc = await db.collection("produtos").doc(produtoId).get();
   if (!doc.exists) return;
 
   const p = doc.data();
 
-  // salva pedido automático
-  const pedidoRef = await db.collection("pedidos").add({
-    userId,
-    produtoId,
-    nomeProduto: p.nome,
-    valor: p.valor,
-    status: "pendente",
-    criadoEm: Date.now()
-  });
-
   bot.sendMessage(msg.chat.id, `
 💰 PAGAMENTO PIX
 
-📦 Produto: ${p.nome}
+📦 Produto: ${p.produto}
 💰 Valor: R$ ${p.valor}
 
 🔑 Chave PIX:
 ${CHAVE_PIX}
 
-📩 Após pagar, envie:
-👉 paguei
+👤 Vendedor: RAPHAEL DE MATOS
 
-🧾 ID do Pedido:
-${pedidoRef.id}
-`);
+⚠️ Envie comprovante no WhatsApp:
+
+`, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "📲 Falar no WhatsApp", url: WHATSAPP }]
+      ]
+    }
+  });
 });
 
-// ================= PAGUEI =================
-bot.onText(/paguei/i, async (msg) => {
+// ================= ADMIN =================
+bot.onText(/\/admin/, (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
 
   bot.sendMessage(msg.chat.id, `
-⏳ Recebido!
+⚙️ ADMIN
 
-Seu pagamento será verificado e liberado em breve.
+/adicionar_produto
+/deletar_tudo
+/liberar ID_USER ID_PRODUTO
 `);
 });
 
-// ================= VER PEDIDOS =================
-bot.onText(/\/pedidos/, async (msg) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  const snap = await db.collection("pedidos")
-    .where("status", "==", "pendente")
-    .get();
-
-  if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "✅ Nenhum pedido pendente.");
-  }
-
-  snap.forEach(doc => {
-    const p = doc.data();
-
-    bot.sendMessage(msg.chat.id, `
-🧾 Pedido: ${doc.id}
-
-👤 Cliente: ${p.userId}
-📦 Produto: ${p.nomeProduto}
-💰 Valor: R$ ${p.valor}
-
-👉 /liberar ${doc.id}
-`);
-  });
-});
-
-// ================= LIBERAR =================
-bot.onText(/\/liberar (.+)/, async (msg, match) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  const pedidoId = match[1];
-
-  const pedidoRef = db.collection("pedidos").doc(pedidoId);
-  const pedidoDoc = await pedidoRef.get();
-
-  if (!pedidoDoc.exists) {
-    return bot.sendMessage(msg.chat.id, "❌ Pedido não encontrado.");
-  }
-
-  const pedido = pedidoDoc.data();
-
-  const produtoRef = db.collection("produtos").doc(pedido.produtoId);
-  const produtoDoc = await produtoRef.get();
-
-  if (!produtoDoc.exists) {
-    return bot.sendMessage(msg.chat.id, "❌ Produto não encontrado.");
-  }
-
-  const produto = produtoDoc.data();
-
-  // baixa estoque
-  await produtoRef.update({
-    estoque: Math.max(0, Number(produto.estoque) - 1)
-  });
-
-  // marca como entregue
-  await pedidoRef.update({
-    status: "entregue"
-  });
-
-  // entrega produto
-  bot.sendMessage(pedido.userId, `
-✅ PAGAMENTO CONFIRMADO!
-
-📦 Produto: ${produto.nome}
-
-🔗 Acesse:
-${produto.link}
-`);
-
-  bot.sendMessage(msg.chat.id, "✅ Produto liberado com sucesso!");
-});
-
-// ================= CADASTRO =================
+// ================= ADICIONAR =================
 const adminState = {};
 
-bot.onText(/\/adicionar/, (msg) => {
+bot.onText(/\/adicionar_produto/, (msg) => {
   if (!isAdmin(msg.from.id)) return;
 
-  adminState[msg.from.id] = { step: "produto" };
-  bot.sendMessage(msg.chat.id, "Nome do produto:");
+  adminState[msg.from.id] = { step: "vendedor" };
+  bot.sendMessage(msg.chat.id, "Vendedor:");
 });
 
 bot.on("message", async (msg) => {
@@ -258,30 +249,44 @@ bot.on("message", async (msg) => {
 
   const t = msg.text;
 
+  if (s.step === "vendedor") {
+    s.vendedor = t;
+    s.step = "produto";
+    return bot.sendMessage(id, "Produto:");
+  }
+
   if (s.step === "produto") {
-    s.nome = t;
+    s.produto = t;
     s.step = "valor";
     return bot.sendMessage(id, "Valor:");
   }
 
   if (s.step === "valor") {
     s.valor = t;
-    s.step = "estoque";
-    return bot.sendMessage(id, "Estoque:");
+    s.step = "descricao";
+    return bot.sendMessage(id, "Descrição:");
   }
 
-  if (s.step === "estoque") {
-    s.estoque = t;
+  if (s.step === "descricao") {
+    s.descricao = t;
+    s.step = "whatsapp";
+    return bot.sendMessage(id, "WhatsApp:");
+  }
+
+  if (s.step === "whatsapp") {
+    s.whatsapp = t;
     s.step = "link";
-    return bot.sendMessage(id, "Link do produto:");
+    return bot.sendMessage(id, "Link:");
   }
 
   if (s.step === "link") {
 
     await db.collection("produtos").add({
-      nome: s.nome,
-      valor: Number(String(s.valor).replace(",", ".")),
-      estoque: Number(s.estoque),
+      vendedor: s.vendedor,
+      produto: s.produto,
+      valor: s.valor,
+      descricao: s.descricao,
+      whatsapp: s.whatsapp,
       link: t,
       criadoEm: Date.now()
     });
@@ -292,8 +297,45 @@ bot.on("message", async (msg) => {
   }
 });
 
+// ================= DELETAR =================
+bot.onText(/\/deletar_tudo/, async (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const snap = await db.collection("produtos").get();
+
+  snap.forEach(doc => doc.ref.delete());
+
+  bot.sendMessage(msg.chat.id, "🗑️ Todos produtos deletados.");
+});
+
+// ================= LIBERAR =================
+bot.onText(/\/liberar (.+) (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const userId = match[1];
+  const produtoId = match[2];
+
+  const doc = await db.collection("produtos").doc(produtoId).get();
+  if (!doc.exists) return;
+
+  const p = doc.data();
+
+  bot.sendMessage(userId, `
+✅ PAGAMENTO CONFIRMADO!
+
+📦 Produto: ${p.produto}
+
+🔗 Link:
+${p.link}
+`);
+
+  bot.sendMessage(msg.chat.id, "✅ Produto liberado!");
+});
+
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT MANUAL ONLINE (100% FUNCIONANDO)");
+  console.log("🚀 BOT COMPLETO ONLINE");
 });
