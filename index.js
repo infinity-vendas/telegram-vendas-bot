@@ -44,144 +44,49 @@ bot.onText(/\/start/, async (msg) => {
   await bot.sendPhoto(chatId, "https://i.postimg.cc/cJktrZVw/logo.jpg");
 
   const TEXTO = `
-Bem-vindo à INFINITY CLIENTES 🚀
+╔══════════════════════════════╗
+        🌠 INFINITY CLIENTES
+╚══════════════════════════════╝
 
-Sistema de vendas via PIX manual.
+🔥 Bem-vindo ao seu novo ponto de confiança
 
-Após pagar, envie comprovante no WhatsApp.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ Sistema automatizado  
+⚡ Atendimento rápido  
+⚡ Entregas seguras  
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌠 Plataforma profissional e organizada
+
+🔥 Aqui você não perde tempo  
+⚡ Aqui você tem resultado  
+🌠 Aqui você evolui  
 `;
 
   setTimeout(() => bot.sendMessage(chatId, TEXTO), 2000);
 
-  setTimeout(() => {
-    bot.sendMessage(chatId, "🔐 Acesso:", {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "🔐 Logar", callback_data: "login" }],
-          [{ text: "🆕 Criar conta", callback_data: "criar" }]
-        ]
-      }
-    });
-  }, 4000);
-});
-
-// ================= LOGIN =================
-const userState = {};
-
-bot.on("callback_query", async (query) => {
-
-  const id = query.from.id;
-
-  if (query.data === "criar") {
-    userState[id] = { step: "nome" };
-    return bot.sendMessage(id, "Digite seu nome:");
-  }
-
-  if (query.data === "login") {
-    userState[id] = { step: "login" };
-    return bot.sendMessage(id, "Digite seu nome cadastrado:");
-  }
-});
-
-// ================= MESSAGE =================
-const adminState = {};
-
-bot.on("message", async (msg) => {
-
-  const id = msg.from.id;
-  const text = msg.text;
-
-  // ================= USER FLOW =================
-  const s = userState[id];
-
-  if (s) {
-
-    if (s.step === "nome") {
-      s.nome = text;
-      s.step = "whatsapp";
-      return bot.sendMessage(id, "Digite seu WhatsApp:");
-    }
-
-    if (s.step === "whatsapp") {
-
-      await db.collection("usuarios").doc(String(id)).set({
-        nome: s.nome,
-        whatsapp: text,
-        criadoEm: Date.now()
-      });
-
-      delete userState[id];
-
-      bot.sendMessage(id, "✅ Conta criada!");
-      return menuPrincipal(id);
-    }
-
-    if (s.step === "login") {
-
-      const doc = await db.collection("usuarios").doc(String(id)).get();
-
-      if (!doc.exists) {
-        return bot.sendMessage(id, "❌ Conta não encontrada.");
-      }
-
-      delete userState[id];
-
-      bot.sendMessage(id, "✅ Login realizado!");
-      return menuPrincipal(id);
-    }
-  }
-
-  // ================= ADMIN FLOW =================
-  const a = adminState[id];
-
-  if (a && isAdmin(id)) {
-
-    if (a.step === "produto") {
-      a.nome = text;
-      a.step = "valor";
-      return bot.sendMessage(id, "Valor:");
-    }
-
-    if (a.step === "valor") {
-      a.valor = Number(String(text).replace(",", "."));
-      a.step = "link";
-      return bot.sendMessage(id, "Link:");
-    }
-
-    if (a.step === "link") {
-
-      await db.collection("produtos").add({
-        nome: a.nome,
-        valor: a.valor,
-        link: text,
-        criadoEm: Date.now()
-      });
-
-      delete adminState[id];
-
-      return bot.sendMessage(id, "✅ Produto cadastrado!");
-    }
-  }
+  setTimeout(() => menuPrincipal(chatId), 4000);
 });
 
 // ================= MENU =================
-function menuPrincipal(chatId) {
-  bot.sendMessage(chatId, `
-📦 MENU
+function menuPrincipal(id) {
+  bot.sendMessage(id, `
+🌠 MENU PRINCIPAL
 
-/produtos
-/id
-/suporte
+/produtos  
+/id  
+/suporte  
+/admin  
 `);
 }
 
 // ================= COMANDOS =================
 bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(msg.chat.id, `🆔 ${msg.from.id}`);
+  bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${msg.from.id}`);
 });
 
 bot.onText(/\/suporte/, (msg) => {
-  bot.sendMessage(msg.chat.id, "📲 Enviar comprovante:", {
+  bot.sendMessage(msg.chat.id, "📲 Fale com suporte:", {
     reply_markup: {
       inline_keyboard: [
         [{ text: "WhatsApp", url: WHATSAPP }]
@@ -196,7 +101,7 @@ bot.onText(/\/produtos/, async (msg) => {
   const snap = await db.collection("produtos").get();
 
   if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "❌ Sem produtos.");
+    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto disponível.");
   }
 
   snap.forEach(doc => {
@@ -206,7 +111,7 @@ bot.onText(/\/produtos/, async (msg) => {
 📦 ${p.nome}
 💰 R$ ${p.valor}
 
-🆔 ID: ${doc.id}
+🆔 ID PRODUTO: ${doc.id}
 
 👉 /comprar_${doc.id}
 `);
@@ -217,39 +122,38 @@ bot.onText(/\/produtos/, async (msg) => {
 bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const produtoId = match[1];
-  const userId = String(msg.from.id);
+  const userId = msg.from.id;
 
   const doc = await db.collection("produtos").doc(produtoId).get();
   if (!doc.exists) return;
 
   const p = doc.data();
 
-  // salva pedido
-  const pedido = await db.collection("pedidos").add({
-    userId,
-    produtoId,
-    status: "pendente",
-    criadoEm: Date.now()
-  });
-
   bot.sendMessage(msg.chat.id, `
-💰 PAGAMENTO PIX
+💰 PAGAMENTO VIA PIX
 
-📦 ${p.nome}
-💰 R$ ${p.valor}
+📦 Produto: ${p.nome}
+💰 Valor: R$ ${p.valor}
 
-🔑 ${CHAVE_PIX}
+🔑 Chave PIX:
+${CHAVE_PIX}
 
-📲 Envie comprovante no WhatsApp
+👤 Vendedor: INFINITY CLIENTES
 
-🧾 ID DO PEDIDO:
-${pedido.id}
+⚠️ Após pagar, envie comprovante:
 `, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "Enviar comprovante", url: WHATSAPP }]
+        [{ text: "📲 Enviar comprovante", url: WHATSAPP }]
       ]
     }
+  });
+
+  // salva log
+  await db.collection("logs").add({
+    userId,
+    produtoId,
+    data: Date.now()
   });
 });
 
@@ -259,97 +163,201 @@ bot.onText(/\/admin/, (msg) => {
   if (!isAdmin(msg.from.id)) return;
 
   bot.sendMessage(msg.chat.id, `
-⚙️ ADMIN
+⚙️ PAINEL ADMIN
 
-/adicionar
-/pedidos
-/liberar ID_PEDIDO
-/deletar_produtos
+/adicionar_produto  
+/listar_produtos  
+/deletar_produto ID  
+/deletar_tudo  
+
+/listar_usuarios  
+/buscar_user ID  
+
+/liberar ID_USER ID_PRODUTO  
+
+/estoque ID VALOR  
 `);
 });
 
-// ================= VER PEDIDOS =================
-bot.onText(/\/pedidos/, async (msg) => {
+// ================= ADICIONAR =================
+const adminState = {};
+
+bot.onText(/\/adicionar_produto/, (msg) => {
 
   if (!isAdmin(msg.from.id)) return;
 
-  const snap = await db.collection("pedidos")
-    .where("status", "==", "pendente")
-    .get();
+  adminState[msg.from.id] = { step: "nome" };
+  bot.sendMessage(msg.chat.id, "Nome do produto:");
+});
 
-  if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "✅ Sem pedidos.");
+// ================= ADMIN FLOW =================
+bot.on("message", async (msg) => {
+
+  const id = msg.from.id;
+  const a = adminState[id];
+
+  if (!a || !isAdmin(id)) return;
+
+  const text = msg.text;
+
+  if (a.step === "nome") {
+    a.nome = text;
+    a.step = "valor";
+    return bot.sendMessage(id, "Valor:");
   }
+
+  if (a.step === "valor") {
+    a.valor = Number(String(text).replace(",", "."));
+    a.step = "descricao";
+    return bot.sendMessage(id, "Descrição:");
+  }
+
+  if (a.step === "descricao") {
+    a.descricao = text;
+    a.step = "link";
+    return bot.sendMessage(id, "Link:");
+  }
+
+  if (a.step === "link") {
+
+    await db.collection("produtos").add({
+      nome: a.nome,
+      valor: a.valor,
+      descricao: a.descricao,
+      link: text,
+      criadoEm: Date.now()
+    });
+
+    delete adminState[id];
+
+    return bot.sendMessage(id, "✅ Produto cadastrado!");
+  }
+});
+
+// ================= ADMIN EXTRA =================
+
+// LISTAR PRODUTOS
+bot.onText(/\/listar_produtos/, async (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const snap = await db.collection("produtos").get();
 
   snap.forEach(doc => {
     const p = doc.data();
 
     bot.sendMessage(msg.chat.id, `
-🧾 ${doc.id}
-👤 ${p.userId}
-📦 ${p.produtoId}
-
-👉 /liberar ${doc.id}
+📦 ${p.nome}
+💰 R$ ${p.valor}
+🆔 ${doc.id}
 `);
   });
 });
 
-// ================= LIBERAR =================
-bot.onText(/\/liberar (.+)/, async (msg, match) => {
+// DELETAR PRODUTO
+bot.onText(/\/deletar_produto (.+)/, async (msg, match) => {
 
   if (!isAdmin(msg.from.id)) return;
 
-  const pedidoId = match[1];
+  await db.collection("produtos").doc(match[1]).delete();
 
-  const ref = db.collection("pedidos").doc(pedidoId);
-  const pedidoDoc = await ref.get();
-
-  if (!pedidoDoc.exists) {
-    return bot.sendMessage(msg.chat.id, "❌ Pedido não encontrado.");
-  }
-
-  const pedido = pedidoDoc.data();
-
-  const produtoDoc = await db.collection("produtos")
-    .doc(pedido.produtoId).get();
-
-  const produto = produtoDoc.data();
-
-  await ref.update({ status: "entregue" });
-
-  bot.sendMessage(pedido.userId, `
-✅ PAGAMENTO CONFIRMADO!
-
-📦 ${produto.nome}
-
-🔗 ${produto.link}
-`);
-
-  bot.sendMessage(msg.chat.id, "✅ Liberado!");
+  bot.sendMessage(msg.chat.id, "🗑️ Produto deletado.");
 });
 
-// ================= ADICIONAR =================
-bot.onText(/\/adicionar/, (msg) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  adminState[msg.from.id] = { step: "produto" };
-  bot.sendMessage(msg.chat.id, "Produto:");
-});
-
-// ================= DELETAR =================
-bot.onText(/\/deletar_produtos/, async (msg) => {
+// DELETAR TODOS
+bot.onText(/\/deletar_tudo/, async (msg) => {
 
   if (!isAdmin(msg.from.id)) return;
 
   const snap = await db.collection("produtos").get();
+
   snap.forEach(doc => doc.ref.delete());
 
-  bot.sendMessage(msg.chat.id, "🗑️ Produtos deletados.");
+  bot.sendMessage(msg.chat.id, "🗑️ Todos produtos removidos.");
+});
+
+// LISTAR USUÁRIOS (PELOS LOGS)
+bot.onText(/\/listar_usuarios/, async (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const snap = await db.collection("logs").get();
+
+  snap.forEach(doc => {
+    const l = doc.data();
+
+    bot.sendMessage(msg.chat.id, `
+👤 USER ID: ${l.userId}
+📦 PRODUTO: ${l.produtoId}
+`);
+  });
+});
+
+// BUSCAR USER
+bot.onText(/\/buscar_user (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const userId = match[1];
+
+  bot.sendMessage(msg.chat.id, `🔎 USER ID: ${userId}`);
+});
+
+// ================= LIBERAR (CORRIGIDO) =================
+bot.onText(/\/liberar (.+) (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const userId = match[1];
+  const produtoId = match[2];
+
+  const doc = await db.collection("produtos").doc(produtoId).get();
+
+  if (!doc.exists) {
+    return bot.sendMessage(msg.chat.id, "❌ Produto não encontrado.");
+  }
+
+  const p = doc.data();
+
+  // entrega produto
+  await bot.sendMessage(userId, `
+╔════════════════════╗
+   ✅ PAGAMENTO APROVADO
+╚════════════════════╝
+
+📦 Produto: ${p.nome}
+
+🔗 Acesso:
+${p.link}
+
+🔥 Obrigado pela compra!
+`);
+
+  bot.sendMessage(msg.chat.id, `
+✅ LIBERADO COM SUCESSO
+
+👤 USER: ${userId}
+📦 PRODUTO: ${produtoId}
+`);
+});
+
+// ================= ESTOQUE =================
+bot.onText(/\/estoque (.+) (.+)/, async (msg, match) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  const id = match[1];
+  const valor = Number(match[2]);
+
+  await db.collection("produtos").doc(id).update({
+    estoque: valor
+  });
+
+  bot.sendMessage(msg.chat.id, "📦 Estoque atualizado.");
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT MANUAL ONLINE");
+  console.log("🚀 BOT EMPRESA GIGANTE ONLINE");
 });
