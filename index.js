@@ -34,14 +34,12 @@ app.post("/webhook", (req, res) => {
 // ================= MERCADO PAGO WEBHOOK =================
 app.post("/mp-webhook", async (req, res) => {
 
-  console.log("WEBHOOK RECEBIDO:", req.body);
+  console.log("WEBHOOK RECEBIDO:", JSON.stringify(req.body));
 
   try {
-
     const paymentId = req.body?.data?.id;
     if (!paymentId) return res.sendStatus(200);
 
-    // 🔍 VERIFICA PAGAMENTO
     const response = await axios.get(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
@@ -55,13 +53,8 @@ app.post("/mp-webhook", async (req, res) => {
 
     console.log("STATUS:", payment.status);
 
-    // 🔐 PROTEÇÃO DUPLICADA
     const jaProcessado = await db.collection("pagamentos").doc(payment.id.toString()).get();
-
-    if (jaProcessado.exists) {
-      console.log("Pagamento já processado");
-      return res.sendStatus(200);
-    }
+    if (jaProcessado.exists) return res.sendStatus(200);
 
     if (payment.status === "approved") {
 
@@ -72,19 +65,14 @@ app.post("/mp-webhook", async (req, res) => {
 
       const ref = db.collection("produtos").doc(produtoId);
       const doc = await ref.get();
-
       if (!doc.exists) return res.sendStatus(200);
 
       const produto = doc.data();
 
-      // 📦 BAIXAR ESTOQUE
       const novoEstoque = Math.max(0, Number(produto.estoque) - 1);
 
-      await ref.update({
-        estoque: novoEstoque
-      });
+      await ref.update({ estoque: novoEstoque });
 
-      // 💾 SALVAR PAGAMENTO
       await db.collection("pagamentos").doc(payment.id.toString()).set({
         userId,
         produtoId,
@@ -92,22 +80,18 @@ app.post("/mp-webhook", async (req, res) => {
         criadoEm: Date.now()
       });
 
-      // 🚀 ENTREGA AUTOMÁTICA
       bot.sendMessage(userId, `
 ✅ PAGAMENTO APROVADO!
 
 📦 Produto: ${produto.nome}
 
-🔗 Acesse seu produto:
+🔗 Acesse:
 ${produto.link}
-
-Obrigado pela compra!
 `);
-
     }
 
   } catch (err) {
-    console.log("ERRO WEBHOOK:", err.response?.data || err.message);
+    console.log("ERRO WEBHOOK:", JSON.stringify(err.response?.data || err.message));
   }
 
   res.sendStatus(200);
@@ -124,7 +108,7 @@ bot.onText(/\/start/, async (msg) => {
   const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 
   const TEXTO = `
-Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
+Bem-vindo à INFINITY CLIENTES!
 
 Sistema automatizado com entrega instantânea.
 `;
@@ -159,7 +143,7 @@ bot.onText(/\/id/, (msg) => {
 
 // ================= STATUS =================
 bot.onText(/\/status/, (msg) => {
-  bot.sendMessage(msg.chat.id, "BOT ONLINE - PIX AUTOMÁTICO");
+  bot.sendMessage(msg.chat.id, "BOT ONLINE - PIX OK");
 });
 
 // ================= PRODUTOS =================
@@ -195,16 +179,22 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const p = doc.data();
 
+  // 🔥 VALIDAÇÃO CRÍTICA
+  const valor = Number(p.valor);
+  if (!valor || valor <= 0) {
+    return bot.sendMessage(msg.chat.id, "❌ Valor inválido do produto.");
+  }
+
   try {
 
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
-        transaction_amount: Number(p.valor),
+        transaction_amount: valor,
         description: p.nome,
         payment_method_id: "pix",
         payer: {
-          email: `user${userId}@gmail.com`
+          email: "comprador@email.com" // 🔥 FIX
         },
         metadata: {
           user_id: userId,
@@ -231,24 +221,24 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 💰 PAGAMENTO PIX
 
 📦 ${p.nome}
-💰 R$ ${p.valor}
+💰 R$ ${valor}
 
 📋 Copia e cola:
 ${copia}
 
-⚡ Pagamento automático!
+⚡ Após pagar, liberação automática!
 `
     });
 
   } catch (err) {
-    console.log("Erro PIX:", err.response?.data || err.message);
-    bot.sendMessage(msg.chat.id, "Erro ao gerar pagamento.");
+    console.log("ERRO PIX DETALHADO:", JSON.stringify(err.response?.data, null, 2));
+
+    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX. Verifique configuração.");
   }
 });
 
 // ================= ADMIN =================
 bot.onText(/\/admin/, (msg) => {
-
   if (!isAdmin(msg.from.id)) return;
 
   bot.sendMessage(msg.chat.id, `
@@ -315,22 +305,22 @@ bot.on("message", async (msg) => {
 
     await db.collection("produtos").add({
       nome: s.nome,
-      valor: s.valor,
+      valor: Number(s.valor),
       descricao: s.descricao,
       whatsapp: s.whatsapp,
-      estoque: s.estoque,
+      estoque: Number(s.estoque),
       link: s.link,
       criadoEm: Date.now()
     });
 
     delete adminState[id];
 
-    bot.sendMessage(id, "Produto cadastrado!");
+    bot.sendMessage(id, "✅ Produto cadastrado!");
   }
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT 100% AUTOMÁTICO ONLINE");
+  console.log("🚀 BOT ONLINE COM PIX FUNCIONANDO");
 });
