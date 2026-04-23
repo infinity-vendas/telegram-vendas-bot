@@ -34,9 +34,10 @@ app.post("/webhook", (req, res) => {
 // ================= MERCADO PAGO WEBHOOK =================
 app.post("/mp-webhook", async (req, res) => {
 
-  console.log("WEBHOOK RECEBIDO:", JSON.stringify(req.body));
+  console.log("WEBHOOK:", JSON.stringify(req.body));
 
   try {
+
     const paymentId = req.body?.data?.id;
     if (!paymentId) return res.sendStatus(200);
 
@@ -50,8 +51,6 @@ app.post("/mp-webhook", async (req, res) => {
     );
 
     const payment = response.data;
-
-    console.log("STATUS:", payment.status);
 
     const jaProcessado = await db.collection("pagamentos").doc(payment.id.toString()).get();
     if (jaProcessado.exists) return res.sendStatus(200);
@@ -69,9 +68,9 @@ app.post("/mp-webhook", async (req, res) => {
 
       const produto = doc.data();
 
-      const novoEstoque = Math.max(0, Number(produto.estoque) - 1);
-
-      await ref.update({ estoque: novoEstoque });
+      await ref.update({
+        estoque: Math.max(0, Number(produto.estoque) - 1)
+      });
 
       await db.collection("pagamentos").doc(payment.id.toString()).set({
         userId,
@@ -85,8 +84,10 @@ app.post("/mp-webhook", async (req, res) => {
 
 📦 Produto: ${produto.nome}
 
-🔗 Acesse:
+🔗 Acesse seu produto:
 ${produto.link}
+
+Obrigado pela compra!
 `);
     }
 
@@ -108,26 +109,29 @@ bot.onText(/\/start/, async (msg) => {
   const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 
   const TEXTO = `
-Bem-vindo à INFINITY CLIENTES!
+Bem-vindo à INFINITY CLIENTES, o seu novo ponto de confiança para serviços, produtos e oportunidades reais dentro do Telegram!
 
-Sistema automatizado com entrega instantânea.
+Aqui você encontra um ambiente totalmente estruturado para facilitar sua experiência, com atendimento rápido, organizado e focado em entregar o melhor resultado possível para cada cliente. Nosso compromisso é com a transparência, a segurança e a satisfação de quem confia no nosso trabalho.
+
+Na INFINITY CLIENTES você não perde tempo. Tudo foi pensado para ser simples, direto e eficiente. Desde o primeiro acesso, você já sente a diferença: um sistema automatizado, informações claras e suporte preparado para te atender sempre que precisar.
+
+Trabalhamos diariamente para manter um padrão de qualidade elevado, oferecendo um espaço confiável onde clientes e vendedores podem interagir com tranquilidade. Aqui, cada detalhe importa, e cada cliente é tratado com atenção e respeito.
+
+Se você está chegando agora, seja muito bem-vindo! Você acaba de entrar em uma plataforma criada para crescer, evoluir e entregar resultados de verdade. Explore, conheça nossos serviços e aproveite tudo o que preparamos para você.
+
+INFINITY CLIENTES – confiança, organização e resultado em um só lugar
 `;
 
   bot.sendPhoto(msg.chat.id, LOGO);
 
-  setTimeout(() => {
-    bot.sendMessage(msg.chat.id, TEXTO);
-  }, 3000);
-
-  setTimeout(() => {
-    bot.sendMessage(msg.chat.id, menuUser());
-  }, 6000);
+  setTimeout(() => bot.sendMessage(msg.chat.id, TEXTO), 4000);
+  setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 8000);
 });
 
 // ================= MENU =================
 function menuUser() {
   return `
-📦 MENU
+📦 MENU PRINCIPAL
 
 /produtos
 /id
@@ -136,23 +140,13 @@ function menuUser() {
 `;
 }
 
-// ================= ID =================
-bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(msg.chat.id, `Seu ID: ${msg.from.id}`);
-});
-
-// ================= STATUS =================
-bot.onText(/\/status/, (msg) => {
-  bot.sendMessage(msg.chat.id, "BOT ONLINE - PIX OK");
-});
-
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
   const snap = await db.collection("produtos").get();
 
   if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "Sem produtos.");
+    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto.");
   }
 
   snap.forEach(doc => {
@@ -163,12 +157,14 @@ bot.onText(/\/produtos/, async (msg) => {
 💰 R$ ${p.valor}
 📦 Estoque: ${p.estoque}
 
+🆔 ID: ${doc.id}
+
 👉 /comprar_${doc.id}
 `);
   });
 });
 
-// ================= COMPRA PIX =================
+// ================= COMPRA =================
 bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const idProduto = match[1];
@@ -179,10 +175,10 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const p = doc.data();
 
-  // 🔥 VALIDAÇÃO CRÍTICA
-  const valor = Number(p.valor);
-  if (!valor || valor <= 0) {
-    return bot.sendMessage(msg.chat.id, "❌ Valor inválido do produto.");
+  const valor = Number(String(p.valor).replace(",", "."));
+
+  if (isNaN(valor) || valor <= 0) {
+    return bot.sendMessage(msg.chat.id, "❌ Valor inválido.");
   }
 
   try {
@@ -193,9 +189,7 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
         transaction_amount: valor,
         description: p.nome,
         payment_method_id: "pix",
-        payer: {
-          email: "comprador@email.com" // 🔥 FIX
-        },
+        payer: { email: "comprador@email.com" },
         metadata: {
           user_id: userId,
           produto_id: idProduto
@@ -211,10 +205,10 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
     const data = pagamento.data;
 
-    const qr = data.point_of_interaction.transaction_data.qr_code_base64;
-    const copia = data.point_of_interaction.transaction_data.qr_code;
-
-    const buffer = Buffer.from(qr, "base64");
+    const buffer = Buffer.from(
+      data.point_of_interaction.transaction_data.qr_code_base64,
+      "base64"
+    );
 
     await bot.sendPhoto(msg.chat.id, buffer, {
       caption: `
@@ -224,33 +218,19 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 💰 R$ ${valor}
 
 📋 Copia e cola:
-${copia}
+${data.point_of_interaction.transaction_data.qr_code}
 
-⚡ Após pagar, liberação automática!
+⚡ Pagamento automático!
 `
     });
 
   } catch (err) {
-    console.log("ERRO PIX DETALHADO:", JSON.stringify(err.response?.data, null, 2));
-
-    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX. Verifique configuração.");
+    console.log("ERRO PIX:", JSON.stringify(err.response?.data));
+    bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX.");
   }
 });
 
 // ================= ADMIN =================
-bot.onText(/\/admin/, (msg) => {
-  if (!isAdmin(msg.from.id)) return;
-
-  bot.sendMessage(msg.chat.id, `
-⚙️ ADMIN
-
-/adicionar
-/deletar_produto ID
-/alterar_estoque ID VALOR
-`);
-});
-
-// ================= CADASTRO =================
 const adminState = {};
 
 bot.onText(/\/adicionar/, (msg) => {
@@ -264,7 +244,6 @@ bot.on("message", async (msg) => {
 
   const id = msg.from.id;
   const s = adminState[id];
-
   if (!s || !isAdmin(id)) return;
 
   const t = msg.text;
@@ -301,15 +280,13 @@ bot.on("message", async (msg) => {
 
   if (s.step === "link") {
 
-    s.link = t;
-
     await db.collection("produtos").add({
       nome: s.nome,
-      valor: Number(s.valor),
+      valor: Number(String(s.valor).replace(",", ".")),
       descricao: s.descricao,
       whatsapp: s.whatsapp,
       estoque: Number(s.estoque),
-      link: s.link,
+      link: t,
       criadoEm: Date.now()
     });
 
@@ -322,5 +299,5 @@ bot.on("message", async (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT ONLINE COM PIX FUNCIONANDO");
+  console.log("🚀 BOT ONLINE 100%");
 });
