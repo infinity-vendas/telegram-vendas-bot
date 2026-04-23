@@ -5,8 +5,8 @@ const axios = require("axios");
 
 // ================= CONFIG =================
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
-const URL = "https://telegram-vendas-bot-1.onrender.com"; // 🔥 CORRIGIDO
-const MP_TOKEN = "APP_USR-5364485461402569-042206-d7728868cf6e70a9f34584e0584fdb22-2339435531";
+const URL = "https://telegram-vendas-bot-1.onrender.com"; // 🔥 SUA URL REAL
+const MP_TOKEN = "APP_USR-5364485461402569-042206-d7728868cf6e70a9f34584e0584fdb22-2339435531"; // 🔥 APP_USR-
 
 const ADMINS = ["6863505946"];
 
@@ -35,7 +35,6 @@ app.post("/webhook", (req, res) => {
 app.post("/mp-webhook", async (req, res) => {
 
   try {
-
     const paymentId = req.body?.data?.id;
     if (!paymentId) return res.sendStatus(200);
 
@@ -59,17 +58,24 @@ app.post("/mp-webhook", async (req, res) => {
 
       const ref = db.collection("produtos").doc(produtoId);
       const doc = await ref.get();
-
       if (!doc.exists) return res.sendStatus(200);
 
       const produto = doc.data();
 
-      const novoEstoque = Math.max(0, Number(produto.estoque) - 1);
-
+      // 🔻 BAIXAR ESTOQUE
       await ref.update({
-        estoque: novoEstoque
+        estoque: Math.max(0, Number(produto.estoque) - 1)
       });
 
+      // 💾 SALVAR PAGAMENTO
+      await db.collection("pagamentos").doc(payment.id.toString()).set({
+        userId,
+        produtoId,
+        valor: payment.transaction_amount,
+        criadoEm: Date.now()
+      });
+
+      // 🚀 ENTREGA AUTOMÁTICA
       bot.sendMessage(userId, `
 ✅ PAGAMENTO APROVADO!
 
@@ -80,7 +86,6 @@ ${produto.link}
 
 Obrigado pela compra!
 `);
-
     }
 
   } catch (err) {
@@ -100,19 +105,16 @@ bot.onText(/\/start/, async (msg) => {
 
   const LOGO = "https://i.postimg.cc/cJktrZVw/logo.jpg";
 
-  const TEXTO = `Bem-vindo à INFINITY CLIENTES!
+  const TEXTO = `
+Bem-vindo à INFINITY CLIENTES!
 
-Sistema automatizado com entrega instantânea.`;
+Sistema automatizado com entrega instantânea.
+`;
 
   bot.sendPhoto(msg.chat.id, LOGO);
 
-  setTimeout(() => {
-    bot.sendMessage(msg.chat.id, TEXTO);
-  }, 3000);
-
-  setTimeout(() => {
-    bot.sendMessage(msg.chat.id, menuUser());
-  }, 6000);
+  setTimeout(() => bot.sendMessage(msg.chat.id, TEXTO), 3000);
+  setTimeout(() => bot.sendMessage(msg.chat.id, menuUser()), 6000);
 });
 
 // ================= MENU =================
@@ -137,15 +139,12 @@ bot.onText(/\/status/, (msg) => {
 });
 
 bot.onText(/\/admin/, (msg) => {
-
   if (!isAdmin(msg.from.id)) return;
 
   bot.sendMessage(msg.chat.id, `
 ⚙️ ADMIN
 
 /adicionar
-/deletar_produto ID
-/alterar_estoque ID VALOR
 `);
 });
 
@@ -166,12 +165,14 @@ bot.onText(/\/produtos/, async (msg) => {
 💰 R$ ${p.valor}
 📦 Estoque: ${p.estoque}
 
+🆔 ID: ${doc.id}
+
 👉 /comprar_${doc.id}
 `);
   });
 });
 
-// ================= COMPRA PIX =================
+// ================= PIX (CORRIGIDO 100%) =================
 bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const idProduto = match[1];
@@ -182,11 +183,9 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 
   const p = doc.data();
 
-  // 🔥 CORREÇÃO DO VALOR
-  const valor = parseFloat(String(p.valor).replace(",", "."));
+  const valor = Number(String(p.valor).replace(",", "."));
 
   if (!valor || isNaN(valor) || valor <= 0) {
-    console.log("VALOR INVÁLIDO:", p.valor);
     return bot.sendMessage(msg.chat.id, "❌ Valor inválido.");
   }
 
@@ -198,23 +197,34 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
         transaction_amount: valor,
         description: p.nome,
         payment_method_id: "pix",
+
         payer: {
-          email: "github.script.oficial@gmail.com" // 🔥 COLOQUE SEU EMAIL REAL
+          email: "github.script.oficial@gmail.com" // 🔥 COLOQUE SEU EMAIL
         },
+
         metadata: {
           user_id: userId,
           produto_id: idProduto
         },
-        notification_url: `${URL}/mp-webhook`
+
+        notification_url: `${URL}/mp-webhook`,
+
+        date_of_expiration: new Date(Date.now() + 30 * 60 * 1000) // 🔥 CORREÇÃO
       },
       {
         headers: {
-          Authorization: `Bearer ${MP_TOKEN}`
+          Authorization: `Bearer ${MP_TOKEN}`,
+          "Content-Type": "application/json"
         }
       }
     );
 
     const data = pagamento.data;
+
+    if (!data.point_of_interaction) {
+      console.log("ERRO MP:", data);
+      return bot.sendMessage(msg.chat.id, "❌ Erro no Mercado Pago.");
+    }
 
     const qr = data.point_of_interaction.transaction_data.qr_code_base64;
     const copia = data.point_of_interaction.transaction_data.qr_code;
@@ -231,12 +241,15 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
 📋 Copia e cola:
 ${copia}
 
-⚡ Pagamento automático!
+⚡ Após pagar, liberação automática!
 `
     });
 
   } catch (err) {
-    console.log("ERRO PIX DETALHADO:", JSON.stringify(err.response?.data, null, 2));
+
+    console.log("ERRO REAL PIX:");
+    console.log(JSON.stringify(err.response?.data, null, 2));
+
     bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX.");
   }
 });
@@ -293,7 +306,7 @@ bot.on("message", async (msg) => {
 
     await db.collection("produtos").add({
       nome: s.nome,
-      valor: parseFloat(String(s.valor).replace(",", ".")), // 🔥 CORREÇÃO
+      valor: Number(String(s.valor).replace(",", ".")),
       descricao: s.descricao,
       whatsapp: s.whatsapp,
       estoque: Number(s.estoque),
@@ -310,5 +323,5 @@ bot.on("message", async (msg) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
   await bot.setWebHook(`${URL}/webhook`);
-  console.log("🚀 BOT 100% AUTOMÁTICO");
+  console.log("🚀 BOT ONLINE COM PIX FUNCIONANDO");
 });
