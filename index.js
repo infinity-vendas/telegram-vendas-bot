@@ -5,7 +5,7 @@ const axios = require("axios");
 
 // ================= CONFIG =================
 const TOKEN = "8227400926:AAF5sWBB6n63wZueUo_XQBVSgs6lBGLsAiE";
-const URL = "https://telegram-vendas-bot-1.onrender.com";
+const URL = "https://telegram-vendas-bot-1.onrender.com"; // 🔥 CORRIGIDO
 const MP_TOKEN = "APP_USR-5364485461402569-042206-d7728868cf6e70a9f34584e0584fdb22-2339435531";
 
 const ADMINS = ["6863505946"];
@@ -84,7 +84,7 @@ Obrigado pela compra!
     }
 
   } catch (err) {
-    console.log("ERRO WEBHOOK:", err.response?.data || err.message);
+    console.log("ERRO WEBHOOK:", JSON.stringify(err.response?.data || err.message));
   }
 
   res.sendStatus(200);
@@ -127,6 +127,28 @@ function menuUser() {
 `;
 }
 
+// ================= COMANDOS =================
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${msg.from.id}`);
+});
+
+bot.onText(/\/status/, (msg) => {
+  bot.sendMessage(msg.chat.id, "✅ BOT ONLINE - PIX OK");
+});
+
+bot.onText(/\/admin/, (msg) => {
+
+  if (!isAdmin(msg.from.id)) return;
+
+  bot.sendMessage(msg.chat.id, `
+⚙️ ADMIN
+
+/adicionar
+/deletar_produto ID
+/alterar_estoque ID VALOR
+`);
+});
+
 // ================= PRODUTOS =================
 bot.onText(/\/produtos/, async (msg) => {
 
@@ -161,9 +183,10 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
   const p = doc.data();
 
   // 🔥 CORREÇÃO DO VALOR
-  const valor = Number(String(p.valor).replace(",", "."));
+  const valor = parseFloat(String(p.valor).replace(",", "."));
 
   if (!valor || isNaN(valor) || valor <= 0) {
+    console.log("VALOR INVÁLIDO:", p.valor);
     return bot.sendMessage(msg.chat.id, "❌ Valor inválido.");
   }
 
@@ -176,7 +199,7 @@ bot.onText(/\/comprar_(.+)/, async (msg, match) => {
         description: p.nome,
         payment_method_id: "pix",
         payer: {
-          email: "github.script.oficial@gmail.com" // 🔥 COLOQUE SEU EMAIL AQUI
+          email: "github.script.oficial@gmail.com" // 🔥 COLOQUE SEU EMAIL REAL
         },
         metadata: {
           user_id: userId,
@@ -213,24 +236,9 @@ ${copia}
     });
 
   } catch (err) {
-    console.log("ERRO PIX DETALHADO:", err.response?.data || err.message);
-
+    console.log("ERRO PIX DETALHADO:", JSON.stringify(err.response?.data, null, 2));
     bot.sendMessage(msg.chat.id, "❌ Erro ao gerar PIX.");
   }
-});
-
-// ================= ADMIN =================
-bot.onText(/\/admin/, (msg) => {
-
-  if (!isAdmin(msg.from.id)) return;
-
-  bot.sendMessage(msg.chat.id, `
-⚙️ ADMIN
-
-/adicionar
-/deletar_produto ID
-/alterar_estoque ID VALOR
-`);
 });
 
 // ================= CADASTRO =================
@@ -285,7 +293,7 @@ bot.on("message", async (msg) => {
 
     await db.collection("produtos").add({
       nome: s.nome,
-      valor: Number(String(s.valor).replace(",", ".")), // 🔥 CORREÇÃO
+      valor: parseFloat(String(s.valor).replace(",", ".")), // 🔥 CORREÇÃO
       descricao: s.descricao,
       whatsapp: s.whatsapp,
       estoque: Number(s.estoque),
