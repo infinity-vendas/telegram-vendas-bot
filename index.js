@@ -2,8 +2,12 @@ require('dotenv').config();
 
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
+const express = require('express');
 
-// 🔐 Firebase via variável de ambiente (Render)
+const app = express();
+app.use(express.json());
+
+// 🔐 Firebase
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 
 admin.initializeApp({
@@ -12,28 +16,47 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// 🤖 Bot Telegram
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+// 🤖 Bot SEM polling
+const bot = new TelegramBot(process.env.BOT_TOKEN);
 
-// 🚀 START
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "🔥 SellForge online com Firebase!");
+// 🔗 URL do Render
+const url = process.env.RENDER_EXTERNAL_URL;
+
+// 🚀 definir webhook
+bot.setWebHook(`${url}/bot${process.env.BOT_TOKEN}`);
+
+// 📩 receber mensagens
+app.post(`/bot${process.env.BOT_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
 });
 
-// 💾 Salvar usuário automaticamente
+// START
+bot.onText(/\/start/, (msg) => {
+  bot.sendMessage(msg.chat.id, "🔥 SellForge rodando com Webhook!");
+});
+
+// salvar usuário
 bot.on('message', async (msg) => {
   try {
     const userId = String(msg.from.id);
 
     await db.collection('users').doc(userId).set({
       nome: msg.from.first_name || "User",
-      id: userId,
-      data: new Date()
+      id: userId
     });
 
-    console.log("Usuário salvo:", userId);
-
-  } catch (error) {
-    console.error("Erro ao salvar usuário:", error);
+  } catch (err) {
+    console.log(err);
   }
+});
+
+// 🌐 servidor
+app.get('/', (req, res) => {
+  res.send("Bot online 🚀");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Servidor rodando...");
 });
