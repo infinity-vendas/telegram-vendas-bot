@@ -8,9 +8,17 @@ const app = express();
 app.use(express.json());
 
 // 🔐 CONFIG
-const ADMIN_ID = "6863505946"; // coloque seu ID
+const ADMIN_ID = "6863505946";
 
-// 🔐 Firebase
+// 👨‍💼 VENDEDORES
+const vendedoresAutorizados = [
+  { nome: "Alyson", numero: "+55 35 91002-9714", cargo: "Vendedor" },
+  { nome: "Nexus", numero: "+55 67 9624-4153", cargo: "Gerente" },
+  { nome: "Bruno", numero: "+55 22 97406-2633", cargo: "Vendedor" },
+  { nome: "Faelzin", numero: "+55 51981528372", cargo: "Líder Administrador" }
+];
+
+// 🔥 Firebase
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 
 admin.initializeApp({
@@ -33,18 +41,13 @@ app.post(SECRET_PATH, (req, res) => {
   res.sendStatus(200);
 });
 
-// 🌐 rota
-app.get('/', (req, res) => {
-  res.send("🔥 SellForge Online");
-});
+app.get('/', (req, res) => res.send("🔥 SellForge Online"));
 
-// 🧠 utilidades
+// 🧠 Utils
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 const userCooldown = new Map();
 
-function diasParaMs(dias) {
-  return dias * 24 * 60 * 60 * 1000;
-}
+const diasParaMs = d => d * 86400000;
 
 // =============================
 // 🚀 START
@@ -53,44 +56,30 @@ bot.onText(/\/start$/, async (msg) => {
   const userId = String(msg.from.id);
 
   await bot.sendPhoto(msg.chat.id, "https://i.postimg.cc/Y9FHz03z/logo.jpg", {
-    caption: `🔥 *SELLFORGE BOT*
+    caption: `🔥 SELLFORGE BOT
 
 👑 Dono: FAELZIN
 📞 WhatsApp: 51981528372
-⚙ Tipo: Aluguel
-📅 Validade: 01/12/2026`,
-    parse_mode: "Markdown"
+⚙ Tipo: Aluguel`,
   });
 
-  await bot.sendMessage(msg.chat.id, "⏳ Carregando sistema...");
-  await delay(4000);
-
-  await bot.sendMessage(msg.chat.id,
-`🚀 *BEM-VINDO AO SELLFORGE*
-
-Transforme seu celular em uma máquina automática de vendas.
-
-🔥 Venda 24h
-🔥 Automação completa
-🔥 Sem esforço manual
-
-💰 Comece hoje e lucre com facilidade.`,
-{ parse_mode: "Markdown" });
-
-  await delay(4000);
+  await bot.sendMessage(msg.chat.id, "⏳ Carregando...");
+  await delay(3000);
 
   // ADMIN
   if (userId === ADMIN_ID) {
     return bot.sendMessage(msg.chat.id,
-`👑 *PAINEL ADMIN*
+`👑 PAINEL ADMIN
 
 /addproduto
 /produtos
-/ativar 7
+/meulink
 /status
 /listarusers
-/meulink`,
-{ parse_mode: "Markdown" });
+/vendedores
+/resetprodutos
+/delproduto ID
+/resetar ID DIAS`);
   }
 
   // vendedor
@@ -98,49 +87,40 @@ Transforme seu celular em uma máquina automática de vendas.
 
   if (!produtos.empty) {
     return bot.sendMessage(msg.chat.id,
-`💼 *PAINEL VENDEDOR*
+`💼 PAINEL VENDEDOR
 
 /addproduto
 /produtos
 /meulink
-/status`,
-{ parse_mode: "Markdown" });
+/status`);
   }
 
-  // usuário
-  bot.sendMessage(msg.chat.id,
-`👤 *MENU*
-
-Use um link de vendedor para ver produtos.`);
+  bot.sendMessage(msg.chat.id, "👤 Use um link de vendedor.");
 });
 
 // =============================
-// 🔗 START COM REF
+// 🔗 REF
 // =============================
 bot.onText(/\/start (.+)/, async (msg, match) => {
   const vendedorId = match[1];
 
-  const produtosSnap = await db.collection('produtos')
+  const snap = await db.collection('produtos')
     .doc(vendedorId)
     .collection('itens')
     .get();
 
-  if (produtosSnap.empty) {
-    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto.");
-  }
+  if (snap.empty) return bot.sendMessage(msg.chat.id, "❌ Nenhum produto.");
 
-  produtosSnap.forEach(doc => {
+  snap.forEach(doc => {
     const p = doc.data();
 
     bot.sendMessage(msg.chat.id,
-`🛍️ ${p.nome}
+`${p.nome}
 💰 ${p.preco}
-📄 ${p.descricao}`,
+${p.descricao}`,
       {
         reply_markup: {
-          inline_keyboard: [
-            [{ text: "Comprar", url: p.link }]
-          ]
+          inline_keyboard: [[{ text: "Comprar", url: p.link }]]
         }
       }
     );
@@ -150,15 +130,14 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
 // =============================
 // 🛍️ ADD PRODUTO
 // =============================
-bot.onText(/\/addproduto/, (msg) => {
-  bot.sendMessage(msg.chat.id,
-"Envie:\nnome | preco | descricao | link");
+bot.onText(/\/addproduto/, msg => {
+  bot.sendMessage(msg.chat.id, "Envie:\nnome | preco | descricao | link");
 });
 
 // =============================
 // 📦 LISTAR PRODUTOS
 // =============================
-bot.onText(/\/produtos/, async (msg) => {
+bot.onText(/\/produtos/, async msg => {
   const userId = String(msg.from.id);
 
   const snap = await db.collection('produtos')
@@ -166,39 +145,29 @@ bot.onText(/\/produtos/, async (msg) => {
     .collection('itens')
     .get();
 
-  if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto.");
-  }
+  if (snap.empty) return bot.sendMessage(msg.chat.id, "❌ Nenhum produto.");
 
   snap.forEach(doc => {
-    const p = doc.data();
-
-    bot.sendMessage(msg.chat.id,
-`${p.nome} - ${p.preco}`);
+    bot.sendMessage(msg.chat.id, `${doc.id} | ${doc.data().nome}`);
   });
 });
 
 // =============================
 // 🔗 LINK
 // =============================
-bot.onText(/\/meulink/, (msg) => {
-  const userId = msg.from.id;
-
-  bot.sendMessage(msg.chat.id,
-`🔗 Seu link:
-https://t.me/SellForge_bot?start=${userId}`);
+bot.onText(/\/meulink/, msg => {
+  const id = msg.from.id;
+  bot.sendMessage(msg.chat.id, `https://t.me/SellForge_bot?start=${id}`);
 });
 
 // =============================
 // ⏳ ATIVAR
 // =============================
-bot.onText(/\/ativar (.+)/, async (msg, match) => {
-  const userId = String(msg.from.id);
-  const dias = parseInt(match[1]);
-
+bot.onText(/\/ativar (.+)/, async (msg, m) => {
+  const dias = parseInt(m[1]);
   if (isNaN(dias)) return;
 
-  await db.collection('users').doc(userId).set({
+  await db.collection('users').doc(String(msg.from.id)).set({
     expiraEm: Date.now() + diasParaMs(dias)
   }, { merge: true });
 
@@ -208,64 +177,106 @@ bot.onText(/\/ativar (.+)/, async (msg, match) => {
 // =============================
 // 📊 STATUS
 // =============================
-bot.onText(/\/status/, async (msg) => {
-  const userId = String(msg.from.id);
+bot.onText(/\/status/, async msg => {
+  const doc = await db.collection('users').doc(String(msg.from.id)).get();
 
-  const doc = await db.collection('users').doc(userId).get();
-
-  if (!doc.exists || !doc.data().expiraEm) {
+  if (!doc.exists || !doc.data().expiraEm)
     return bot.sendMessage(msg.chat.id, "❌ Sem plano");
-  }
 
-  const restante = doc.data().expiraEm - Date.now();
-
-  if (restante <= 0) {
+  if (Date.now() > doc.data().expiraEm)
     return bot.sendMessage(msg.chat.id, "❌ Expirado");
-  }
 
-  bot.sendMessage(msg.chat.id, "⏳ Plano ativo");
+  bot.sendMessage(msg.chat.id, "⏳ Ativo");
 });
 
 // =============================
-// 👑 ADMIN LIST USERS
+// 👑 ADMIN
 // =============================
-bot.onText(/\/listarusers/, async (msg) => {
+bot.onText(/\/listarusers/, async msg => {
   if (String(msg.from.id) !== ADMIN_ID) return;
 
   const snap = await db.collection('users').get();
+  bot.sendMessage(msg.chat.id, `👥 ${snap.size} usuários`);
+});
 
-  bot.sendMessage(msg.chat.id, `👥 Total: ${snap.size}`);
+bot.onText(/\/vendedores/, msg => {
+  let t = "👨‍💼 Vendedores:\n\n";
+  vendedoresAutorizados.forEach(v => {
+    t += `${v.nome} - ${v.numero} (${v.cargo})\n`;
+  });
+  bot.sendMessage(msg.chat.id, t);
+});
+
+// 🗑️ deletar todos produtos
+bot.onText(/\/resetprodutos/, async msg => {
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  const col = await db.collection('produtos').get();
+
+  for (const doc of col.docs) {
+    const itens = await doc.ref.collection('itens').get();
+    for (const item of itens.docs) {
+      await item.ref.delete();
+    }
+  }
+
+  bot.sendMessage(msg.chat.id, "🗑️ Tudo deletado");
+});
+
+// 🗑️ deletar produto
+bot.onText(/\/delproduto (.+)/, async (msg, m) => {
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  const id = m[1];
+
+  const userId = String(msg.from.id);
+
+  await db.collection('produtos')
+    .doc(userId)
+    .collection('itens')
+    .doc(id)
+    .delete();
+
+  bot.sendMessage(msg.chat.id, "🗑️ Produto removido");
+});
+
+// ⏳ resetar plano
+bot.onText(/\/resetar (.+) (.+)/, async (msg, m) => {
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  const uid = m[1];
+  const dias = parseInt(m[2]);
+
+  await db.collection('users').doc(uid).set({
+    expiraEm: Date.now() + diasParaMs(dias)
+  }, { merge: true });
+
+  bot.sendMessage(msg.chat.id, "⏳ Resetado");
 });
 
 // =============================
-// 💾 MESSAGE
+// 💾 SAVE USER + PRODUTO
 // =============================
-bot.on('message', async (msg) => {
+bot.on('message', async msg => {
   try {
     if (!msg.from) return;
 
-    const userId = String(msg.from.id);
+    const id = String(msg.from.id);
 
     const now = Date.now();
-    if (userCooldown.has(userId) && now - userCooldown.get(userId) < 2000) return;
-    userCooldown.set(userId, now);
+    if (userCooldown.has(id) && now - userCooldown.get(id) < 2000) return;
+    userCooldown.set(id, now);
 
-    // salvar usuário
-    await db.collection('users').doc(userId).set({
-      id: userId,
-      nome: msg.from.first_name || "User",
-      updatedAt: new Date()
+    await db.collection('users').doc(id).set({
+      id,
+      nome: msg.from.first_name || "User"
     }, { merge: true });
 
-    // cadastrar produto
     if (msg.text && msg.text.includes("|")) {
-      const partes = msg.text.split("|");
-      if (partes.length < 4) return;
-
-      const [nome, preco, descricao, link] = partes;
+      const [nome, preco, descricao, link] = msg.text.split("|");
 
       await db.collection('produtos')
-        .doc(userId)
+        .doc(id)
         .collection('itens')
         .add({
           nome: nome.trim(),
@@ -274,17 +285,13 @@ bot.on('message', async (msg) => {
           link: link.trim()
         });
 
-      bot.sendMessage(msg.chat.id, "✅ Produto cadastrado!");
+      bot.sendMessage(msg.chat.id, "✅ Produto cadastrado");
     }
 
-  } catch (err) {
-    console.log(err);
-  }
+  } catch {}
 });
 
 // 🚀 SERVER
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("🚀 Rodando...");
+app.listen(process.env.PORT || 3000, () => {
+  console.log("🚀 Rodando");
 });
