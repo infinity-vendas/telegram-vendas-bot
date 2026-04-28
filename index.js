@@ -49,22 +49,34 @@ app.post(SECRET_PATH, (req, res) => {
 
 app.get('/', (req, res) => res.send("🔥 Online"));
 
+// =============================
 // 🧠 CONTROLE
-const userState = {}; // controla fluxo do usuário
+// =============================
+const userState = {};
 const userCooldown = new Map();
 
 // =============================
-// 💾 SALVAR USER
+// 💾 SALVAR USER (CORRIGIDO)
 // =============================
 async function salvarUser(msg) {
   const id = String(msg.from.id);
 
-  await db.collection('users').doc(id).set({
-    id,
-    nome: msg.from.first_name || "User",
-    aprovado: false,
-    atualizadoEm: new Date()
-  }, { merge: true });
+  const ref = db.collection('users').doc(id);
+  const doc = await ref.get();
+
+  if (!doc.exists) {
+    await ref.set({
+      id,
+      nome: msg.from.first_name || "User",
+      aprovado: false,
+      criadoEm: new Date()
+    });
+  } else {
+    await ref.set({
+      nome: msg.from.first_name || "User",
+      atualizadoEm: new Date()
+    }, { merge: true });
+  }
 }
 
 // =============================
@@ -159,30 +171,28 @@ ${linha}
 💰 Automatize suas vendas
 🚀 Ganhe dinheiro no automático
 
-${linha}
-
-⏳ Carregando...`);
+${linha}`);
 
   const doc = await db.collection('users').doc(userId).get();
-  const userData = doc.data();
+  const userData = doc.exists ? doc.data() : {};
 
-  // ADMIN
+  // 👑 ADMIN
   if (userId === ADMIN_ID) {
     return bot.sendMessage(msg.chat.id,
 `👑 PAINEL ADMIN`,
 menu("admin", userId));
   }
 
-  // VENDEDOR
-  if (userData?.aprovado) {
+  // 💼 VENDEDOR
+  if (userData.aprovado) {
     return bot.sendMessage(msg.chat.id,
 `💼 PAINEL VENDEDOR`,
 menu("vendedor", userId));
   }
 
-  // BLOQUEADO
+  // 👤 USUÁRIO
   bot.sendMessage(msg.chat.id,
-`⛔ Aguardando aprovação do administrador`,
+`⛔ Aguardando aprovação`,
 menu("user", userId));
 });
 
@@ -264,12 +274,15 @@ bot.onText(/\/aprovar (.+)/, async (msg, m) => {
 });
 
 // =============================
-// 💾 MESSAGE
+// 💾 MESSAGE (CORRIGIDO)
 // =============================
 bot.on('message', async (msg) => {
 
   try {
     if (!msg.from) return;
+
+    // 🚫 NÃO INTERFERIR COM COMANDOS
+    if (msg.text && msg.text.startsWith("/")) return;
 
     const id = String(msg.from.id);
 
@@ -282,9 +295,7 @@ bot.on('message', async (msg) => {
 
     const state = userState[id];
 
-    // =============================
     // 📸 FOTO
-    // =============================
     if (state?.step === "foto" && msg.photo) {
 
       const fileId = msg.photo[msg.photo.length - 1].file_id;
@@ -297,9 +308,7 @@ bot.on('message', async (msg) => {
 nome | preco | descricao | link`);
     }
 
-    // =============================
     // 📝 DADOS
-    // =============================
     if (state?.step === "dados" && msg.text?.includes("|")) {
 
       const doc = await db.collection('users').doc(id).get();
