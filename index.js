@@ -3,8 +3,8 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 
-//  Firebase
-const serviceAccount = require('./firebase.json');
+// 🔐 Firebase via variável de ambiente (Render)
+const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -12,22 +12,28 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-//  Bot
+// 🤖 Bot Telegram
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-// START
+// 🚀 START
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, " SellForge com Firebase ativo!");
+  bot.sendMessage(msg.chat.id, "🔥 SellForge online com Firebase!");
 });
 
-// SALVAR USU�RIO
+// 💾 Salvar usuário automaticamente
 bot.on('message', async (msg) => {
-  const userId = String(msg.from.id);
+  try {
+    const userId = String(msg.from.id);
 
-  await db.collection('users').doc(userId).set({
-    nome: msg.from.first_name || "User",
-    id: userId
-  });
+    await db.collection('users').doc(userId).set({
+      nome: msg.from.first_name || "User",
+      id: userId,
+      data: new Date()
+    });
 
-  console.log("Usu�rio salvo:", userId);
+    console.log("Usuário salvo:", userId);
+
+  } catch (error) {
+    console.error("Erro ao salvar usuário:", error);
+  }
 });
