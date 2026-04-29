@@ -10,6 +10,7 @@ app.use(express.json());
 // ================= CONFIG =================
 const ADMIN_ID = "6863505946";
 const BOT_USERNAME = "SellForge_bot";
+const MAX_USERS = 2;
 
 // ================= FIREBASE =================
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
@@ -41,12 +42,13 @@ const startTime = Date.now();
 
 // ================= FUNÇÕES =================
 
+// pegar ou criar usuário
 async function getUser(id) {
   const ref = db.collection('users').doc(id);
   const doc = await ref.get();
 
   if (!doc.exists) {
-    await ref.set({
+    const data = {
       id,
       nome: "User",
       aprovado: false,
@@ -57,14 +59,16 @@ async function getUser(id) {
       vip: false,
       vipExpira: null,
       criadoEm: new Date()
-    });
+    };
 
-    return (await ref.get()).data();
+    await ref.set(data);
+    return data;
   }
 
   return doc.data();
 }
 
+// pontos
 async function addPontos(id, valor) {
   const user = await getUser(id);
 
@@ -73,23 +77,7 @@ async function addPontos(id, valor) {
   }, { merge: true });
 }
 
-async function ativarVIP(id, dias) {
-  const user = await getUser(id);
-
-  let base = new Date();
-
-  if (user.vipExpira && user.vipExpira.toDate() > new Date()) {
-    base = user.vipExpira.toDate();
-  }
-
-  base.setDate(base.getDate() + dias);
-
-  await db.collection('users').doc(id).set({
-    vip: true,
-    vipExpira: base
-  }, { merge: true });
-}
-
+// VIP check
 async function isVIP(id) {
   const user = await getUser(id);
 
@@ -98,66 +86,112 @@ async function isVIP(id) {
   return user.vipExpira.toDate() > new Date();
 }
 
+// ================= SISTEMA DE VAGAS =================
+
+async function verificarEntrada(userId) {
+
+  const ref = db.collection('users').doc(userId);
+  const doc = await ref.get();
+
+  // já ativo
+  if (doc.exists && !doc.data().banido) {
+    return { status: "ok" };
+  }
+
+  // VIP fura fila
+  if (doc.exists && doc.data().vip) {
+    return { status: "ok" };
+  }
+
+  // contar usuários ativos
+  const usersSnap = await db.collection('users')
+    .where("banido", "==", false)
+    .get();
+
+  if (usersSnap.size < MAX_USERS) {
+    return { status: "ok" };
+  }
+
+  // entrar na fila
+  const filaRef = db.collection('fila').doc(userId);
+  const filaDoc = await filaRef.get();
+
+  if (!filaDoc.exists) {
+    await filaRef.set({
+      id: userId,
+      entrouEm: new Date()
+    });
+  }
+
+  return { status: "fila" };
+}
+
+// liberar vaga
+async function processarFila() {
+
+  const usersSnap = await db.collection('users')
+    .where("banido", "==", false)
+    .get();
+
+  if (usersSnap.size >= MAX_USERS) return;
+
+  const filaSnap = await db.collection('fila')
+    .orderBy("entrouEm")
+    .limit(1)
+    .get();
+
+  if (filaSnap.empty) return;
+
+  const userFila = filaSnap.docs[0];
+  const userId = userFila.id;
+
+  await db.collection('users').doc(userId).set({
+    id: userId,
+    nome: "User",
+    aprovado: false,
+    banido: false,
+    pontos: 0,
+    saldo: 0,
+    criadoEm: new Date()
+  });
+
+  await db.collection('fila').doc(userId).delete();
+
+  bot.sendMessage(userId, "🎉 Sua vaga foi liberada!");
+}
+
 // ================= START =================
 
 bot.onText(/\/start$/, async (msg) => {
 
   const id = String(msg.from.id);
+
+  const check = await verificarEntrada(id);
+
+  if (check.status === "fila") {
+    return bot.sendMessage(msg.chat.id,
+`🚫 Bot lotado (2 usuários)
+
+Você entrou na fila ⏳`);
+  }
+
   const user = await getUser(id);
 
   if (user.banido) {
-    return bot.sendMessage(msg.chat.id, "🚫 Você foi banido");
+    return bot.sendMessage(msg.chat.id, "🚫 Banido");
   }
 
-  await bot.sendPhoto(msg.chat.id, "https://i.postimg.cc/Y9FHz03z/logo.jpg");
+  bot.sendMessage(msg.chat.id,
+`🔥 SELLFORGE BOT
 
-  bot.sendMessage(msg.chat.id, `
-🔥 SELLFORGE BOT 🔥
-
-👤 CLIENTE
-/ver ID
-/status
-/denunciar ID
-
-💼 VENDEDOR
-/addproduto
-/produtos
-/deletar ID
-/deletartudo
-/link
-/pontos
-/saldo
-/resgatarvip
-/vip
-
-👑 ADMIN
-/aprovar ID
-/ban ID
-/aprovarproduto USER PROD
-/addsaldo ID VALOR
-/verusuarios
-/broadcast TEXTO
-`);
+Use /ver ID para ver produtos`);
 });
 
-// ================= LINK AFILIADO =================
+// ================= LINK =================
 
 bot.onText(/\/start (.+)/, async (msg, match) => {
 
   const vendedorId = match[1];
-  const userId = String(msg.from.id);
-
-  if (userId !== vendedorId) {
-    const user = await getUser(userId);
-
-    if (!user.referidoPor) {
-      await db.collection('users').doc(userId).set({
-        referidoPor: vendedorId
-      }, { merge: true });
-
-      await addPontos(vendedorId, 10);
-    }
-  }
 
   const snap = await db.collection('produtos')
     .doc(vendedorId)
@@ -183,108 +217,57 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
   });
 });
 
-// ================= VENDEDOR =================
+// ================= PRODUTO =================
 
 bot.onText(/\/addproduto/, async (msg) => {
 
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  if (!user.aprovado) {
-    return bot.sendMessage(msg.chat.id, "⛔ Não autorizado");
-  }
-
-  if (!(await isVIP(id))) {
-    return bot.sendMessage(msg.chat.id, "🔒 Apenas VIP pode usar");
-  }
-
-  if ((user.saldo || 0) < 2.9) {
-    return bot.sendMessage(msg.chat.id, "💰 Saldo insuficiente");
-  }
+  if (!user.aprovado) return bot.sendMessage(msg.chat.id, "⛔ Não autorizado");
 
   userState[id] = { step: "foto" };
-
-  bot.sendMessage(msg.chat.id, "📸 Envie a foto do produto");
+  bot.sendMessage(msg.chat.id, "📸 Envie a foto");
 });
 
-// ================= PRODUTOS =================
-
-bot.onText(/\/produtos/, async (msg) => {
-
-  const snap = await db.collection('produtos')
-    .doc(String(msg.from.id))
-    .collection('itens')
-    .get();
-
-  if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
-  }
-
-  snap.forEach(doc => {
-    const p = doc.data();
-
-    bot.sendMessage(msg.chat.id, `🆔 ${doc.id}`);
-
-    bot.sendPhoto(msg.chat.id, p.foto, {
-      caption: `${p.nome} - ${p.preco} (${p.status})`
-    });
-  });
-});
-
-// ================= FLUXO PRODUTO =================
-
+// fluxo produto
 bot.on('message', async (msg) => {
 
-  try {
+  if (!msg.text && !msg.photo) return;
+  if (msg.text && msg.text.startsWith("/")) return;
 
-    if (!msg.text && !msg.photo) return;
-    if (msg.text && msg.text.startsWith("/")) return;
+  const id = String(msg.from.id);
+  const state = userState[id];
 
-    const id = String(msg.from.id);
-    const state = userState[id];
+  if (state?.step === "foto" && msg.photo) {
+    state.foto = msg.photo[msg.photo.length - 1].file_id;
+    state.step = "dados";
+    return bot.sendMessage(msg.chat.id, "nome | preco | descricao | link");
+  }
 
-    // FOTO
-    if (state?.step === "foto" && msg.photo) {
-      state.foto = msg.photo[msg.photo.length - 1].file_id;
-      state.step = "dados";
+  if (state?.step === "dados" && msg.text.includes("|")) {
 
-      return bot.sendMessage(msg.chat.id, "nome | preco | descricao | link");
-    }
+    const [nome, preco, descricao, link] = msg.text.split("|");
 
-    // DADOS
-    if (state?.step === "dados" && msg.text.includes("|")) {
+    const docRef = await db.collection('produtos')
+      .doc(id)
+      .collection('itens')
+      .add({
+        nome: nome.trim(),
+        preco: preco.trim(),
+        descricao: descricao.trim(),
+        link: link.trim(),
+        foto: state.foto,
+        status: "pendente"
+      });
 
-      const user = await getUser(id);
+    userState[id] = null;
 
-      const [nome, preco, descricao, link] = msg.text.split("|");
+    bot.sendMessage(msg.chat.id, "📦 Enviado para análise");
 
-      const docRef = await db.collection('produtos')
-        .doc(id)
-        .collection('itens')
-        .add({
-          nome: nome.trim(),
-          preco: preco.trim(),
-          descricao: descricao.trim(),
-          link: link.trim(),
-          foto: state.foto,
-          status: "pendente"
-        });
-
-      await db.collection('users').doc(id).set({
-        saldo: user.saldo - 2.9
-      }, { merge: true });
-
-      userState[id] = null;
-
-      await bot.sendMessage(msg.chat.id, "📦 Produto enviado para análise");
-
-      return bot.sendMessage(ADMIN_ID,
-`🆕 Produto novo
+    bot.sendMessage(ADMIN_ID,
+`Novo produto:
 /aprovarproduto ${id} ${docRef.id}`);
-    }
-
-  } catch (err) {
-    console.log(err);
   }
 });
 
@@ -292,24 +275,18 @@ bot.on('message', async (msg) => {
 
 bot.on("callback_query", async (q) => {
 
-  try {
+  const [_, prodId, vendedorId] = q.data.split("_");
 
-    const [_, prodId, vendedorId] = q.data.split("_");
+  await db.collection('vendas').add({
+    vendedor: vendedorId,
+    cliente: q.from.id,
+    produto: prodId,
+    data: new Date()
+  });
 
-    await db.collection('vendas').add({
-      vendedor: vendedorId,
-      cliente: q.from.id,
-      produto: prodId,
-      data: new Date()
-    });
+  await addPontos(vendedorId, 15);
 
-    await addPontos(vendedorId, 15);
-
-    bot.answerCallbackQuery(q.id, { text: "Compra registrada" });
-
-  } catch (err) {
-    console.log(err);
-  }
+  bot.answerCallbackQuery(q.id, { text: "Compra registrada" });
 });
 
 // ================= DENÚNCIA =================
@@ -318,11 +295,9 @@ bot.onText(/\/denunciar (.+)/, async (msg, m) => {
 
   const ref = db.collection('users').doc(m[1]);
   const doc = await ref.get();
-
   if (!doc.exists) return;
 
   const user = doc.data();
-
   const denuncias = (user.denuncias || 0) + 1;
 
   await ref.set({
@@ -331,7 +306,11 @@ bot.onText(/\/denunciar (.+)/, async (msg, m) => {
     banido: denuncias >= 5
   }, { merge: true });
 
-  bot.sendMessage(msg.chat.id, "🚨 Denúncia enviada");
+  bot.sendMessage(msg.chat.id, "🚨 Denunciado");
+
+  if (denuncias >= 5) {
+    await processarFila();
+  }
 });
 
 // ================= ADMIN =================
@@ -353,9 +332,7 @@ bot.onText(/\/aprovarproduto (.+) (.+)/, async (msg, m) => {
     .doc(m[1])
     .collection('itens')
     .doc(m[2])
-    .set({
-      status: "aprovado"
-    }, { merge: true });
+    .set({ status: "aprovado" }, { merge: true });
 
   bot.sendMessage(msg.chat.id, "✅ Produto aprovado");
 });
@@ -363,7 +340,6 @@ bot.onText(/\/aprovarproduto (.+) (.+)/, async (msg, m) => {
 // ================= STATUS =================
 
 bot.onText(/\/status/, (msg) => {
-
   bot.sendMessage(msg.chat.id,
 `⏱️ ${Math.floor((Date.now() - startTime)/1000)}s`);
 });
