@@ -56,7 +56,7 @@ const userState = {};
 const userCooldown = new Map();
 
 // =============================
-// 💾 SALVAR USER (CORRIGIDO)
+// 💾 SALVAR USER (SEM BUG)
 // =============================
 async function salvarUser(msg) {
   const id = String(msg.from.id);
@@ -89,6 +89,8 @@ function menu(tipo, userId) {
       reply_markup: {
         inline_keyboard: [
           [{ text: "👥 Usuários", callback_data: "users" }],
+          [{ text: "📦 Produtos", callback_data: "produtos" }],
+          [{ text: "➕ Add Produto", callback_data: "addproduto" }],
           [{ text: "🆔 Meu ID", callback_data: "id" }]
         ]
       }
@@ -100,7 +102,7 @@ function menu(tipo, userId) {
       reply_markup: {
         inline_keyboard: [
           [{ text: "📦 Produtos", callback_data: "produtos" }],
-          [{ text: "➕ Adicionar Produto", callback_data: "addproduto" }],
+          [{ text: "➕ Add Produto", callback_data: "addproduto" }],
           [{ text: "🔗 Meu Link", callback_data: "link" }],
           [{ text: "🆔 Meu ID", callback_data: "id" }]
         ]
@@ -138,11 +140,7 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
     const p = doc.data();
 
     bot.sendPhoto(msg.chat.id, p.foto, {
-      caption:
-`🛍️ ${p.nome}
-
-💰 ${p.preco}
-📄 ${p.descricao}`,
+      caption: `🛍️ ${p.nome}\n\n💰 ${p.preco}\n📄 ${p.descricao}`,
       reply_markup: {
         inline_keyboard: [[{ text: "🛒 Comprar", url: p.link }]]
       }
@@ -156,44 +154,60 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
 bot.onText(/\/start$/, async (msg) => {
 
   const userId = String(msg.from.id);
-
   await salvarUser(msg);
 
   await bot.sendPhoto(msg.chat.id, "https://i.postimg.cc/Y9FHz03z/logo.jpg");
 
-  await bot.sendMessage(msg.chat.id,
-`${topo}
-
-🔥 Bem-vindo ao SELLFORGE
-
-${linha}
-
-💰 Automatize suas vendas
-🚀 Ganhe dinheiro no automático
-
-${linha}`);
-
   const doc = await db.collection('users').doc(userId).get();
-  const userData = doc.exists ? doc.data() : {};
+  const userData = doc.data();
 
-  // 👑 ADMIN
   if (userId === ADMIN_ID) {
-    return bot.sendMessage(msg.chat.id,
-`👑 PAINEL ADMIN`,
-menu("admin", userId));
+    return bot.sendMessage(msg.chat.id, "👑 PAINEL ADMIN", menu("admin", userId));
   }
 
-  // 💼 VENDEDOR
-  if (userData.aprovado) {
-    return bot.sendMessage(msg.chat.id,
-`💼 PAINEL VENDEDOR`,
-menu("vendedor", userId));
+  if (userData?.aprovado) {
+    return bot.sendMessage(msg.chat.id, "💼 PAINEL VENDEDOR", menu("vendedor", userId));
   }
 
-  // 👤 USUÁRIO
+  bot.sendMessage(msg.chat.id, "⛔ Aguardando aprovação", menu("user", userId));
+});
+
+// =============================
+// 📊 COMANDOS (AGORA FUNCIONA)
+// =============================
+
+// ID
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${msg.from.id}`);
+});
+
+// MEU LINK
+bot.onText(/\/link/, (msg) => {
   bot.sendMessage(msg.chat.id,
-`⛔ Aguardando aprovação`,
-menu("user", userId));
+`https://t.me/${BOT_USERNAME}?start=${msg.from.id}`);
+});
+
+// LISTAR PRODUTOS
+bot.onText(/\/produtos/, async (msg) => {
+
+  const id = String(msg.from.id);
+
+  const snap = await db.collection('produtos')
+    .doc(id)
+    .collection('itens')
+    .get();
+
+  if (snap.empty) {
+    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
+  }
+
+  snap.forEach(doc => {
+    const p = doc.data();
+
+    bot.sendPhoto(msg.chat.id, p.foto, {
+      caption: `${p.nome} - ${p.preco}`
+    });
+  });
 });
 
 // =============================
@@ -211,25 +225,23 @@ bot.on('callback_query', async (q) => {
   const aprovado = doc.data()?.aprovado;
 
   if (data === "id") {
-    return bot.sendMessage(msg.chat.id, `🆔 Seu ID: ${userId}`);
+    return bot.sendMessage(msg.chat.id, `🆔 ${userId}`);
   }
 
   if (data === "link") {
     return bot.sendMessage(msg.chat.id,
-`🔗 Seu link:
-https://t.me/${BOT_USERNAME}?start=${userId}`);
+`https://t.me/${BOT_USERNAME}?start=${userId}`);
   }
 
   if (data === "addproduto") {
 
     if (!aprovado) {
-      return bot.sendMessage(msg.chat.id, "⛔ Você não está aprovado");
+      return bot.sendMessage(msg.chat.id, "⛔ Não aprovado");
     }
 
     userState[userId] = { step: "foto" };
 
-    return bot.sendMessage(msg.chat.id,
-`📸 Envie a FOTO do produto`);
+    return bot.sendMessage(msg.chat.id, "📸 Envie a FOTO");
   }
 
   if (data === "produtos") {
@@ -270,28 +282,22 @@ bot.onText(/\/aprovar (.+)/, async (msg, m) => {
     aprovado: true
   }, { merge: true });
 
-  bot.sendMessage(msg.chat.id, "✅ Usuário aprovado");
+  bot.sendMessage(msg.chat.id, "✅ Aprovado");
 });
 
 // =============================
-// 💾 MESSAGE (CORRIGIDO)
+// 💾 MESSAGE (FLUXO PRODUTO)
 // =============================
 bot.on('message', async (msg) => {
 
   try {
     if (!msg.from) return;
 
-    // 🚫 NÃO INTERFERIR COM COMANDOS
+    // 🔥 NÃO INTERFERIR EM COMANDOS
     if (msg.text && msg.text.startsWith("/")) return;
 
     const id = String(msg.from.id);
-
     await salvarUser(msg);
-
-    // 🚫 anti spam
-    const now = Date.now();
-    if (userCooldown.has(id) && now - userCooldown.get(id) < 1500) return;
-    userCooldown.set(id, now);
 
     const state = userState[id];
 
@@ -334,7 +340,7 @@ nome | preco | descricao | link`);
 
       userState[id] = null;
 
-      return bot.sendMessage(msg.chat.id, "✅ Produto cadastrado com foto!");
+      return bot.sendMessage(msg.chat.id, "✅ Produto cadastrado!");
     }
 
   } catch (err) {
