@@ -7,11 +7,11 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// CONFIG
+// ================= CONFIG =================
 const ADMIN_ID = "6863505946";
 const BOT_USERNAME = "SellForge_bot";
 
-// FIREBASE
+// ================= FIREBASE =================
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 
 admin.initializeApp({
@@ -20,11 +20,12 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// BOT
+// ================= BOT =================
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
 
-// WEBHOOK
+// ================= WEBHOOK =================
 const SECRET_PATH = `/bot${process.env.BOT_TOKEN}`;
+
 bot.setWebHook(`${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`);
 
 app.post(SECRET_PATH, (req, res) => {
@@ -34,11 +35,11 @@ app.post(SECRET_PATH, (req, res) => {
 
 app.get('/', (req, res) => res.send("🔥 ONLINE"));
 
-// CONTROLE
+// ================= CONTROLE =================
 const userState = {};
 const startTime = Date.now();
 
-// ================= USER =================
+// ================= FUNÇÕES =================
 
 async function getUser(id) {
   const ref = db.collection('users').doc(id);
@@ -64,8 +65,6 @@ async function getUser(id) {
   return doc.data();
 }
 
-// ================= PONTOS =================
-
 async function addPontos(id, valor) {
   const user = await getUser(id);
 
@@ -74,14 +73,14 @@ async function addPontos(id, valor) {
   }, { merge: true });
 }
 
-// ================= VIP =================
-
 async function ativarVIP(id, dias) {
   const user = await getUser(id);
 
-  let base = user.vipExpira && user.vipExpira.toDate() > new Date()
-    ? user.vipExpira.toDate()
-    : new Date();
+  let base = new Date();
+
+  if (user.vipExpira && user.vipExpira.toDate() > new Date()) {
+    base = user.vipExpira.toDate();
+  }
 
   base.setDate(base.getDate() + dias);
 
@@ -93,7 +92,10 @@ async function ativarVIP(id, dias) {
 
 async function isVIP(id) {
   const user = await getUser(id);
-  return user.vip && user.vipExpira && user.vipExpira.toDate() > new Date();
+
+  if (!user.vip || !user.vipExpira) return false;
+
+  return user.vipExpira.toDate() > new Date();
 }
 
 // ================= START =================
@@ -103,43 +105,38 @@ bot.onText(/\/start$/, async (msg) => {
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  if (user.banido) return bot.sendMessage(msg.chat.id, "🚫 Banido");
+  if (user.banido) {
+    return bot.sendMessage(msg.chat.id, "🚫 Você foi banido");
+  }
 
   await bot.sendPhoto(msg.chat.id, "https://i.postimg.cc/Y9FHz03z/logo.jpg");
 
   bot.sendMessage(msg.chat.id, `
-🔥 SELLFORGE BOT
+🔥 SELLFORGE BOT 🔥
 
-👤 CLIENTE:
+👤 CLIENTE
 /ver ID
-/buscar nome
 /status
 /denunciar ID
 
-💼 VENDEDOR:
+💼 VENDEDOR
 /addproduto
 /produtos
-/editar ID
 /deletar ID
 /deletartudo
 /link
-/saldo
 /pontos
+/saldo
 /resgatarvip
 /vip
 
-👑 ADMIN:
+👑 ADMIN
 /aprovar ID
 /ban ID
-/addsaldo ID VALOR
-/broadcast TEXTO
 /aprovarproduto USER PROD
+/addsaldo ID VALOR
 /verusuarios
-
-👥 GRUPO:
-/menu
-/top
-/divulgar
+/broadcast TEXTO
 `);
 });
 
@@ -168,7 +165,9 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
     .where("status", "==", "aprovado")
     .get();
 
-  if (snap.empty) return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
+  if (snap.empty) {
+    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
+  }
 
   snap.forEach(doc => {
     const p = doc.data();
@@ -184,90 +183,28 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
   });
 });
 
-// ================= ADD PRODUTO =================
+// ================= VENDEDOR =================
 
 bot.onText(/\/addproduto/, async (msg) => {
 
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  if (!user.aprovado) return bot.sendMessage(msg.chat.id, "⛔ Não autorizado");
-  if (!(await isVIP(id))) return bot.sendMessage(msg.chat.id, "🔒 Apenas VIP");
-  if (user.saldo < 2.9) return bot.sendMessage(msg.chat.id, "💰 Sem saldo");
+  if (!user.aprovado) {
+    return bot.sendMessage(msg.chat.id, "⛔ Não autorizado");
+  }
+
+  if (!(await isVIP(id))) {
+    return bot.sendMessage(msg.chat.id, "🔒 Apenas VIP pode usar");
+  }
+
+  if ((user.saldo || 0) < 2.9) {
+    return bot.sendMessage(msg.chat.id, "💰 Saldo insuficiente");
+  }
 
   userState[id] = { step: "foto" };
 
-  bot.sendMessage(msg.chat.id, "📸 Envie a foto");
-});
-
-// ================= FLUXO =================
-
-bot.on('message', async (msg) => {
-
-  if (!msg.text && !msg.photo) return;
-  if (msg.text && msg.text.startsWith("/")) return;
-
-  const id = String(msg.from.id);
-  const state = userState[id];
-
-  // FOTO
-  if (state?.step === "foto" && msg.photo) {
-    state.foto = msg.photo[msg.photo.length - 1].file_id;
-    state.step = "dados";
-    return bot.sendMessage(msg.chat.id, "nome | preco | descricao | link");
-  }
-
-  // DADOS
-  if (state?.step === "dados" && msg.text.includes("|")) {
-
-    const user = await getUser(id);
-    const [nome, preco, descricao, link] = msg.text.split("|");
-
-    const docRef = await db.collection('produtos')
-      .doc(id)
-      .collection('itens')
-      .add({
-        nome: nome.trim(),
-        preco: preco.trim(),
-        descricao: descricao.trim(),
-        link: link.trim(),
-        foto: state.foto,
-        status: "pendente"
-      });
-
-    await db.collection('users').doc(id).set({
-      saldo: user.saldo - 2.9
-    }, { merge: true });
-
-    userState[id] = null;
-
-    bot.sendMessage(msg.chat.id, "📦 Enviado para análise");
-
-    bot.sendMessage(ADMIN_ID,
-`Novo produto:
-/aprovarproduto ${id} ${docRef.id}`);
-  }
-
-  // EDITAR
-  if (state?.step === "editar" && msg.text.includes("|")) {
-
-    const [nome, preco, descricao, link] = msg.text.split("|");
-
-    await db.collection('produtos')
-      .doc(id)
-      .collection('itens')
-      .doc(state.produtoId)
-      .update({
-        nome: nome.trim(),
-        preco: preco.trim(),
-        descricao: descricao.trim(),
-        link: link.trim()
-      });
-
-    userState[id] = null;
-
-    return bot.sendMessage(msg.chat.id, "✅ Atualizado");
-  }
+  bot.sendMessage(msg.chat.id, "📸 Envie a foto do produto");
 });
 
 // ================= PRODUTOS =================
@@ -279,81 +216,103 @@ bot.onText(/\/produtos/, async (msg) => {
     .collection('itens')
     .get();
 
-  if (snap.empty) return bot.sendMessage(msg.chat.id, "❌ Nenhum");
+  if (snap.empty) {
+    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
+  }
 
   snap.forEach(doc => {
     const p = doc.data();
 
-    bot.sendMessage(msg.chat.id,
-`📦 ${p.nome}
-💰 ${p.preco}
-📊 ${p.status}
-🆔 ${doc.id}`);
+    bot.sendMessage(msg.chat.id, `🆔 ${doc.id}`);
+
+    bot.sendPhoto(msg.chat.id, p.foto, {
+      caption: `${p.nome} - ${p.preco} (${p.status})`
+    });
   });
 });
 
-// ================= BUSCAR =================
+// ================= FLUXO PRODUTO =================
 
-bot.onText(/\/buscar (.+)/, async (msg, m) => {
+bot.on('message', async (msg) => {
 
-  const termo = m[1].toLowerCase();
+  try {
 
-  const snap = await db.collectionGroup('itens').get();
+    if (!msg.text && !msg.photo) return;
+    if (msg.text && msg.text.startsWith("/")) return;
 
-  let achou = false;
+    const id = String(msg.from.id);
+    const state = userState[id];
 
-  snap.forEach(doc => {
-    const p = doc.data();
+    // FOTO
+    if (state?.step === "foto" && msg.photo) {
+      state.foto = msg.photo[msg.photo.length - 1].file_id;
+      state.step = "dados";
 
-    if (p.status === "aprovado" && p.nome.toLowerCase().includes(termo)) {
-      achou = true;
-
-      bot.sendPhoto(msg.chat.id, p.foto, {
-        caption: `${p.nome}\n💰 ${p.preco}`
-      });
+      return bot.sendMessage(msg.chat.id, "nome | preco | descricao | link");
     }
-  });
 
-  if (!achou) bot.sendMessage(msg.chat.id, "❌ Nenhum encontrado");
+    // DADOS
+    if (state?.step === "dados" && msg.text.includes("|")) {
+
+      const user = await getUser(id);
+
+      const [nome, preco, descricao, link] = msg.text.split("|");
+
+      const docRef = await db.collection('produtos')
+        .doc(id)
+        .collection('itens')
+        .add({
+          nome: nome.trim(),
+          preco: preco.trim(),
+          descricao: descricao.trim(),
+          link: link.trim(),
+          foto: state.foto,
+          status: "pendente"
+        });
+
+      await db.collection('users').doc(id).set({
+        saldo: user.saldo - 2.9
+      }, { merge: true });
+
+      userState[id] = null;
+
+      await bot.sendMessage(msg.chat.id, "📦 Produto enviado para análise");
+
+      return bot.sendMessage(ADMIN_ID,
+`🆕 Produto novo
+/aprovarproduto ${id} ${docRef.id}`);
+    }
+
+  } catch (err) {
+    console.log(err);
+  }
 });
 
-// ================= CALLBACK =================
+// ================= COMPRA =================
 
 bot.on("callback_query", async (q) => {
 
-  const [_, prodId, vendedorId] = q.data.split("_");
+  try {
 
-  await db.collection('vendas').add({
-    vendedor: vendedorId,
-    cliente: q.from.id,
-    produto: prodId,
-    data: new Date()
-  });
+    const [_, prodId, vendedorId] = q.data.split("_");
 
-  await addPontos(vendedorId, 15);
+    await db.collection('vendas').add({
+      vendedor: vendedorId,
+      cliente: q.from.id,
+      produto: prodId,
+      data: new Date()
+    });
 
-  bot.answerCallbackQuery(q.id, { text: "Compra registrada" });
+    await addPontos(vendedorId, 15);
+
+    bot.answerCallbackQuery(q.id, { text: "Compra registrada" });
+
+  } catch (err) {
+    console.log(err);
+  }
 });
 
-// ================= VIP =================
-
-bot.onText(/\/resgatarvip/, async (msg) => {
-
-  const user = await getUser(String(msg.from.id));
-  const dias = Math.floor(user.pontos / 500);
-
-  if (dias <= 0) return bot.sendMessage(msg.chat.id, "❌ Sem pontos");
-
-  await db.collection('users').doc(String(msg.from.id)).set({
-    pontos: user.pontos - (dias * 500)
-  }, { merge: true });
-
-  await ativarVIP(String(msg.from.id), dias);
-
-  bot.sendMessage(msg.chat.id, `💎 VIP ${dias} dias`);
-});
-
-// ================= DENUNCIA =================
+// ================= DENÚNCIA =================
 
 bot.onText(/\/denunciar (.+)/, async (msg, m) => {
 
@@ -363,6 +322,7 @@ bot.onText(/\/denunciar (.+)/, async (msg, m) => {
   if (!doc.exists) return;
 
   const user = doc.data();
+
   const denuncias = (user.denuncias || 0) + 1;
 
   await ref.set({
@@ -379,9 +339,11 @@ bot.onText(/\/denunciar (.+)/, async (msg, m) => {
 bot.onText(/\/aprovar (.+)/, async (msg, m) => {
   if (msg.from.id != ADMIN_ID) return;
 
-  await db.collection('users').doc(m[1]).set({ aprovado: true }, { merge: true });
+  await db.collection('users').doc(m[1]).set({
+    aprovado: true
+  }, { merge: true });
 
-  bot.sendMessage(msg.chat.id, "✅ aprovado");
+  bot.sendMessage(msg.chat.id, "✅ Vendedor aprovado");
 });
 
 bot.onText(/\/aprovarproduto (.+) (.+)/, async (msg, m) => {
@@ -391,3 +353,23 @@ bot.onText(/\/aprovarproduto (.+) (.+)/, async (msg, m) => {
     .doc(m[1])
     .collection('itens')
     .doc(m[2])
+    .set({
+      status: "aprovado"
+    }, { merge: true });
+
+  bot.sendMessage(msg.chat.id, "✅ Produto aprovado");
+});
+
+// ================= STATUS =================
+
+bot.onText(/\/status/, (msg) => {
+
+  bot.sendMessage(msg.chat.id,
+`⏱️ ${Math.floor((Date.now() - startTime)/1000)}s`);
+});
+
+// ================= SERVER =================
+
+app.listen(process.env.PORT || 3000, () => {
+  console.log("🚀 BOT RODANDO");
+});
