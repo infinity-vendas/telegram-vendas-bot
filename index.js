@@ -3,6 +3,7 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const express = require('express');
+const fetch = require('node-fetch');
 
 const app = express();
 app.use(express.json());
@@ -13,36 +14,77 @@ const BOT_USERNAME = "SellForge_bot";
 const MAX_USERS = 2;
 
 // ================= FIREBASE =================
-const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+let serviceAccount;
+
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+} catch (e) {
+  console.error("❌ Erro Firebase:", e);
+  process.exit(1);
+}
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-const db = admin.firestore();
+const db = admin.firestore({
+  ignoreUndefinedProperties: true
+});
 
 // ================= BOT =================
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
+const bot = new TelegramBot(process.env.BOT_TOKEN, {
+  webHook: { port: process.env.PORT || 3000 }
+});
 
 // ================= WEBHOOK =================
 const SECRET_PATH = `/bot${process.env.BOT_TOKEN}`;
 
-bot.setWebHook(`${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`);
-
 app.post(SECRET_PATH, (req, res) => {
-  bot.processUpdate(req.body);
   res.sendStatus(200);
+
+  try {
+    bot.processUpdate(req.body);
+  } catch (e) {
+    console.error("Erro update:", e);
+  }
 });
 
-app.get('/', (req, res) => res.send("🔥 ONLINE"));
+app.get('/', (req, res) => res.send("🤖 ONLINE"));
+
+// configurar webhook
+(async () => {
+  try {
+    const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
+
+    await bot.deleteWebHook();
+    await bot.setWebHook(url);
+
+    console.log("✅ Webhook:", url);
+
+    const info = await bot.getWebHookInfo();
+    console.log("📡 Info:", info);
+
+  } catch (err) {
+    console.error("❌ Webhook erro:", err);
+  }
+})();
+
+// ================= KEEP ALIVE =================
+setInterval(() => {
+  fetch(process.env.RENDER_EXTERNAL_URL)
+    .then(() => console.log("🔄 Alive"))
+    .catch(() => {});
+}, 1000 * 60 * 5);
+
+// ================= SEGURANÇA =================
+process.on("uncaughtException", console.error);
+process.on("unhandledRejection", console.error);
 
 // ================= CONTROLE =================
 const userState = {};
 const startTime = Date.now();
 
 // ================= FUNÇÕES =================
-
-// pegar ou criar usuário
 async function getUser(id) {
   const ref = db.collection('users').doc(id);
   const doc = await ref.get();
@@ -68,7 +110,6 @@ async function getUser(id) {
   return doc.data();
 }
 
-// pontos
 async function addPontos(id, valor) {
   const user = await getUser(id);
 
@@ -77,7 +118,6 @@ async function addPontos(id, valor) {
   }, { merge: true });
 }
 
-// VIP check
 async function isVIP(id) {
   const user = await getUser(id);
 
@@ -86,33 +126,20 @@ async function isVIP(id) {
   return user.vipExpira.toDate() > new Date();
 }
 
-// ================= SISTEMA DE VAGAS =================
-
+// ================= FILA =================
 async function verificarEntrada(userId) {
 
-  const ref = db.collection('users').doc(userId);
-  const doc = await ref.get();
+  const doc = await db.collection('users').doc(userId).get();
 
-  // já ativo
-  if (doc.exists && !doc.data().banido) {
-    return { status: "ok" };
-  }
+  if (doc.exists && !doc.data().banido) return { status: "ok" };
 
-  // VIP fura fila
-  if (doc.exists && doc.data().vip) {
-    return { status: "ok" };
-  }
+  if (await isVIP(userId)) return { status: "ok" };
 
-  // contar usuários ativos
-  const usersSnap = await db.collection('users')
-    .where("banido", "==", false)
-    .get();
+  const usersSnap = await db.collection('users').get();
+  const ativos = usersSnap.docs.filter(d => !d.data().banido);
 
-  if (usersSnap.size < MAX_USERS) {
-    return { status: "ok" };
-  }
+  if (ativos.length < MAX_USERS) return { status: "ok" };
 
-  // entrar na fila
   const filaRef = db.collection('fila').doc(userId);
   const filaDoc = await filaRef.get();
 
@@ -126,14 +153,12 @@ async function verificarEntrada(userId) {
   return { status: "fila" };
 }
 
-// liberar vaga
 async function processarFila() {
 
-  const usersSnap = await db.collection('users')
-    .where("banido", "==", false)
-    .get();
+  const usersSnap = await db.collection('users').get();
+  const ativos = usersSnap.docs.filter(d => !d.data().banido);
 
-  if (usersSnap.size >= MAX_USERS) return;
+  if (ativos.length >= MAX_USERS) return;
 
   const filaSnap = await db.collection('fila')
     .orderBy("entrouEm")
@@ -142,8 +167,7 @@ async function processarFila() {
 
   if (filaSnap.empty) return;
 
-  const userFila = filaSnap.docs[0];
-  const userId = userFila.id;
+  const userId = filaSnap.docs[0].id;
 
   await db.collection('users').doc(userId).set({
     id: userId,
@@ -161,7 +185,6 @@ async function processarFila() {
 }
 
 // ================= START =================
-
 bot.onText(/\/start$/, async (msg) => {
 
   const id = String(msg.from.id);
@@ -170,9 +193,9 @@ bot.onText(/\/start$/, async (msg) => {
 
   if (check.status === "fila") {
     return bot.sendMessage(msg.chat.id,
-`🚫 Bot lotado (2 usuários)
+`🚫 Bot lotado (${MAX_USERS} usuários)
 
-Você entrou na fila ⏳`);
+⏳ Você entrou na fila`);
   }
 
   const user = await getUser(id);
@@ -184,11 +207,10 @@ Você entrou na fila ⏳`);
   bot.sendMessage(msg.chat.id,
 `🔥 SELLFORGE BOT
 
-Use /ver ID para ver produtos`);
+Use /start ID para ver produtos`);
 });
 
 // ================= LINK =================
-
 bot.onText(/\/start (.+)/, async (msg, match) => {
 
   const vendedorId = match[1];
@@ -200,7 +222,7 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
     .get();
 
   if (snap.empty) {
-    return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
+    return bot.sendMessage(msg.chat.id, "🚫 Nenhum produto");
   }
 
   snap.forEach(doc => {
@@ -217,14 +239,14 @@ bot.onText(/\/start (.+)/, async (msg, match) => {
   });
 });
 
-// ================= PRODUTO =================
-
+// ================= ADD PRODUTO =================
 bot.onText(/\/addproduto/, async (msg) => {
 
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  if (!user.aprovado) return bot.sendMessage(msg.chat.id, "⛔ Não autorizado");
+  if (!user.aprovado)
+    return bot.sendMessage(msg.chat.id, "🚫 Não autorizado");
 
   userState[id] = { step: "foto" };
   bot.sendMessage(msg.chat.id, "📸 Envie a foto");
@@ -263,7 +285,7 @@ bot.on('message', async (msg) => {
 
     userState[id] = null;
 
-    bot.sendMessage(msg.chat.id, "📦 Enviado para análise");
+    bot.sendMessage(msg.chat.id, "⏳ Enviado para análise");
 
     bot.sendMessage(ADMIN_ID,
 `Novo produto:
@@ -272,8 +294,9 @@ bot.on('message', async (msg) => {
 });
 
 // ================= COMPRA =================
-
 bot.on("callback_query", async (q) => {
+
+  if (!q.data.startsWith("buy_")) return;
 
   const [_, prodId, vendedorId] = q.data.split("_");
 
@@ -286,11 +309,10 @@ bot.on("callback_query", async (q) => {
 
   await addPontos(vendedorId, 15);
 
-  bot.answerCallbackQuery(q.id, { text: "Compra registrada" });
+  bot.answerCallbackQuery(q.id, { text: "✅ Compra registrada" });
 });
 
 // ================= DENÚNCIA =================
-
 bot.onText(/\/denunciar (.+)/, async (msg, m) => {
 
   const ref = db.collection('users').doc(m[1]);
@@ -306,7 +328,7 @@ bot.onText(/\/denunciar (.+)/, async (msg, m) => {
     banido: denuncias >= 5
   }, { merge: true });
 
-  bot.sendMessage(msg.chat.id, "🚨 Denunciado");
+  bot.sendMessage(msg.chat.id, "⚠️ Denunciado");
 
   if (denuncias >= 5) {
     await processarFila();
@@ -314,9 +336,8 @@ bot.onText(/\/denunciar (.+)/, async (msg, m) => {
 });
 
 // ================= ADMIN =================
-
 bot.onText(/\/aprovar (.+)/, async (msg, m) => {
-  if (msg.from.id != ADMIN_ID) return;
+  if (String(msg.from.id) !== ADMIN_ID) return;
 
   await db.collection('users').doc(m[1]).set({
     aprovado: true
@@ -326,7 +347,7 @@ bot.onText(/\/aprovar (.+)/, async (msg, m) => {
 });
 
 bot.onText(/\/aprovarproduto (.+) (.+)/, async (msg, m) => {
-  if (msg.from.id != ADMIN_ID) return;
+  if (String(msg.from.id) !== ADMIN_ID) return;
 
   await db.collection('produtos')
     .doc(m[1])
@@ -338,14 +359,12 @@ bot.onText(/\/aprovarproduto (.+) (.+)/, async (msg, m) => {
 });
 
 // ================= STATUS =================
-
 bot.onText(/\/status/, (msg) => {
   bot.sendMessage(msg.chat.id,
-`⏱️ ${Math.floor((Date.now() - startTime)/1000)}s`);
+`⏱️ Online há ${Math.floor((Date.now() - startTime)/1000)}s`);
 });
 
 // ================= SERVER =================
-
 app.listen(process.env.PORT || 3000, () => {
   console.log("🚀 BOT RODANDO");
 });
