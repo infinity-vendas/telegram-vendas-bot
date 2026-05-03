@@ -80,10 +80,10 @@ bot.onText(/\/start/, async (msg) => {
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  // ===== LOGO =====
+  // LOGO
   await bot.sendPhoto(chatId, LOGO);
 
-  // ===== NÃO CADASTRADO =====
+  // CADASTRO
   if (!user) {
     userState[id] = { step: "cadastro" };
 
@@ -94,15 +94,56 @@ Envie:
 Nick | Idade | Whatsapp`);
   }
 
-  // ===== BOAS VINDAS =====
+  // ================= TEXTO RED ZONE =================
   await bot.sendMessage(chatId,
-`🔥 Bem-vindo, ${user.nome}
+`🔥 RED ZONE — Domine sua sensibilidade, eleve seu nível
 
-🚀 RED ZONE - Painel Digital
+A RED ZONE é especializada em performance gamer.
 
-Escolha abaixo 👇`);
+🎯 Transformamos jogadores comuns em PRO.`);
+  
+  await bot.sendMessage(chatId,
+`🎯 O que fazemos
 
-  // ===== PRODUTOS =====
+• Sensibilidade personalizada
+• Configuração otimizada
+• Melhoria de mira e reflexo
+• Redução de lag`);
+
+  await bot.sendMessage(chatId,
+`⚙️ Sensibilidade PRO
+
+✔️ Mais controle
+✔️ Mais precisão
+✔️ Melhor movimentação`);
+
+  await bot.sendMessage(chatId,
+`🚀 Ajustes avançados
+
+• DPI otimizado
+• HUD profissional
+• Gráficos ideais`);
+
+  await bot.sendMessage(chatId,
+`🧠 Método RED ZONE
+
+• Análise
+• Configuração
+• Evolução`);
+
+  await bot.sendMessage(chatId,
+`💰 Resultados
+
+• Mais HS
+• Melhor rank
+• Mais vitórias`);
+
+  await bot.sendMessage(chatId,
+`🤖 Bot RED ZONE
+
+🔥 Seu próximo nível começa agora`);
+
+  // ================= PRODUTOS =================
   const snap = await db.collection('produtos').get();
 
   if (!snap.empty) {
@@ -128,18 +169,16 @@ Escolha abaixo 👇`);
     }
   }
 
-  // ===== COMANDOS =====
+  // COMANDOS
   await bot.sendMessage(chatId,
 `📌 COMANDOS
 
 📦 /produtos
 📊 /status
-ℹ️ /info
-
-🔥 RED ZONE`);
+ℹ️ /info`);
 });
 
-// ================= MENSAGENS =================
+// ================= CADASTRO =================
 bot.on("message", async (msg) => {
 
   if (!db) return;
@@ -150,7 +189,6 @@ bot.on("message", async (msg) => {
 
   if (!text) return;
 
-  // ===== CADASTRO =====
   if (state?.step === "cadastro") {
 
     if (!text.includes("|")) {
@@ -196,7 +234,6 @@ bot.onText(/\/produtos/, async (msg) => {
 
 // ================= STATUS =================
 bot.onText(/\/status/, (msg) => {
-
   bot.sendMessage(msg.chat.id,
 `📊 STATUS
 
@@ -206,7 +243,6 @@ Sistema: Online
 
 // ================= INFO =================
 bot.onText(/\/info/, (msg) => {
-
   bot.sendMessage(msg.chat.id,
 `ℹ️ Produtos digitais
 Entrega rápida
