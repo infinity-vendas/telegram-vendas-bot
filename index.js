@@ -17,7 +17,7 @@ let serviceAccount;
 try {
   serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 } catch (e) {
-  console.error("Erro Firebase");
+  console.error("Erro ao carregar Firebase");
   process.exit(1);
 }
 
@@ -37,7 +37,7 @@ app.post(SECRET_PATH, (req, res) => {
   try {
     bot.processUpdate(req.body);
   } catch (e) {
-    console.error(e);
+    console.error("Erro webhook:", e);
   }
 });
 
@@ -47,43 +47,30 @@ app.get('/', (req, res) => res.send("ONLINE"));
 process.on("uncaughtException", console.error);
 process.on("unhandledRejection", console.error);
 
-// ================= CONTROLE =================
+// ================= ESTADO =================
 const userState = {};
 
 // ================= FUNÇÕES =================
 async function getUser(id) {
-  const ref = db.collection('users').doc(id);
-  const doc = await ref.get();
-
-  if (!doc.exists) return null;
-  return doc.data();
+  const doc = await db.collection('users').doc(id).get();
+  return doc.exists ? doc.data() : null;
 }
 
 // ================= START =================
 bot.onText(/\/start$/, async (msg) => {
-
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  // NÃO CADASTRADO
   if (!user || !user.nome) {
-
     userState[id] = { step: "cadastro" };
 
-    return bot.sendPhoto(msg.chat.id,
-      "https://i.postimg.cc/BQwJ8VTL/Red-Zone-Cliente.jpg",
-      {
-        caption:
-`🚫 É necessário se cadastrar antes de usar o bot
+    return bot.sendMessage(msg.chat.id,
+`📋 Cadastro necessário
 
-📋 Envie no formato:
-
-Nick | Idade | Whatsapp`
-      }
-    );
+Envie:
+Nick | Idade | Whatsapp`);
   }
 
-  // MENU
   bot.sendMessage(msg.chat.id,
 `🔥 Bem-vindo, ${user.nome}`,
 {
@@ -97,22 +84,27 @@ Nick | Idade | Whatsapp`
 });
 });
 
-// ================= CADASTRO =================
-bot.on('message', async (msg) => {
+// ================= MENSAGENS (CENTRAL) =================
+bot.on("message", async (msg) => {
 
   const id = String(msg.from.id);
+  const text = msg.text;
   const state = userState[id];
 
-  if (!state) return;
+  // ===== CADASTRO =====
+  if (state?.step === "cadastro") {
 
-  if (state.step === "cadastro") {
-
-    if (!msg.text.includes("|")) {
-      return bot.sendMessage(msg.chat.id,
-        "❌ Use: Nick | Idade | Whatsapp");
+    if (!text.includes("|")) {
+      return bot.sendMessage(msg.chat.id, "Use: Nick | Idade | Whatsapp");
     }
 
-    const [nick, idade, whatsapp] = msg.text.split("|");
+    const [nick, idade, whatsapp] = text.split("|");
+
+    const totalUsers = (await db.collection('users').get()).size;
+
+    if (totalUsers >= MAX_USERS) {
+      return bot.sendMessage(msg.chat.id, "🚫 Limite de usuários atingido");
+    }
 
     await db.collection('users').doc(id).set({
       nome: nick.trim(),
@@ -124,47 +116,67 @@ bot.on('message', async (msg) => {
     userState[id] = null;
 
     return bot.sendMessage(msg.chat.id,
-"✅ Cadastro concluído! Digite /start novamente");
+"✅ Cadastro concluído! Digite /start");
   }
-});
 
-// ================= PRODUTOS =================
-bot.on("message", async (msg) => {
+  // ===== ADMIN ADD =====
+  if (state?.step === "add") {
 
-  if (msg.text !== "📦 Produtos") return;
+    const [nome, preco, whatsapp] = text.split("|");
 
-  const snap = await db.collection('produtos').get();
-
-  if (snap.empty)
-    return bot.sendMessage(msg.chat.id, "🚫 Sem produtos");
-
-  const imgs = [
-    "https://i.postimg.cc/8cYLsVNw/img2.jpg",
-    "https://i.postimg.cc/h4ZL2VVq/img3.jpg",
-    "https://i.postimg.cc/3xm2r661/img4.jpg",
-    "https://i.postimg.cc/yNKcDjCH/img5.jpg",
-    "https://i.postimg.cc/W47rgZsd/img6.jpg"
-  ];
-
-  let i = 0;
-
-  for (const doc of snap.docs) {
-    const p = doc.data();
-
-    await bot.sendPhoto(msg.chat.id, imgs[i % imgs.length], {
-      caption:
-`📦 ${p.nome}
-💰 ${p.preco}
-
-📲 ${p.whatsapp}`,
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "🛒 Comprar", callback_data: `buy_${doc.id}` }]
-        ]
-      }
+    await db.collection('produtos').add({
+      nome: nome.trim(),
+      preco: preco.trim(),
+      whatsapp: whatsapp.trim()
     });
 
-    i++;
+    userState[id] = null;
+
+    return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
+  }
+
+  // ===== MENU =====
+  if (text === "📦 Produtos") {
+
+    const snap = await db.collection('produtos').get();
+
+    if (snap.empty)
+      return bot.sendMessage(msg.chat.id, "❌ Sem produtos");
+
+    for (const doc of snap.docs) {
+      const p = doc.data();
+
+      await bot.sendMessage(msg.chat.id,
+`📦 ${p.nome}
+💰 ${p.preco}
+📞 ${p.whatsapp}`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🛒 Comprar", callback_data: `buy_${doc.id}` }]
+          ]
+        }
+      });
+    }
+  }
+
+  if (text === "📊 Status") {
+    bot.sendMessage(msg.chat.id,
+`📊 STATUS
+
+Sistema: Online
+Versão: 2.0
+
+👑 Dono: Faelzin`);
+  }
+
+  if (text === "ℹ️ Informações") {
+    bot.sendMessage(msg.chat.id,
+`ℹ️ Informações
+
+Produtos digitais
+Entrega rápida
+Suporte direto`);
   }
 });
 
@@ -179,43 +191,13 @@ bot.on("callback_query", async (q) => {
     data: new Date()
   });
 
-  bot.answerCallbackQuery(q.id, { text: "✅ Compra registrada" });
-});
-
-// ================= STATUS =================
-bot.on("message", (msg) => {
-
-  if (msg.text !== "📊 Status") return;
-
-  bot.sendMessage(msg.chat.id,
-`📊 STATUS
-
-Versão: 1.0
-Sistema: Online
-
-👑 Dono: Faelzin
-📞 +55 51 981528372
-
-📲 Insta: @Infinity_clientes_oficial`);
-});
-
-// ================= INFO =================
-bot.on("message", (msg) => {
-
-  if (msg.text !== "ℹ️ Informações") return;
-
-  bot.sendMessage(msg.chat.id,
-`📢 Informações
-
-Produtos digitais disponíveis
-Entrega rápida
-
-Contato direto com vendedor`);
+  bot.answerCallbackQuery(q.id, {
+    text: "✅ Compra registrada"
+  });
 });
 
 // ================= ADMIN =================
 bot.onText(/\/admin/, (msg) => {
-
   if (String(msg.from.id) !== ADMIN_ID) return;
 
   bot.sendMessage(msg.chat.id,
@@ -226,9 +208,7 @@ bot.onText(/\/admin/, (msg) => {
 /deletartudo`);
 });
 
-// adicionar produto
 bot.onText(/\/adicionar/, (msg) => {
-
   if (String(msg.from.id) !== ADMIN_ID) return;
 
   userState[msg.from.id] = { step: "add" };
@@ -237,33 +217,7 @@ bot.onText(/\/adicionar/, (msg) => {
 "nome | preco | whatsapp");
 });
 
-// fluxo admin
-bot.on('message', async (msg) => {
-
-  const id = String(msg.from.id);
-  const state = userState[id];
-
-  if (!state) return;
-
-  if (state.step === "add") {
-
-    const [nome, preco, whatsapp] = msg.text.split("|");
-
-    await db.collection('produtos').add({
-      nome: nome.trim(),
-      preco: preco.trim(),
-      whatsapp: whatsapp.trim()
-    });
-
-    userState[id] = null;
-
-    bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
-  }
-});
-
-// deletar
 bot.onText(/\/deletar (.+)/, async (msg, m) => {
-
   if (String(msg.from.id) !== ADMIN_ID) return;
 
   await db.collection('produtos').doc(m[1]).delete();
@@ -271,9 +225,7 @@ bot.onText(/\/deletar (.+)/, async (msg, m) => {
   bot.sendMessage(msg.chat.id, "🗑️ Deletado");
 });
 
-// deletar tudo
 bot.onText(/\/deletartudo/, async (msg) => {
-
   if (String(msg.from.id) !== ADMIN_ID) return;
 
   const snap = await db.collection('produtos').get();
@@ -282,13 +234,13 @@ bot.onText(/\/deletartudo/, async (msg) => {
     await doc.ref.delete();
   }
 
-  bot.sendMessage(msg.chat.id, "🔥 Tudo apagado");
+  bot.sendMessage(msg.chat.id, "🗑️ Tudo apagado");
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
-  console.log("🚀 ONLINE");
+  console.log("🔥 ONLINE");
 
   try {
     const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
