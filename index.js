@@ -1,34 +1,41 @@
 require('dotenv').config();
 
-const TelegramBot = require('node-telegram-bot-api');
-const admin = require('firebase-admin');
 const express = require('express');
+const TelegramBot = require('node-telegram-bot-api');
+
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
 const app = express();
 app.use(express.json());
 
-// ================= CONFIG =================
+// CONFIG
 const ADMIN_ID = "6863505946";
-const MAX_USERS = 50;
 
 // ================= FIREBASE =================
-let serviceAccount;
+let db = null;
 
 try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+  if (!process.env.FIREBASE_CONFIG) throw new Error("Sem Firebase");
+
+  const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+
+  initializeApp({
+    credential: cert(serviceAccount)
+  });
+
+  db = getFirestore();
+  console.log("🔥 Firebase conectado");
+
 } catch (e) {
-  console.error("Erro ao carregar Firebase");
-  process.exit(1);
+  console.log("⚠️ Firebase erro:", e.message);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+// ================= BOT =================
+const bot = new TelegramBot(process.env.BOT_TOKEN, {
+  webHook: true
 });
 
-const db = admin.firestore({ ignoreUndefinedProperties: true });
-
-// ================= BOT =================
-const bot = new TelegramBot(process.env.BOT_TOKEN);
 const SECRET_PATH = `/bot${process.env.BOT_TOKEN}`;
 
 // ================= WEBHOOK =================
@@ -41,206 +48,53 @@ app.post(SECRET_PATH, (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.send("ONLINE"));
-
-// ================= SEGURANÇA =================
-process.on("uncaughtException", console.error);
-process.on("unhandledRejection", console.error);
-
-// ================= ESTADO =================
-const userState = {};
-
-// ================= FUNÇÕES =================
-async function getUser(id) {
-  const doc = await db.collection('users').doc(id).get();
-  return doc.exists ? doc.data() : null;
-}
+app.get('/', (req, res) => res.send("🔥 ONLINE"));
 
 // ================= START =================
-bot.onText(/\/start$/, async (msg) => {
+bot.onText(/\/start/, async (msg) => {
+
+  if (!db) return bot.sendMessage(msg.chat.id, "Banco offline");
+
   const id = String(msg.from.id);
-  const user = await getUser(id);
+  const doc = await db.collection('users').doc(id).get();
 
-  if (!user || !user.nome) {
-    userState[id] = { step: "cadastro" };
-
+  if (!doc.exists) {
     return bot.sendMessage(msg.chat.id,
-`📋 Cadastro necessário
+`📋 Cadastro
 
 Envie:
 Nick | Idade | Whatsapp`);
   }
 
-  bot.sendMessage(msg.chat.id,
-`🔥 Bem-vindo, ${user.nome}`,
-{
-  reply_markup: {
-    keyboard: [
-      ["📦 Produtos", "📊 Status"],
-      ["ℹ️ Informações"]
-    ],
-    resize_keyboard: true
-  }
-});
+  bot.sendMessage(msg.chat.id, "🔥 Bem-vindo!");
 });
 
-// ================= MENSAGENS (CENTRAL) =================
+// ================= CADASTRO =================
 bot.on("message", async (msg) => {
 
-  const id = String(msg.from.id);
+  if (!db) return;
+
   const text = msg.text;
-  const state = userState[id];
+  const id = String(msg.from.id);
 
-  // ===== CADASTRO =====
-  if (state?.step === "cadastro") {
+  if (!text || !text.includes("|")) return;
 
-    if (!text.includes("|")) {
-      return bot.sendMessage(msg.chat.id, "Use: Nick | Idade | Whatsapp");
-    }
+  const [nome, idade, whatsapp] = text.split("|");
 
-    const [nick, idade, whatsapp] = text.split("|");
-
-    const totalUsers = (await db.collection('users').get()).size;
-
-    if (totalUsers >= MAX_USERS) {
-      return bot.sendMessage(msg.chat.id, "🚫 Limite de usuários atingido");
-    }
-
-    await db.collection('users').doc(id).set({
-      nome: nick.trim(),
-      idade: idade.trim(),
-      whatsapp: whatsapp.trim(),
-      criadoEm: new Date()
-    });
-
-    userState[id] = null;
-
-    return bot.sendMessage(msg.chat.id,
-"✅ Cadastro concluído! Digite /start");
-  }
-
-  // ===== ADMIN ADD =====
-  if (state?.step === "add") {
-
-    const [nome, preco, whatsapp] = text.split("|");
-
-    await db.collection('produtos').add({
-      nome: nome.trim(),
-      preco: preco.trim(),
-      whatsapp: whatsapp.trim()
-    });
-
-    userState[id] = null;
-
-    return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
-  }
-
-  // ===== MENU =====
-  if (text === "📦 Produtos") {
-
-    const snap = await db.collection('produtos').get();
-
-    if (snap.empty)
-      return bot.sendMessage(msg.chat.id, "❌ Sem produtos");
-
-    for (const doc of snap.docs) {
-      const p = doc.data();
-
-      await bot.sendMessage(msg.chat.id,
-`📦 ${p.nome}
-💰 ${p.preco}
-📞 ${p.whatsapp}`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "🛒 Comprar", callback_data: `buy_${doc.id}` }]
-          ]
-        }
-      });
-    }
-  }
-
-  if (text === "📊 Status") {
-    bot.sendMessage(msg.chat.id,
-`📊 STATUS
-
-Sistema: Online
-Versão: 2.0
-
-👑 Dono: Faelzin`);
-  }
-
-  if (text === "ℹ️ Informações") {
-    bot.sendMessage(msg.chat.id,
-`ℹ️ Informações
-
-Produtos digitais
-Entrega rápida
-Suporte direto`);
-  }
-});
-
-// ================= COMPRA =================
-bot.on("callback_query", async (q) => {
-
-  if (!q.data.startsWith("buy_")) return;
-
-  await db.collection('vendas').add({
-    cliente: q.from.id,
-    produto: q.data,
-    data: new Date()
+  await db.collection('users').doc(id).set({
+    nome: nome.trim(),
+    idade: idade.trim(),
+    whatsapp: whatsapp.trim(),
+    criadoEm: new Date()
   });
 
-  bot.answerCallbackQuery(q.id, {
-    text: "✅ Compra registrada"
-  });
-});
-
-// ================= ADMIN =================
-bot.onText(/\/admin/, (msg) => {
-  if (String(msg.from.id) !== ADMIN_ID) return;
-
-  bot.sendMessage(msg.chat.id,
-`🔐 ADMIN
-
-/adicionar
-/deletar ID
-/deletartudo`);
-});
-
-bot.onText(/\/adicionar/, (msg) => {
-  if (String(msg.from.id) !== ADMIN_ID) return;
-
-  userState[msg.from.id] = { step: "add" };
-
-  bot.sendMessage(msg.chat.id,
-"nome | preco | whatsapp");
-});
-
-bot.onText(/\/deletar (.+)/, async (msg, m) => {
-  if (String(msg.from.id) !== ADMIN_ID) return;
-
-  await db.collection('produtos').doc(m[1]).delete();
-
-  bot.sendMessage(msg.chat.id, "🗑️ Deletado");
-});
-
-bot.onText(/\/deletartudo/, async (msg) => {
-  if (String(msg.from.id) !== ADMIN_ID) return;
-
-  const snap = await db.collection('produtos').get();
-
-  for (const doc of snap.docs) {
-    await doc.ref.delete();
-  }
-
-  bot.sendMessage(msg.chat.id, "🗑️ Tudo apagado");
+  bot.sendMessage(msg.chat.id, "✅ Cadastro salvo");
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
-  console.log("🔥 ONLINE");
+  console.log("🔥 Servidor ONLINE");
 
   try {
     const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
@@ -248,9 +102,9 @@ app.listen(process.env.PORT || 3000, async () => {
     await bot.deleteWebHook();
     await bot.setWebHook(url);
 
-    console.log("Webhook ativo:", url);
+    console.log("✅ Webhook:", url);
 
   } catch (e) {
-    console.error(e);
+    console.error("Erro webhook:", e);
   }
 });
