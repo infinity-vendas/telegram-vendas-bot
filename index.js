@@ -48,7 +48,7 @@ app.post(SECRET_PATH, (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.send("🔥 ONLINE"));
+app.get('/', (req, res) => res.send("🚀 SELLFORGE SYSTEM ACTIVE"));
 
 // ================= ESTADO =================
 const userState = {};
@@ -80,10 +80,9 @@ bot.onText(/\/start/, async (msg) => {
   const id = String(msg.from.id);
   const user = await getUser(id);
 
-  // LOGO
   await bot.sendPhoto(chatId, LOGO);
 
-  // CADASTRO
+  // ===== CADASTRO =====
   if (!user) {
     userState[id] = { step: "cadastro" };
 
@@ -94,56 +93,44 @@ Envie:
 Nick | Idade | Whatsapp`);
   }
 
-  // ================= TEXTO RED ZONE =================
+  // ===== MENU =====
   await bot.sendMessage(chatId,
-`🔥 RED ZONE — Domine sua sensibilidade, eleve seu nível
+`╔═✦════════ GOLD ELITE ════════✦═╗
+║ 👑 VIP ACCESS PANEL            ║
+╚═✦═══════════════════════════✦═╝
 
-A RED ZONE é especializada em performance gamer.
+👤 User: @${msg.from.username || "client"}
+💎 Plan: CLIENT
+⚡ Status: ACTIVE
 
-🎯 Transformamos jogadores comuns em PRO.`);
-  
+╭────────── MENU ──────────╮
+│ 💰 /produtos  → Products │
+│ 📊 /status    → Status   │
+│ ℹ️ /info      → Info     │
+╰─────────────────────────╯`);
+
+  // ===== CREDITS =====
   await bot.sendMessage(chatId,
-`🎯 O que fazemos
+`📌 Credits
 
-• Sensibilidade personalizada
-• Configuração otimizada
-• Melhoria de mira e reflexo
-• Redução de lag`);
+👑 Owner: +55 51 98152-8372
+🌍 Sales: GLOBAL
+📦 Plan: CLIENT
+📅 Validity: 05.05.2026
+🤖 Bot: RED ZONE
+🤝 Partnerships: No`);
 
+  // ===== WELCOME =====
   await bot.sendMessage(chatId,
-`⚙️ Sensibilidade PRO
+`🌍 Welcome / Bem-vindo
 
-✔️ Mais controle
-✔️ Mais precisão
-✔️ Melhor movimentação`);
+VIP access liberado!
 
-  await bot.sendMessage(chatId,
-`🚀 Ajustes avançados
+💎 Premium plans  
+⚡ Fast delivery  
+📲 Contact: +55 51 98152-8372`);
 
-• DPI otimizado
-• HUD profissional
-• Gráficos ideais`);
-
-  await bot.sendMessage(chatId,
-`🧠 Método RED ZONE
-
-• Análise
-• Configuração
-• Evolução`);
-
-  await bot.sendMessage(chatId,
-`💰 Resultados
-
-• Mais HS
-• Melhor rank
-• Mais vitórias`);
-
-  await bot.sendMessage(chatId,
-`🤖 Bot RED ZONE
-
-🔥 Seu próximo nível começa agora`);
-
-  // ================= PRODUTOS =================
+  // ===== PRODUTOS =====
   const snap = await db.collection('produtos').get();
 
   if (!snap.empty) {
@@ -168,17 +155,9 @@ A RED ZONE é especializada em performance gamer.
       i++;
     }
   }
-
-  // COMANDOS
-  await bot.sendMessage(chatId,
-`📌 COMANDOS
-
-📦 /produtos
-📊 /status
-ℹ️ /info`);
 });
 
-// ================= CADASTRO =================
+// ================= MENSAGENS =================
 bot.on("message", async (msg) => {
 
   if (!db) return;
@@ -189,6 +168,7 @@ bot.on("message", async (msg) => {
 
   if (!text) return;
 
+  // ===== CADASTRO =====
   if (state?.step === "cadastro") {
 
     if (!text.includes("|")) {
@@ -207,7 +187,23 @@ bot.on("message", async (msg) => {
     userState[id] = null;
 
     return bot.sendMessage(msg.chat.id,
-"✅ Cadastro concluído! Digite /start");
+"✅ Cadastro concluído! /start");
+  }
+
+  // ===== ADMIN ADD =====
+  if (state?.step === "add") {
+
+    const [nome, preco, whatsapp] = text.split("|");
+
+    await db.collection('produtos').add({
+      nome: nome.trim(),
+      preco: preco.trim(),
+      whatsapp: whatsapp.trim()
+    });
+
+    userState[id] = null;
+
+    return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
   }
 });
 
@@ -237,16 +233,18 @@ bot.onText(/\/status/, (msg) => {
   bot.sendMessage(msg.chat.id,
 `📊 STATUS
 
-Sistema: Online
-🔥 RED ZONE`);
+System: ONLINE
+Mode: VIP`);
 });
 
 // ================= INFO =================
 bot.onText(/\/info/, (msg) => {
   bot.sendMessage(msg.chat.id,
-`ℹ️ Produtos digitais
-Entrega rápida
-Suporte direto`);
+`ℹ️ INFO
+
+Digital products
+Fast delivery
+Direct support`);
 });
 
 // ================= COMPRA =================
@@ -263,14 +261,59 @@ bot.on("callback_query", async (q) => {
   });
 
   bot.answerCallbackQuery(q.id, {
-    text: "✅ Compra registrada"
+    text: "✅ Purchase registered"
   });
+});
+
+// ================= ADMIN =================
+bot.onText(/\/admin/, (msg) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  bot.sendMessage(msg.chat.id,
+`🔐 ADMIN
+
+/adicionar
+/deletar ID
+/deletartudo`);
+});
+
+bot.onText(/\/adicionar/, (msg) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  userState[msg.from.id] = { step: "add" };
+
+  bot.sendMessage(msg.chat.id,
+"nome | preco | whatsapp");
+});
+
+bot.onText(/\/deletar (.+)/, async (msg, m) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  await db.collection('produtos').doc(m[1]).delete();
+
+  bot.sendMessage(msg.chat.id, "🗑️ Deleted");
+});
+
+bot.onText(/\/deletartudo/, async (msg) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  const snap = await db.collection('produtos').get();
+
+  for (const doc of snap.docs) {
+    await doc.ref.delete();
+  }
+
+  bot.sendMessage(msg.chat.id, "🗑️ All deleted");
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
-  console.log("🔥 Servidor ONLINE");
+  console.log("🚀 SELLFORGE SYSTEM ACTIVE");
 
   try {
     const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
