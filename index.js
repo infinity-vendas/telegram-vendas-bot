@@ -12,6 +12,7 @@ app.use(express.json());
 // CONFIG
 const ADMIN_ID = "6863505946";
 const WHATSAPP = "551981528372";
+const BOT_USERNAME = "@SellForge_bot"; // ALTERAR
 
 // FIREBASE
 let db;
@@ -49,12 +50,36 @@ const userState = {};
 const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
 // ================= START =================
-bot.onText(/\/start/, async (msg) => {
+bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
 
   const chatId = msg.chat.id;
+  const ref = match[1];
 
   await bot.sendPhoto(chatId, LOGO);
 
+  // ===== VALIDAÇÃO VENDEDOR =====
+  if (ref) {
+    const vendedor = await db.collection('vendedores').doc(ref).get();
+
+    if (!vendedor.exists || !vendedor.data().ativo) {
+      return bot.sendMessage(chatId,
+`🚫 Link não autorizado
+
+Fale com suporte`,
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "📲 WhatsApp",
+      url: `https://wa.me/${WHATSAPP}`
+    }]]
+  }
+});
+    }
+
+    await bot.sendMessage(chatId, `👤 Indicado por: ${ref}`);
+  }
+
+  // ===== SUA MENSAGEM ORIGINAL =====
   await bot.sendMessage(chatId,
 `Olá 👋
 
@@ -84,6 +109,14 @@ Escolha abaixo 👇`,
     resize_keyboard: true
   }
 });
+
+  // ===== MENU ADMIN =====
+  if (String(msg.from.id) === ADMIN_ID) {
+    bot.sendMessage(chatId,
+`🔐 ADMIN
+
+/comandos_admin`);
+  }
 });
 
 // ================= MENU =================
@@ -95,10 +128,10 @@ bot.on("message", async (msg) => {
   const id = String(msg.from.id);
   const state = userState[id];
 
-  // ================= CADASTRO PRODUTO PASSO A PASSO =================
+  // ===== CADASTRO PRODUTO =====
   if (state?.step === "nome") {
     userState[id] = { step: "preco", nome: text };
-    return bot.sendMessage(msg.chat.id, "💰 Valor (ex: $10,00)");
+    return bot.sendMessage(msg.chat.id, "💰 Valor (ex: R$10,00)");
   }
 
   if (state?.step === "preco") {
@@ -110,7 +143,7 @@ bot.on("message", async (msg) => {
   if (state?.step === "desc") {
     state.desc = text;
     state.step = "img";
-    return bot.sendMessage(msg.chat.id, "🖼️ Link da imagem (.jpg/.png)");
+    return bot.sendMessage(msg.chat.id, "🖼️ Link da imagem");
   }
 
   if (state?.step === "img") {
@@ -134,7 +167,7 @@ bot.on("message", async (msg) => {
     return bot.sendMessage(msg.chat.id, "✅ Produto cadastrado");
   }
 
-  // ================= PRODUTOS =================
+  // ===== PRODUTOS =====
   if (text === "📦 Produtos") {
 
     const snap = await db.collection('produtos').get();
@@ -150,41 +183,35 @@ bot.on("message", async (msg) => {
 `📦 ${p.nome}
 💰 ${p.preco}
 
-📝 ${p.desc}
-
-📲 ${p.whatsapp}`,
+📝 ${p.desc}`,
         reply_markup: {
-          inline_keyboard: [
-            [{
-              text: "🛒 Comprar",
-              url: `https://wa.me/${p.whatsapp.replace(/\D/g, '')}`
-            }]
-          ]
+          inline_keyboard: [[{
+            text: "🛒 Comprar",
+            url: `https://wa.me/${p.whatsapp.replace(/\D/g, '')}`
+          }]]
         }
       });
     }
   }
 
-  // ================= PLANOS =================
+  // ===== PLANOS =====
   if (text === "📊 Planos") {
-
     bot.sendMessage(msg.chat.id,
-`📊 PLANOS DISPONÍVEIS
+`📊 PLANOS
 
-1 Day  - R$5
-3 Day  - R$15
-10 Day - R$30
-20 Day - R$60
-30 Day - R$90
-40 Day - R$120
-50 Day - R$150
-60 Day - R$180
-90 Day - R$210`);
+1D = R$5
+3D = R$15
+10D = R$30
+20D = R$60
+30D = R$90
+40D = R$120
+50D = R$150
+60D = R$180
+90D = R$210`);
   }
 
-  // ================= ALUGAR BOT =================
+  // ===== ALUGAR BOT =====
   if (text === "🤖 Alugar Bot") {
-
     bot.sendMessage(msg.chat.id,
 `🤖 ALUGAR BOT
 
@@ -192,35 +219,44 @@ bot.on("message", async (msg) => {
 48h = R$8`,
 {
   reply_markup: {
-    inline_keyboard: [
-      [{
-        text: "📲 Contratar",
-        url: `https://wa.me/${WHATSAPP}?text=Quero%20alugar%20bot`
-      }]
-    ]
+    inline_keyboard: [[{
+      text: "📲 Contratar",
+      url: `https://wa.me/${WHATSAPP}?text=Quero%20alugar%20bot`
+    }]]
   }
 });
   }
 
-  // ================= SUPORTE =================
+  // ===== SUPORTE =====
   if (text === "📲 Suporte") {
-
     bot.sendMessage(msg.chat.id,
 "Fale conosco 👇",
 {
   reply_markup: {
-    inline_keyboard: [
-      [{
-        text: "WhatsApp",
-        url: `https://wa.me/${WHATSAPP}`
-      }]
-    ]
+    inline_keyboard: [[{
+      text: "WhatsApp",
+      url: `https://wa.me/${WHATSAPP}`
+    }]]
   }
 });
   }
 });
 
-// ================= COMANDOS ADMIN =================
+// ================= ADMIN =================
+
+// menu admin
+bot.onText(/\/comandos_admin/, (msg) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  bot.sendMessage(msg.chat.id,
+`🔐 COMANDOS ADMIN
+
+/Produtos
+/ativar vendedor ID nome
+/link vendedor nome
+/excluir vendedor nome`);
+});
 
 // criar produto
 bot.onText(/\/Produtos/, (msg) => {
@@ -233,15 +269,36 @@ bot.onText(/\/Produtos/, (msg) => {
 });
 
 // ativar vendedor
-bot.onText(/\/ativar vendedor (.+)/, async (msg, m) => {
+bot.onText(/\/ativar vendedor (\d+) (.+)/, async (msg, m) => {
 
   if (String(msg.from.id) !== ADMIN_ID) return;
 
-  await db.collection('vendedores').doc(m[1]).set({
+  const userId = m[1];
+  const nome = m[2].toLowerCase();
+
+  await db.collection('vendedores').doc(nome).set({
+    userId,
     ativo: true
   });
 
-  bot.sendMessage(msg.chat.id, "✅ Vendedor ativado");
+  bot.sendMessage(msg.chat.id,
+`✅ Vendedor ativado
+
+🔗 Link:
+https://t.me/${BOT_USERNAME}?start=${nome}`);
+});
+
+// gerar link
+bot.onText(/\/link vendedor (.+)/, (msg, m) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  const nome = m[1];
+
+  bot.sendMessage(msg.chat.id,
+`🔗 Link do vendedor:
+
+https://t.me/${BOT_USERNAME}?start=${nome}`);
 });
 
 // excluir vendedor
@@ -257,11 +314,11 @@ bot.onText(/\/excluir vendedor (.+)/, async (msg, m) => {
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
-  console.log("🚀 INFINITY CLIENTES ONLINE");
+  console.log("🚀 ONLINE");
 
   const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
 
   await bot.setWebHook(url);
 
-  console.log("Webhook ativo:", url);
+  console.log("Webhook:", url);
 });
