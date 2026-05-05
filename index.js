@@ -9,10 +9,11 @@ const { getFirestore } = require('firebase-admin/firestore');
 const app = express();
 app.use(express.json());
 
-// ================= CONFIG =================
+// CONFIG
 const ADMIN_ID = "6863505946";
+const WHATSAPP = "551981528372";
 
-// ================= FIREBASE =================
+// FIREBASE
 let db;
 
 try {
@@ -29,257 +30,238 @@ try {
   console.log("❌ Firebase erro:", e.message);
 }
 
-// ================= BOT =================
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  webHook: true
-});
-
+// BOT
+const bot = new TelegramBot(process.env.BOT_TOKEN, { webHook: true });
 const SECRET_PATH = `/bot${process.env.BOT_TOKEN}`;
 
-// ================= WEBHOOK =================
+// WEBHOOK
 app.post(SECRET_PATH, (req, res) => {
   res.sendStatus(200);
   bot.processUpdate(req.body);
 });
 
-app.get('/', (req, res) => res.send("🚀 BOT ONLINE"));
+app.get('/', (req, res) => res.send("🚀 INFINITY CLIENTES ONLINE"));
 
-// ================= ESTADO =================
+// ESTADO
 const userState = {};
 
-// ================= IMAGENS =================
-const LOGO = "https://i.postimg.cc/BQwJ8VTL/Red-Zone-Cliente.jpg";
-
-// ================= FUNÇÕES =================
-async function getUser(id) {
-  const doc = await db.collection('users').doc(id).get();
-  return doc.exists ? doc.data() : null;
-}
-
-async function isActive(id) {
-  const user = await getUser(id);
-  if (!user || !user.expiraEm) return false;
-  return Date.now() < user.expiraEm;
-}
+// LOGO
+const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
 // ================= START =================
 bot.onText(/\/start/, async (msg) => {
 
   const chatId = msg.chat.id;
-  const id = String(msg.from.id);
 
   await bot.sendPhoto(chatId, LOGO);
 
-  const user = await getUser(id);
+  await bot.sendMessage(chatId,
+`Olá 👋
 
-  // ===== CADASTRO =====
-  if (!user) {
-    userState[id] = { step: "cadastro" };
+Sou seu assistente virtual 🤖
 
-    return bot.sendMessage(chatId,
-`📋 Cadastro necessário
+Como posso lhe ajudar hoje?
 
-Envie:
-Nick | Idade | Whatsapp`);
+🔥 Confira nossos planos ULTRA MAX
+
+Cansado de alugar bots caros e sem resultado?
+
+Apresento a você a INFINITY CLIENTES 🚀
+
+✔ Transparência
+✔ Qualidade
+✔ Desempenho
+
+#EQUIPE IC ®
+
+Escolha abaixo 👇`,
+{
+  reply_markup: {
+    keyboard: [
+      ["📦 Produtos", "📊 Planos"],
+      ["🤖 Alugar Bot", "📲 Suporte"]
+    ],
+    resize_keyboard: true
   }
-
-  // ===== VERIFICAR PLANO =====
-  if (!(await isActive(id))) {
-    return bot.sendMessage(chatId,
-`🚫 Seu acesso expirou
-
-💰 Compre um plano para continuar
-
-1 DIA = R$5
-7 DIAS = R$20
-30 DIAS = R$50
-
-📲 Contato:
-+55 51 98152-8372`);
-  }
-
-  // ===== MENU =====
-  bot.sendMessage(chatId,
-`👑 VIP LIBERADO
-
-/comandos disponíveis:
-
-/produtos
-/status
-/plano
-/info`);
+});
 });
 
-// ================= MENSAGENS =================
+// ================= MENU =================
 bot.on("message", async (msg) => {
 
   if (!msg.text) return;
 
-  const id = String(msg.from.id);
   const text = msg.text;
+  const id = String(msg.from.id);
   const state = userState[id];
 
-  // ===== CADASTRO =====
-  if (state?.step === "cadastro") {
+  // ================= CADASTRO PRODUTO PASSO A PASSO =================
+  if (state?.step === "nome") {
+    userState[id] = { step: "preco", nome: text };
+    return bot.sendMessage(msg.chat.id, "💰 Valor (ex: $10,00)");
+  }
 
-    if (!text.includes("|"))
-      return bot.sendMessage(msg.chat.id, "Use: Nick | Idade | Whatsapp");
+  if (state?.step === "preco") {
+    state.preco = text;
+    state.step = "desc";
+    return bot.sendMessage(msg.chat.id, "📝 Descrição");
+  }
 
-    const [nome, idade, whatsapp] = text.split("|");
+  if (state?.step === "desc") {
+    state.desc = text;
+    state.step = "img";
+    return bot.sendMessage(msg.chat.id, "🖼️ Link da imagem (.jpg/.png)");
+  }
 
-    await db.collection('users').doc(id).set({
-      nome: nome.trim(),
-      idade: idade.trim(),
-      whatsapp: whatsapp.trim(),
-      criadoEm: new Date(),
-      expiraEm: null
+  if (state?.step === "img") {
+    state.img = text;
+    state.step = "zap";
+    return bot.sendMessage(msg.chat.id, "📲 WhatsApp (+55...)");
+  }
+
+  if (state?.step === "zap") {
+
+    await db.collection('produtos').add({
+      nome: state.nome,
+      preco: state.preco,
+      desc: state.desc,
+      img: state.img,
+      whatsapp: text
     });
 
     userState[id] = null;
 
-    return bot.sendMessage(msg.chat.id,
-"✅ Cadastro feito! Aguarde liberação");
+    return bot.sendMessage(msg.chat.id, "✅ Produto cadastrado");
   }
 
-  // ===== BLOQUEIO =====
-  const active = await isActive(id);
+  // ================= PRODUTOS =================
+  if (text === "📦 Produtos") {
 
-  if (!active && text !== "/start") {
-    return bot.sendMessage(msg.chat.id,
-"🚫 Plano expirado. Fale com suporte");
-  }
-});
+    const snap = await db.collection('produtos').get();
 
-// ================= PRODUTOS =================
-bot.onText(/\/produtos/, async (msg) => {
+    if (snap.empty)
+      return bot.sendMessage(msg.chat.id, "Sem produtos");
 
-  const snap = await db.collection('produtos').get();
+    for (const doc of snap.docs) {
+      const p = doc.data();
 
-  if (snap.empty)
-    return bot.sendMessage(msg.chat.id, "Sem produtos");
-
-  for (const doc of snap.docs) {
-    const p = doc.data();
-
-    bot.sendMessage(msg.chat.id,
+      await bot.sendPhoto(msg.chat.id, p.img, {
+        caption:
 `📦 ${p.nome}
 💰 ${p.preco}
+
+📝 ${p.desc}
+
 📲 ${p.whatsapp}`,
+        reply_markup: {
+          inline_keyboard: [
+            [{
+              text: "🛒 Comprar",
+              url: `https://wa.me/${p.whatsapp.replace(/\D/g, '')}`
+            }]
+          ]
+        }
+      });
+    }
+  }
+
+  // ================= PLANOS =================
+  if (text === "📊 Planos") {
+
+    bot.sendMessage(msg.chat.id,
+`📊 PLANOS DISPONÍVEIS
+
+1 Day  - R$5
+3 Day  - R$15
+10 Day - R$30
+20 Day - R$60
+30 Day - R$90
+40 Day - R$120
+50 Day - R$150
+60 Day - R$180
+90 Day - R$210`);
+  }
+
+  // ================= ALUGAR BOT =================
+  if (text === "🤖 Alugar Bot") {
+
+    bot.sendMessage(msg.chat.id,
+`🤖 ALUGAR BOT
+
+24h = R$6
+48h = R$8`,
 {
   reply_markup: {
     inline_keyboard: [
-      [{ text: "🛒 Comprar", callback_data: `buy_${doc.id}` }]
+      [{
+        text: "📲 Contratar",
+        url: `https://wa.me/${WHATSAPP}?text=Quero%20alugar%20bot`
+      }]
+    ]
+  }
+});
+  }
+
+  // ================= SUPORTE =================
+  if (text === "📲 Suporte") {
+
+    bot.sendMessage(msg.chat.id,
+"Fale conosco 👇",
+{
+  reply_markup: {
+    inline_keyboard: [
+      [{
+        text: "WhatsApp",
+        url: `https://wa.me/${WHATSAPP}`
+      }]
     ]
   }
 });
   }
 });
 
-// ================= PLANO =================
-bot.onText(/\/plano/, async (msg) => {
+// ================= COMANDOS ADMIN =================
 
-  const id = String(msg.from.id);
-
-  const user = await getUser(id);
-
-  if (!user?.expiraEm)
-    return bot.sendMessage(msg.chat.id, "Sem plano ativo");
-
-  const dias = Math.ceil((user.expiraEm - Date.now()) / 86400000);
-
-  bot.sendMessage(msg.chat.id,
-`💎 Plano ativo
-
-Dias restantes: ${dias}`);
-});
-
-// ================= STATUS =================
-bot.onText(/\/status/, (msg) => {
-  bot.sendMessage(msg.chat.id,
-"🔥 Sistema online");
-});
-
-// ================= INFO =================
-bot.onText(/\/info/, (msg) => {
-  bot.sendMessage(msg.chat.id,
-"📦 Produtos digitais\n⚡ Entrega rápida");
-});
-
-// ================= COMPRA =================
-bot.on("callback_query", async (q) => {
-
-  await db.collection('vendas').add({
-    cliente: q.from.id,
-    produto: q.data,
-    data: new Date()
-  });
-
-  bot.answerCallbackQuery(q.id, {
-    text: "✅ Pedido registrado"
-  });
-});
-
-// ================= ADMIN =================
-
-// liberar usuário
-bot.onText(/\/liberar (\d+) (\d+)/, async (msg, m) => {
+// criar produto
+bot.onText(/\/Produtos/, (msg) => {
 
   if (String(msg.from.id) !== ADMIN_ID) return;
 
-  const userId = m[1];
-  const dias = parseInt(m[2]);
+  userState[msg.from.id] = { step: "nome" };
 
-  const expira = Date.now() + (dias * 86400000);
-
-  await db.collection('users').doc(userId).set({
-    expiraEm: expira
-  }, { merge: true });
-
-  bot.sendMessage(msg.chat.id,
-`✅ Liberado
-
-ID: ${userId}
-Dias: ${dias}`);
+  bot.sendMessage(msg.chat.id, "📦 Nome do produto");
 });
 
-// adicionar produto
-bot.onText(/\/addprod/, (msg) => {
+// ativar vendedor
+bot.onText(/\/ativar vendedor (.+)/, async (msg, m) => {
 
   if (String(msg.from.id) !== ADMIN_ID) return;
 
-  userState[msg.from.id] = { step: "add" };
+  await db.collection('vendedores').doc(m[1]).set({
+    ativo: true
+  });
 
-  bot.sendMessage(msg.chat.id,
-"nome | preco | whatsapp");
+  bot.sendMessage(msg.chat.id, "✅ Vendedor ativado");
 });
 
-// fluxo add produto
-bot.on("message", async (msg) => {
+// excluir vendedor
+bot.onText(/\/excluir vendedor (.+)/, async (msg, m) => {
 
-  const id = String(msg.from.id);
+  if (String(msg.from.id) !== ADMIN_ID) return;
 
-  if (userState[id]?.step === "add") {
+  await db.collection('vendedores').doc(m[1]).delete();
 
-    const [nome, preco, whatsapp] = msg.text.split("|");
-
-    await db.collection('produtos').add({
-      nome, preco, whatsapp
-    });
-
-    userState[id] = null;
-
-    bot.sendMessage(msg.chat.id, "Produto adicionado");
-  }
+  bot.sendMessage(msg.chat.id, "❌ Vendedor removido");
 });
 
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
-  console.log("🚀 ONLINE");
+  console.log("🚀 INFINITY CLIENTES ONLINE");
 
   const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
 
   await bot.setWebHook(url);
 
-  console.log("Webhook:", url);
+  console.log("Webhook ativo:", url);
 });
