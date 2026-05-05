@@ -2,7 +2,6 @@ require('dotenv').config();
 
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-const os = require('os');
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
@@ -10,13 +9,17 @@ const { getFirestore } = require('firebase-admin/firestore');
 const app = express();
 app.use(express.json());
 
-// CONFIG
-const ADMIN_ID = "6863505946";
+// ================= CONFIG =================
+const MASTER = "6863505946";
+const ADMINS = ["8510878195"];
+
 const WHATSAPP = "551981528372";
 const BOT_USERNAME = "SellForge_bot";
 const BOT_VERSION = "v4.0 GOD";
 
-// FIREBASE
+let BOT_ATIVO = true;
+
+// ================= FIREBASE =================
 let db;
 
 try {
@@ -33,7 +36,7 @@ try {
   console.log("❌ Firebase erro:", e.message);
 }
 
-// BOT
+// ================= BOT =================
 const bot = new TelegramBot(process.env.BOT_TOKEN, { webHook: true });
 const SECRET_PATH = `/bot${process.env.BOT_TOKEN}`;
 
@@ -44,11 +47,14 @@ app.post(SECRET_PATH, (req, res) => {
 
 app.get('/', (req, res) => res.send("🚀 INFINITY CLIENTES ONLINE"));
 
+// ================= ESTADO =================
 const userState = {};
 const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
 // ================= START =================
 bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
+
+  if (!BOT_ATIVO) return;
 
   const chatId = msg.chat.id;
   const id = String(msg.from.id);
@@ -58,7 +64,6 @@ bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
 
   const userDoc = await db.collection('users').doc(id).get();
 
-  // CADASTRO
   if (!userDoc.exists || !userDoc.data().nome) {
     userState[id] = { step: "cad_nome" };
     return bot.sendMessage(chatId,
@@ -67,7 +72,6 @@ bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
 Digite seu nome:`);
   }
 
-  // LINK VENDEDOR
   if (ref) {
     const vendedor = await db.collection('vendedores').doc(ref).get();
 
@@ -78,7 +82,7 @@ Digite seu nome:`);
     await bot.sendMessage(chatId, `👤 Indicado por: ${ref}`);
   }
 
-  // MENSAGEM ORIGINAL (100% intacta)
+  // 🔥 MENSAGEM INTACTA
   await bot.sendMessage(chatId,
 `Olá 👋
 
@@ -110,19 +114,25 @@ Escolha abaixo 👇`,
   }
 });
 
-  if (id === ADMIN_ID) {
+  if (id === MASTER || ADMINS.includes(id)) {
     bot.sendMessage(chatId, `🔐 ADMIN LIBERADO\n/comandos_admin`);
   }
 });
 
-// ================= MENU =================
+// ================= MESSAGE =================
 bot.on("message", async (msg) => {
 
   if (!msg.text) return;
 
-  const text = msg.text;
   const id = String(msg.from.id);
+  const text = msg.text;
   const state = userState[id];
+
+  // 🔴 BOT DESLIGADO
+  if (!BOT_ATIVO && id !== MASTER) {
+    return bot.sendMessage(msg.chat.id,
+"🚫 Bot temporariamente desligado");
+  }
 
   // ===== CADASTRO =====
   if (state?.step === "cad_nome") {
@@ -158,45 +168,7 @@ bot.on("message", async (msg) => {
 "✅ Cadastro concluído!\nDigite /start");
   }
 
-  // ===== BLOQUEIO =====
-  const vendedor = await db.collection('vendedores').doc(id).get();
-
-  if (vendedor.exists) {
-    const v = vendedor.data();
-
-    if (v.banido === "perm")
-      return bot.sendMessage(msg.chat.id, "🚫 Banido permanente");
-
-    if (v.banido === "temp" && Date.now() < v.banExpira)
-      return bot.sendMessage(msg.chat.id, "🚫 Banimento ativo");
-  }
-
-  // ===== DENUNCIA =====
-  if (text === "🚨 Denunciar") {
-    userState[id] = { step: "denuncia" };
-    return bot.sendMessage(msg.chat.id, "Digite o nome do vendedor");
-  }
-
-  if (state?.step === "denuncia") {
-    state.vendedor = text;
-    state.step = "motivo";
-    return bot.sendMessage(msg.chat.id, "Digite o motivo");
-  }
-
-  if (state?.step === "motivo") {
-    await db.collection('denuncias').add({
-      vendedor: state.vendedor,
-      motivo: text,
-      user: id,
-      data: new Date()
-    });
-
-    userState[id] = null;
-
-    return bot.sendMessage(msg.chat.id, "🚨 Denúncia enviada");
-  }
-
-  // ===== PRODUTOS =====
+  // ===== MENU =====
   if (text === "📦 Produtos") {
 
     const snap = await db.collection('produtos').get();
@@ -226,9 +198,8 @@ bot.on("message", async (msg) => {
     }
   }
 
-  // ===== PLANOS =====
   if (text === "📊 Planos") {
-    bot.sendMessage(msg.chat.id,
+    return bot.sendMessage(msg.chat.id,
 `📊 PLANOS DISPONÍVEIS
 
 1D = R$5
@@ -242,9 +213,8 @@ bot.on("message", async (msg) => {
 90D = R$210`);
   }
 
-  // ===== ALUGAR =====
   if (text === "🤖 Alugar Bot") {
-    bot.sendMessage(msg.chat.id,
+    return bot.sendMessage(msg.chat.id,
 `🤖 ALUGAR BOT
 
 24h = R$6
@@ -259,9 +229,8 @@ bot.on("message", async (msg) => {
 });
   }
 
-  // ===== SUPORTE =====
   if (text === "📲 Suporte") {
-    bot.sendMessage(msg.chat.id,
+    return bot.sendMessage(msg.chat.id,
 "Fale conosco 👇",
 {
   reply_markup: {
@@ -273,27 +242,56 @@ bot.on("message", async (msg) => {
 });
   }
 
-  // ===== LINK =====
-  if (text === "🔗 Meu Link") {
+  // ===== ADD PRODUTO =====
+  if (text === "/add_produto") {
 
-    if (!vendedor.exists || !vendedor.data().ativo || vendedor.data().banido) {
-      return bot.sendMessage(msg.chat.id,
-`🚫 Você não está autorizado`,
-{
-  reply_markup: {
-    inline_keyboard: [[{
-      text: "📲 Solicitar acesso",
-      url: `https://wa.me/${WHATSAPP}`
-    }]]
+    if (id !== MASTER && !ADMINS.includes(id)) return;
+
+    userState[id] = { step: "add_nome" };
+    return bot.sendMessage(msg.chat.id, "📦 Nome do produto:");
   }
-});
-    }
 
-    const nome = vendedor.data().nome;
-
-    bot.sendMessage(msg.chat.id,
-`🔗 https://t.me/${BOT_USERNAME}?start=${nome}`);
+  if (state?.step === "add_nome") {
+    state.nome = text;
+    state.step = "add_preco";
+    return bot.sendMessage(msg.chat.id, "💰 Valor:");
   }
+
+  if (state?.step === "add_preco") {
+    state.preco = text;
+    state.step = "add_desc";
+    return bot.sendMessage(msg.chat.id, "📝 Descrição:");
+  }
+
+  if (state?.step === "add_desc") {
+    state.desc = text;
+    state.step = "add_img";
+    return bot.sendMessage(msg.chat.id, "🖼️ Link imagem:");
+  }
+
+  if (state?.step === "add_img") {
+    state.img = text;
+    state.step = "add_zap";
+    return bot.sendMessage(msg.chat.id, "📲 WhatsApp:");
+  }
+
+  if (state?.step === "add_zap") {
+
+    await db.collection('produtos').add({
+      nome: state.nome,
+      preco: state.preco,
+      desc: state.desc,
+      img: state.img,
+      whatsapp: text,
+      criadoPor: id,
+      estoque: 10
+    });
+
+    userState[id] = null;
+
+    return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
+  }
+
 });
 
 // ===== COMPRA =====
@@ -306,7 +304,6 @@ bot.on("callback_query", async (q) => {
   if (!p || p.estoque <= 0)
     return bot.answerCallbackQuery(q.id, { text: "❌ Sem estoque" });
 
-  // salvar venda COMPLETA
   await db.collection('vendas').add({
     produto: p.nome,
     preco: p.preco,
@@ -329,87 +326,47 @@ https://wa.me/${p.whatsapp}`);
 // ===== ADMIN =====
 bot.onText(/\/comandos_admin/, (msg) => {
 
-  if (String(msg.from.id) !== ADMIN_ID) return;
+  const id = String(msg.from.id);
+
+  if (id !== MASTER && !ADMINS.includes(id)) return;
 
   bot.sendMessage(msg.chat.id,
 `🔐 ADMIN
 
+/add_produto
+/del_produto ID
 /ban_temp ID
-/ban_perm ID
-/estoque ID QTD
 /ranking
-/reset_total`);
+
+👑 MASTER:
+/ban_perm ID
+/reset_total
+/desligar_bot
+/ligar_bot`);
 });
 
-// ===== BAN TEMP =====
-bot.onText(/\/ban_temp (.+)/, async (msg, m) => {
+// ===== DESLIGAR BOT =====
+bot.onText(/\/desligar_bot/, async (msg) => {
 
-  const id = m[1];
-  const expira = Date.now() + (30 * 86400000);
-
-  await db.collection('vendedores').doc(id).set({
-    banido: "temp",
-    banExpira: expira
-  }, { merge: true });
-
-  const prod = await db.collection('produtos').where("criadoPor","==",id).get();
-  for (const d of prod.docs) await d.ref.delete();
-
-  bot.sendMessage(msg.chat.id, "🚫 Ban TEMP aplicado");
-});
-
-// ===== BAN PERM =====
-bot.onText(/\/ban_perm (.+)/, async (msg, m) => {
-
-  const id = m[1];
-
-  await db.collection('vendedores').doc(id).set({
-    banido: "perm"
-  }, { merge: true });
-
-  const prod = await db.collection('produtos').where("criadoPor","==",id).get();
-  for (const d of prod.docs) await d.ref.delete();
-
-  bot.sendMessage(msg.chat.id, "🚫 Ban PERM aplicado");
-});
-
-// ===== RANKING =====
-bot.onText(/\/ranking/, async (msg) => {
-
-  const snap = await db.collection('vendas').get();
-  let r = {};
-
-  snap.forEach(doc=>{
-    const v = doc.data().vendedor;
-    r[v] = (r[v]||0)+1;
-  });
-
-  let txt="🏆 Ranking\n\n";
-
-  Object.entries(r).sort((a,b)=>b[1]-a[1])
-  .forEach((v,i)=>{
-    txt += `${i+1}. ${v[0]} - ${v[1]} vendas\n`;
-  });
-
-  bot.sendMessage(msg.chat.id, txt);
-});
-
-// ===== RESET =====
-bot.onText(/\/reset_total/, async (msg) => {
-
-  if (String(msg.from.id) !== ADMIN_ID) return;
-
-  const cols = ["users","produtos","vendas","vendedores","denuncias"];
-
-  for (const c of cols) {
-    const snap = await db.collection(c).get();
-    for (const d of snap.docs) await d.ref.delete();
+  if (String(msg.from.id) !== MASTER) {
+    return bot.sendMessage(msg.chat.id,
+"🚫 Sem autorização\nContate dono oficial +55 51 981528372");
   }
 
-  bot.sendMessage(msg.chat.id, "💀 BANCO RESETADO");
+  BOT_ATIVO = false;
+  bot.sendMessage(msg.chat.id, "🔴 BOT DESLIGADO");
 });
 
-// SERVER
+// ===== LIGAR BOT =====
+bot.onText(/\/ligar_bot/, async (msg) => {
+
+  if (String(msg.from.id) !== MASTER) return;
+
+  BOT_ATIVO = true;
+  bot.sendMessage(msg.chat.id, "🟢 BOT LIGADO");
+});
+
+// ===== SERVER =====
 app.listen(process.env.PORT || 3000, async () => {
 
   console.log("🚀 ONLINE");
