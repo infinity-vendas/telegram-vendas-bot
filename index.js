@@ -37,7 +37,6 @@ try {
 const bot = new TelegramBot(process.env.BOT_TOKEN, { webHook: true });
 const SECRET_PATH = `/bot${process.env.BOT_TOKEN}`;
 
-// WEBHOOK
 app.post(SECRET_PATH, (req, res) => {
   res.sendStatus(200);
   bot.processUpdate(req.body);
@@ -45,10 +44,7 @@ app.post(SECRET_PATH, (req, res) => {
 
 app.get('/', (req, res) => res.send("🚀 INFINITY CLIENTES ONLINE"));
 
-// ESTADO
 const userState = {};
-
-// LOGO
 const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
 // ================= START =================
@@ -65,14 +61,13 @@ bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
   // CADASTRO
   if (!userDoc.exists || !userDoc.data().nome) {
     userState[id] = { step: "cad_nome" };
-
     return bot.sendMessage(chatId,
 `📋 CADASTRO OBRIGATÓRIO
 
 Digite seu nome:`);
   }
 
-  // VALIDA VENDEDOR
+  // LINK VENDEDOR
   if (ref) {
     const vendedor = await db.collection('vendedores').doc(ref).get();
 
@@ -129,7 +124,7 @@ bot.on("message", async (msg) => {
   const id = String(msg.from.id);
   const state = userState[id];
 
-  // ================= CADASTRO =================
+  // ===== CADASTRO =====
   if (state?.step === "cad_nome") {
     userState[id] = { nome: text, step: "cad_idade" };
     return bot.sendMessage(msg.chat.id, "Digite sua idade:");
@@ -138,7 +133,7 @@ bot.on("message", async (msg) => {
   if (state?.step === "cad_idade") {
     state.idade = text;
     state.step = "cad_whatsapp";
-    return bot.sendMessage(msg.chat.id, "Digite seu WhatsApp (+55):");
+    return bot.sendMessage(msg.chat.id, "Digite seu WhatsApp:");
   }
 
   if (state?.step === "cad_whatsapp") {
@@ -160,23 +155,23 @@ bot.on("message", async (msg) => {
     userState[id] = null;
 
     return bot.sendMessage(msg.chat.id,
-"✅ Cadastro concluído!\nDigite /start novamente");
+"✅ Cadastro concluído!\nDigite /start");
   }
 
-  // ================= BLOQUEIO =================
+  // ===== BLOQUEIO =====
   const vendedor = await db.collection('vendedores').doc(id).get();
 
   if (vendedor.exists) {
     const v = vendedor.data();
 
     if (v.banido === "perm")
-      return bot.sendMessage(msg.chat.id, "🚫 Banido permanentemente");
+      return bot.sendMessage(msg.chat.id, "🚫 Banido permanente");
 
     if (v.banido === "temp" && Date.now() < v.banExpira)
       return bot.sendMessage(msg.chat.id, "🚫 Banimento ativo");
   }
 
-  // ================= DENUNCIA =================
+  // ===== DENUNCIA =====
   if (text === "🚨 Denunciar") {
     userState[id] = { step: "denuncia" };
     return bot.sendMessage(msg.chat.id, "Digite o nome do vendedor");
@@ -195,11 +190,13 @@ bot.on("message", async (msg) => {
       user: id,
       data: new Date()
     });
+
     userState[id] = null;
+
     return bot.sendMessage(msg.chat.id, "🚨 Denúncia enviada");
   }
 
-  // ================= PRODUTOS =================
+  // ===== PRODUTOS =====
   if (text === "📦 Produtos") {
 
     const snap = await db.collection('produtos').get();
@@ -229,7 +226,7 @@ bot.on("message", async (msg) => {
     }
   }
 
-  // ================= PLANOS =================
+  // ===== PLANOS =====
   if (text === "📊 Planos") {
     bot.sendMessage(msg.chat.id,
 `📊 PLANOS DISPONÍVEIS
@@ -245,7 +242,7 @@ bot.on("message", async (msg) => {
 90D = R$210`);
   }
 
-  // ================= ALUGAR =================
+  // ===== ALUGAR =====
   if (text === "🤖 Alugar Bot") {
     bot.sendMessage(msg.chat.id,
 `🤖 ALUGAR BOT
@@ -262,7 +259,7 @@ bot.on("message", async (msg) => {
 });
   }
 
-  // ================= SUPORTE =================
+  // ===== SUPORTE =====
   if (text === "📲 Suporte") {
     bot.sendMessage(msg.chat.id,
 "Fale conosco 👇",
@@ -276,7 +273,7 @@ bot.on("message", async (msg) => {
 });
   }
 
-  // ================= LINK =================
+  // ===== LINK =====
   if (text === "🔗 Meu Link") {
 
     if (!vendedor.exists || !vendedor.data().ativo || vendedor.data().banido) {
@@ -299,7 +296,7 @@ bot.on("message", async (msg) => {
   }
 });
 
-// ================= COMPRA =================
+// ===== COMPRA =====
 bot.on("callback_query", async (q) => {
 
   const idProduto = q.data.replace("buy_", "");
@@ -309,6 +306,7 @@ bot.on("callback_query", async (q) => {
   if (!p || p.estoque <= 0)
     return bot.answerCallbackQuery(q.id, { text: "❌ Sem estoque" });
 
+  // salvar venda COMPLETA
   await db.collection('vendas').add({
     produto: p.nome,
     preco: p.preco,
@@ -328,7 +326,7 @@ bot.on("callback_query", async (q) => {
 https://wa.me/${p.whatsapp}`);
 });
 
-// ================= ADMIN =================
+// ===== ADMIN =====
 bot.onText(/\/comandos_admin/, (msg) => {
 
   if (String(msg.from.id) !== ADMIN_ID) return;
@@ -339,10 +337,11 @@ bot.onText(/\/comandos_admin/, (msg) => {
 /ban_temp ID
 /ban_perm ID
 /estoque ID QTD
-/ranking`);
+/ranking
+/reset_total`);
 });
 
-// BAN TEMP
+// ===== BAN TEMP =====
 bot.onText(/\/ban_temp (.+)/, async (msg, m) => {
 
   const id = m[1];
@@ -359,7 +358,7 @@ bot.onText(/\/ban_temp (.+)/, async (msg, m) => {
   bot.sendMessage(msg.chat.id, "🚫 Ban TEMP aplicado");
 });
 
-// BAN PERM
+// ===== BAN PERM =====
 bot.onText(/\/ban_perm (.+)/, async (msg, m) => {
 
   const id = m[1];
@@ -374,7 +373,7 @@ bot.onText(/\/ban_perm (.+)/, async (msg, m) => {
   bot.sendMessage(msg.chat.id, "🚫 Ban PERM aplicado");
 });
 
-// RANKING
+// ===== RANKING =====
 bot.onText(/\/ranking/, async (msg) => {
 
   const snap = await db.collection('vendas').get();
@@ -393,6 +392,21 @@ bot.onText(/\/ranking/, async (msg) => {
   });
 
   bot.sendMessage(msg.chat.id, txt);
+});
+
+// ===== RESET =====
+bot.onText(/\/reset_total/, async (msg) => {
+
+  if (String(msg.from.id) !== ADMIN_ID) return;
+
+  const cols = ["users","produtos","vendas","vendedores","denuncias"];
+
+  for (const c of cols) {
+    const snap = await db.collection(c).get();
+    for (const d of snap.docs) await d.ref.delete();
+  }
+
+  bot.sendMessage(msg.chat.id, "💀 BANCO RESETADO");
 });
 
 // SERVER
