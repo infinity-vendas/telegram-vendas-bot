@@ -2,7 +2,8 @@ require('dotenv').config();
 
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-const mercadopago = require('mercadopago');
+
+const { MercadoPagoConfig, Payment } = require('mercadopago');
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
@@ -19,10 +20,12 @@ const BOT_USERNAME = "SellForge_bot";
 
 let BOT_ATIVO = true;
 
-// ================= MERCADO PAGO =================
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN
+// ================= MERCADO PAGO (NOVO SDK) =================
+const mpClient = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN
 });
+
+const mpPayment = new Payment(mpClient);
 
 // ================= FIREBASE =================
 let db;
@@ -55,19 +58,20 @@ app.get('/', (req, res) => res.send("🚀 INFINITY CLIENTES ONLINE"));
 const userState = {};
 const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
-// ================= WEBHOOK MERCADO PAGO =================
+// ================= WEBHOOK =================
 app.post('/webhook/mp', async (req, res) => {
   try {
     const data = req.body;
 
-    console.log("📥 Webhook recebido:", data);
+    console.log("📥 Webhook:", data);
 
     if (data.type === "payment") {
+
       const paymentId = data.data.id;
 
-      const payment = await mercadopago.payment.findById(paymentId);
+      const payment = await mpPayment.get({ id: paymentId });
 
-      if (payment.body.status === "approved") {
+      if (payment.status === "approved") {
 
         console.log("✅ PAGAMENTO APROVADO");
 
@@ -85,14 +89,13 @@ app.post('/webhook/mp', async (req, res) => {
 
 📲 Finalize aqui:
 https://wa.me/${info.whatsapp}`);
-
       }
     }
 
     res.sendStatus(200);
 
   } catch (err) {
-    console.log("❌ Erro webhook:", err);
+    console.log("❌ ERRO WEBHOOK:", err);
     res.sendStatus(500);
   }
 });
@@ -103,6 +106,7 @@ bot.onText(/\/start/, async (msg) => {
   if (!BOT_ATIVO) return;
 
   const chatId = msg.chat.id;
+  const id = String(msg.from.id);
 
   await bot.sendPhoto(chatId, LOGO);
 
@@ -137,7 +141,7 @@ Escolha abaixo 👇`,
   }
 });
 
-  if (String(msg.from.id) === MASTER || ADMINS.includes(String(msg.from.id))) {
+  if (id === MASTER || ADMINS.includes(id)) {
     bot.sendMessage(chatId, `🔐 ADMIN LIBERADO\n/comandos_admin`);
   }
 });
@@ -169,25 +173,27 @@ bot.onText(/📦 Produtos/, async (msg) => {
   }
 });
 
-// ================= COMPRA =================
+// ================= COMPRA PIX =================
 bot.on("callback_query", async (q) => {
 
   const idProduto = q.data.replace("buy_", "");
   const doc = await db.collection('produtos').doc(idProduto).get();
   const p = doc.data();
 
-  const payment = await mercadopago.payment.create({
-    transaction_amount: Number(p.preco),
-    description: p.nome,
-    payment_method_id: "pix",
-    payer: {
-      email: "cliente@email.com"
+  const payment = await mpPayment.create({
+    body: {
+      transaction_amount: Number(p.preco),
+      description: p.nome,
+      payment_method_id: "pix",
+      payer: {
+        email: "cliente@email.com"
+      }
     }
   });
 
-  const qr = payment.body.point_of_interaction.transaction_data.qr_code_base64;
-  const copia = payment.body.point_of_interaction.transaction_data.qr_code;
-  const paymentId = payment.body.id;
+  const qr = payment.point_of_interaction.transaction_data.qr_code_base64;
+  const copia = payment.point_of_interaction.transaction_data.qr_code;
+  const paymentId = payment.id;
 
   await db.collection('pagamentos').doc(String(paymentId)).set({
     chatId: q.message.chat.id,
@@ -215,6 +221,7 @@ ${copia}
 bot.onText(/\/comandos_admin/, (msg) => {
 
   const id = String(msg.from.id);
+
   if (id !== MASTER && !ADMINS.includes(id)) return;
 
   bot.sendMessage(msg.chat.id,
@@ -282,7 +289,6 @@ bot.on("message", async (msg) => {
     userState[id] = null;
     bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
   }
-
 });
 
 // ================= LIGAR/DESLIGAR =================
