@@ -2,7 +2,6 @@ require('dotenv').config();
 
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-
 const { MercadoPagoConfig, Payment } = require('mercadopago');
 
 const { initializeApp, cert } = require('firebase-admin/app');
@@ -24,7 +23,6 @@ let BOT_ATIVO = true;
 const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN
 });
-
 const mpPayment = new Payment(mpClient);
 
 // ================= FIREBASE =================
@@ -55,6 +53,7 @@ app.post(SECRET_PATH, (req, res) => {
 
 app.get('/', (req, res) => res.send("🚀 INFINITY CLIENTES ONLINE"));
 
+// ================= ESTADO =================
 const userState = {};
 const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
@@ -64,13 +63,11 @@ app.post('/webhook/mp', async (req, res) => {
     const data = req.body;
 
     if (data.type === "payment") {
-
-      const paymentId = data.data.id;
-      const payment = await mpPayment.get({ id: paymentId });
+      const payment = await mpPayment.get({ id: data.data.id });
 
       if (payment.status === "approved") {
 
-        const venda = await db.collection('pagamentos').doc(String(paymentId)).get();
+        const venda = await db.collection('pagamentos').doc(String(payment.id)).get();
         if (!venda.exists) return res.sendStatus(200);
 
         const info = venda.data();
@@ -95,35 +92,14 @@ https://wa.me/${info.whatsapp}`);
 });
 
 // ================= START =================
-bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
+bot.onText(/\/start/, async (msg) => {
 
   if (!BOT_ATIVO) return;
 
   const chatId = msg.chat.id;
   const id = String(msg.from.id);
-  const ref = match[1];
 
   await bot.sendPhoto(chatId, LOGO);
-
-  const userDoc = await db.collection('users').doc(id).get();
-
-  if (!userDoc.exists || !userDoc.data().nome) {
-    userState[id] = { step: "cad_nome" };
-    return bot.sendMessage(chatId,
-`📋 CADASTRO OBRIGATÓRIO
-
-Digite seu nome:`);
-  }
-
-  if (ref) {
-    const vendedor = await db.collection('vendedores').doc(ref).get();
-
-    if (!vendedor.exists || !vendedor.data().ativo) {
-      return bot.sendMessage(chatId, `🚫 Link não autorizado`);
-    }
-
-    await bot.sendMessage(chatId, `👤 Indicado por: ${ref}`);
-  }
 
   await bot.sendMessage(chatId,
 `Olá 👋
@@ -161,7 +137,59 @@ Escolha abaixo 👇`,
   }
 });
 
-// ================= MESSAGE GLOBAL (ÚNICO) =================
+// ================= ADMIN =================
+bot.onText(/\/comandos_admin/, (msg) => {
+  const id = String(msg.from.id);
+  if (id !== MASTER && !ADMINS.includes(id)) return;
+
+  bot.sendMessage(msg.chat.id,
+`🔐 ADMIN
+
+/add_produto
+/del_produto ID
+
+👑 MASTER:
+/desligar_bot
+/ligar_bot`);
+});
+
+// ================= ADD PRODUTO =================
+bot.onText(/\/add_produto/, (msg) => {
+  const id = String(msg.from.id);
+  if (id !== MASTER && !ADMINS.includes(id)) return;
+
+  userState[id] = { step: "nome" };
+  bot.sendMessage(msg.chat.id, "📦 Nome do produto:");
+});
+
+// ================= DEL PRODUTO =================
+bot.onText(/\/del_produto (.+)/, async (msg, m) => {
+  const id = String(msg.from.id);
+  if (id !== MASTER && !ADMINS.includes(id)) return;
+
+  await db.collection('produtos').doc(m[1]).delete();
+  bot.sendMessage(msg.chat.id, "🗑 Produto deletado");
+});
+
+// ================= BOT ON/OFF =================
+bot.onText(/\/desligar_bot/, (msg) => {
+  if (String(msg.from.id) !== MASTER) {
+    return bot.sendMessage(msg.chat.id,
+"🚫 Sem autorização\nContate dono oficial +55 51 981528372");
+  }
+
+  BOT_ATIVO = false;
+  bot.sendMessage(msg.chat.id, "🔴 BOT DESLIGADO");
+});
+
+bot.onText(/\/ligar_bot/, (msg) => {
+  if (String(msg.from.id) !== MASTER) return;
+
+  BOT_ATIVO = true;
+  bot.sendMessage(msg.chat.id, "🟢 BOT LIGADO");
+});
+
+// ================= MESSAGE GLOBAL =================
 bot.on("message", async (msg) => {
 
   if (!msg.text) return;
@@ -170,43 +198,58 @@ bot.on("message", async (msg) => {
   const text = msg.text;
   const state = userState[id];
 
+  console.log("MSG:", text);
+
+  // Reset estado ao usar comando
+  if (text.startsWith("/")) {
+    userState[id] = null;
+  }
+
   if (!BOT_ATIVO && id !== MASTER) {
     return bot.sendMessage(msg.chat.id, "🚫 Bot temporariamente desligado");
   }
 
-  // ===== CADASTRO =====
-  if (state?.step === "cad_nome") {
-    userState[id] = { nome: text, step: "cad_idade" };
-    return bot.sendMessage(msg.chat.id, "Digite sua idade:");
+  // ===== FLUXO ADD PRODUTO =====
+  if (state?.step === "nome") {
+    state.nome = text;
+    state.step = "preco";
+    return bot.sendMessage(msg.chat.id, "💰 Valor:");
   }
 
-  if (state?.step === "cad_idade") {
-    state.idade = text;
-    state.step = "cad_whatsapp";
-    return bot.sendMessage(msg.chat.id, "Digite seu WhatsApp:");
+  if (state?.step === "preco") {
+    state.preco = text;
+    state.step = "desc";
+    return bot.sendMessage(msg.chat.id, "📝 Descrição:");
   }
 
-  if (state?.step === "cad_whatsapp") {
-    state.whatsapp = text;
-    state.step = "cad_insta";
-    return bot.sendMessage(msg.chat.id, "Digite seu Instagram:");
+  if (state?.step === "desc") {
+    state.desc = text;
+    state.step = "img";
+    return bot.sendMessage(msg.chat.id, "🖼️ Link imagem:");
   }
 
-  if (state?.step === "cad_insta") {
+  if (state?.step === "img") {
+    state.img = text;
+    state.step = "zap";
+    return bot.sendMessage(msg.chat.id, "📲 WhatsApp:");
+  }
 
-    await db.collection('users').doc(id).set({
+  if (state?.step === "zap") {
+
+    await db.collection('produtos').add({
       nome: state.nome,
-      idade: state.idade,
-      whatsapp: state.whatsapp,
-      instagram: text,
-      criadoEm: new Date()
+      preco: state.preco,
+      desc: state.desc,
+      img: state.img,
+      whatsapp: text,
+      criadoPor: id
     });
 
     userState[id] = null;
-    return bot.sendMessage(msg.chat.id, "✅ Cadastro concluído!\nDigite /start");
+    return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
   }
 
-  // ===== PRODUTOS =====
+  // ===== MENU =====
   if (text === "📦 Produtos") {
 
     const snap = await db.collection('produtos').get();
@@ -233,79 +276,77 @@ bot.on("message", async (msg) => {
     }
   }
 
-  // ===== ADD PRODUTO =====
-  if (text === "/add_produto") {
-    if (id !== MASTER && !ADMINS.includes(id)) return;
+  if (text === "📊 Planos") {
+    return bot.sendMessage(msg.chat.id,
+`📊 PLANOS DISPONÍVEIS
 
-    userState[id] = { step: "add_nome" };
-    return bot.sendMessage(msg.chat.id, "📦 Nome do produto:");
+1D = R$5
+3D = R$15
+10D = R$30
+20D = R$60
+30D = R$90
+40D = R$120
+50D = R$150
+60D = R$180
+90D = R$210`);
   }
 
-  if (state?.step === "add_nome") {
-    state.nome = text;
-    state.step = "add_preco";
-    return bot.sendMessage(msg.chat.id, "💰 Valor:");
+  if (text === "🤖 Alugar Bot") {
+    return bot.sendMessage(msg.chat.id,
+`🤖 ALUGAR BOT
+
+24h = R$6
+48h = R$8`,
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "📲 Contratar",
+      url: `https://wa.me/${WHATSAPP}`
+    }]]
+  }
+});
   }
 
-  if (state?.step === "add_preco") {
-    state.preco = text;
-    state.step = "add_desc";
-    return bot.sendMessage(msg.chat.id, "📝 Descrição:");
+  if (text === "📲 Suporte") {
+    return bot.sendMessage(msg.chat.id,
+"Fale conosco 👇",
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "WhatsApp",
+      url: `https://wa.me/${WHATSAPP}`
+    }]]
   }
-
-  if (state?.step === "add_desc") {
-    state.desc = text;
-    state.step = "add_img";
-    return bot.sendMessage(msg.chat.id, "🖼️ Link imagem:");
+});
   }
-
-  if (state?.step === "add_img") {
-    state.img = text;
-    state.step = "add_zap";
-    return bot.sendMessage(msg.chat.id, "📲 WhatsApp:");
-  }
-
-  if (state?.step === "add_zap") {
-
-    await db.collection('produtos').add({
-      nome: state.nome,
-      preco: state.preco,
-      desc: state.desc,
-      img: state.img,
-      whatsapp: text,
-      criadoPor: id,
-      estoque: 10
-    });
-
-    userState[id] = null;
-    return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
-  }
-
 });
 
-// ================= COMPRA PIX =================
+// ================= PIX =================
 bot.on("callback_query", async (q) => {
+
+  bot.answerCallbackQuery(q.id);
 
   const idProduto = q.data.replace("buy_", "");
   const doc = await db.collection('produtos').doc(idProduto).get();
   const p = doc.data();
+
+  if (!p) {
+    return bot.sendMessage(q.message.chat.id, "❌ Produto não encontrado");
+  }
 
   const payment = await mpPayment.create({
     body: {
       transaction_amount: Number(p.preco),
       description: p.nome,
       payment_method_id: "pix",
-      payer: {
-        email: "cliente@email.com"
-      }
+      payer: { email: "cliente@email.com" }
     }
   });
 
   const qr = payment.point_of_interaction.transaction_data.qr_code_base64;
   const copia = payment.point_of_interaction.transaction_data.qr_code;
-  const paymentId = payment.id;
 
-  await db.collection('pagamentos').doc(String(paymentId)).set({
+  await db.collection('pagamentos').doc(String(payment.id)).set({
     chatId: q.message.chat.id,
     produto: p.nome,
     valor: p.preco,
@@ -324,26 +365,6 @@ ${copia}
 
 ⏳ Aguardando pagamento...`
   });
-
-});
-
-// ================= ADMIN =================
-bot.onText(/\/comandos_admin/, (msg) => {
-
-  const id = String(msg.from.id);
-  if (id !== MASTER && !ADMINS.includes(id)) return;
-
-  bot.sendMessage(msg.chat.id,
-`🔐 ADMIN
-
-/add_produto
-/del_produto ID
-/unban ID
-/set_tempo ID tempo
-
-👑 MASTER:
-/desligar_bot
-/ligar_bot`);
 });
 
 // ================= SERVER =================
