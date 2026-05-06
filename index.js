@@ -6,7 +6,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
-// ✅ NOVO MERCADO PAGO
+// ✅ Mercado Pago NOVO
 const { MercadoPagoConfig, Payment } = require('mercadopago');
 
 const app = express();
@@ -54,9 +54,59 @@ app.post(SECRET_PATH, (req, res) => {
 
 app.get('/', (req, res) => res.send("🚀 INFINITY CLIENTES ONLINE"));
 
+// ================= WEBHOOK MERCADO PAGO =================
+app.post('/webhook/mp', async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (data.type === "payment") {
+      const paymentId = data.data.id;
+
+      const payment = new Payment(mpClient);
+      const result = await payment.get({ id: paymentId });
+
+      if (result.status === "approved") {
+
+        console.log("💰 PAGAMENTO APROVADO:", result.transaction_amount);
+
+        // 🔥 procura no banco
+        const snap = await db.collection('pagamentos')
+          .where("paymentId", "==", paymentId)
+          .get();
+
+        snap.forEach(async doc => {
+          const d = doc.data();
+
+          // marca como pago
+          await doc.ref.update({ status: "pago" });
+
+          // envia confirmação
+          bot.sendMessage(d.chatId,
+`✅ PAGAMENTO CONFIRMADO!
+
+Produto: ${d.produto}
+Valor: R$${d.valor}
+
+🎉 Obrigado pela compra!`);
+        });
+      }
+    }
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.log("Erro webhook:", err.message);
+    res.sendStatus(500);
+  }
+});
+
 // ================= ESTADO =================
 const userState = {};
 const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
+
+function limparState(id) {
+  if (userState[id]) delete userState[id];
+}
 
 // ================= TEMPO =================
 function getTempo(ms) {
@@ -101,7 +151,7 @@ bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
     await bot.sendMessage(chatId, `👤 Indicado por: ${ref}`);
   }
 
-  // 🔥 MENSAGEM ORIGINAL (NÃO ALTERADA)
+  // 🔥 MENSAGEM ORIGINAL (INTACTA)
   await bot.sendMessage(chatId,
 `Olá 👋
 
@@ -138,11 +188,6 @@ Escolha abaixo 👇`,
   }
 });
 
-// ================= RESET STATE BUG =================
-function limparState(id) {
-  if (userState[id]) delete userState[id];
-}
-
 // ================= MESSAGE =================
 bot.on("message", async (msg) => {
 
@@ -156,7 +201,6 @@ bot.on("message", async (msg) => {
     return bot.sendMessage(msg.chat.id, "🚫 Bot temporariamente desligado");
   }
 
-  // 🔥 EVITA BUG DE TRAVAMENTO
   if (text.startsWith("/")) limparState(id);
 
   // ===== ADD PRODUTO =====
@@ -206,9 +250,39 @@ bot.on("message", async (msg) => {
     limparState(id);
     return bot.sendMessage(msg.chat.id, "✅ Produto adicionado");
   }
+
+  // ===== PRODUTOS =====
+  if (text === "📦 Produtos") {
+
+    const snap = await db.collection('produtos').get();
+
+    if (snap.empty)
+      return bot.sendMessage(msg.chat.id, "❌ Nenhum produto");
+
+    for (const doc of snap.docs) {
+      const p = doc.data();
+
+      if (p.estoque <= 0) continue;
+
+      await bot.sendPhoto(msg.chat.id, p.img, {
+        caption:
+`📦 ${p.nome}
+💰 ${p.preco}
+
+📝 ${p.desc}
+📦 Estoque: ${p.estoque}`,
+        reply_markup: {
+          inline_keyboard: [[{
+            text: "🛒 Comprar",
+            callback_data: `buy_${doc.id}`
+          }]]
+        }
+      });
+    }
+  }
 });
 
-// ================= PIX PAGAMENTO =================
+// ================= COMPRA PIX =================
 bot.on("callback_query", async (q) => {
 
   const idProduto = q.data.replace("buy_", "");
@@ -228,6 +302,15 @@ bot.on("callback_query", async (q) => {
     }
   });
 
+  // salva pagamento
+  await db.collection('pagamentos').add({
+    paymentId: result.id,
+    chatId: q.message.chat.id,
+    produto: p.nome,
+    valor: p.preco,
+    status: "pendente"
+  });
+
   const pix = result.point_of_interaction.transaction_data.qr_code;
 
   bot.sendMessage(q.message.chat.id,
@@ -236,7 +319,7 @@ bot.on("callback_query", async (q) => {
 Produto: ${p.nome}
 Valor: R$${p.preco}
 
-🔑 Copie o código PIX abaixo:
+🔑 Copie o código PIX:
 
 ${pix}`);
 });
@@ -263,59 +346,9 @@ bot.onText(/\/comandos_admin/, (msg) => {
 /ligar_bot`);
 });
 
-// ===== UNBAN =====
-bot.onText(/\/unban (.+)/, async (msg, m) => {
-  if (String(msg.from.id) !== MASTER && !ADMINS.includes(String(msg.from.id))) return;
-
-  await db.collection('vendedores').doc(m[1]).set({
-    banido: null
-  }, { merge: true });
-
-  bot.sendMessage(msg.chat.id, "✅ Vendedor desbloqueado");
-});
-
-// ===== TEMPO =====
-bot.onText(/\/set_tempo (.+) (.+)/, async (msg, m) => {
-
-  const tempo = getTempo(m[2]);
-  if (!tempo) return bot.sendMessage(msg.chat.id, "❌ Tempo inválido");
-
-  await db.collection('vendedores').doc(m[1]).set({
-    ativo: true,
-    expiraEm: Date.now() + tempo
-  }, { merge: true });
-
-  bot.sendMessage(msg.chat.id, "⏱ Tempo atualizado");
-});
-
-// ===== DESLIGAR =====
-bot.onText(/\/desligar_bot/, (msg) => {
-
-  if (String(msg.from.id) !== MASTER) {
-    return bot.sendMessage(msg.chat.id,
-"🚫 Sem autorização\nContate dono oficial +55 51 981528372");
-  }
-
-  BOT_ATIVO = false;
-  bot.sendMessage(msg.chat.id, "🔴 BOT DESLIGADO");
-});
-
-// ===== LIGAR =====
-bot.onText(/\/ligar_bot/, (msg) => {
-
-  if (String(msg.from.id) !== MASTER) return;
-
-  BOT_ATIVO = true;
-  bot.sendMessage(msg.chat.id, "🟢 BOT LIGADO");
-});
-
 // ================= SERVER =================
 app.listen(process.env.PORT || 3000, async () => {
 
   console.log("🚀 ONLINE");
 
   const url = `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
-  await bot.setWebHook(url);
-
-  console.log("Webhook:", url);
-});
