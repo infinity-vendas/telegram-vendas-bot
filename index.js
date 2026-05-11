@@ -17,9 +17,9 @@ const {
   getFirestore
 } = require('firebase-admin/firestore');
 
-// ======================================
+// =========================================
 // EXPRESS
-// ======================================
+// =========================================
 
 const app = express();
 
@@ -29,9 +29,9 @@ app.use(express.json({
   }
 }));
 
-// ======================================
+// =========================================
 // CONFIG
-// ======================================
+// =========================================
 
 const MASTER = "6863505946";
 
@@ -43,11 +43,14 @@ const WHATSAPP = "551981528372";
 
 const BOT_USERNAME = "SellForge_bot";
 
+const LOGO =
+"https://i.postimg.cc/g2JJvqHN/logo.jpg";
+
 let BOT_ATIVO = true;
 
-// ======================================
+// =========================================
 // VALIDAÇÕES
-// ======================================
+// =========================================
 
 if (!process.env.BOT_TOKEN) {
   console.log("❌ BOT_TOKEN ausente");
@@ -69,9 +72,9 @@ if (!process.env.FIREBASE_CONFIG) {
   process.exit(1);
 }
 
-// ======================================
+// =========================================
 // MERCADO PAGO
-// ======================================
+// =========================================
 
 const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN
@@ -79,9 +82,9 @@ const mpClient = new MercadoPagoConfig({
 
 const mpPayment = new Payment(mpClient);
 
-// ======================================
+// =========================================
 // FIREBASE
-// ======================================
+// =========================================
 
 let db;
 
@@ -107,9 +110,9 @@ try {
   process.exit(1);
 }
 
-// ======================================
+// =========================================
 // TELEGRAM
-// ======================================
+// =========================================
 
 const bot = new TelegramBot(
   process.env.BOT_TOKEN,
@@ -119,7 +122,7 @@ const bot = new TelegramBot(
 );
 
 const SECRET_PATH =
-  `/bot${process.env.BOT_TOKEN}`;
+`/bot${process.env.BOT_TOKEN}`;
 
 app.post(
   SECRET_PATH,
@@ -141,26 +144,23 @@ app.post(
   }
 );
 
-// ======================================
+// =========================================
 // HOME
-// ======================================
+// =========================================
 
 app.get('/', (req, res) => {
   res.send("🚀 BOT ONLINE");
 });
 
-// ======================================
+// =========================================
 // STATUS
-// ======================================
+// =========================================
 
 const userState = {};
 
-const LOGO =
-"https://i.postimg.cc/g2JJvqHN/logo.jpg";
-
-// ======================================
-// WEBHOOK MP
-// ======================================
+// =========================================
+// WEBHOOK MERCADO PAGO
+// =========================================
 
 app.post('/webhook/mp', async (req, res) => {
 
@@ -193,7 +193,6 @@ app.post('/webhook/mp', async (req, res) => {
     const venda = await vendaRef.get();
 
     if (!venda.exists) {
-      console.log("❌ VENDA NÃO ENCONTRADA");
       return res.sendStatus(200);
     }
 
@@ -234,9 +233,9 @@ https://wa.me/${info.whatsapp}`
   }
 });
 
-// ======================================
+// =========================================
 // START
-// ======================================
+// =========================================
 
 bot.onText(/\/start/, async (msg) => {
 
@@ -250,28 +249,32 @@ bot.onText(/\/start/, async (msg) => {
 
     await bot.sendPhoto(
       chatId,
-      LOGO
+      LOGO,
+{
+  caption:
+`🚀 Bem-vindo à INFINITY CLIENTES
+
+🤖 Sistema automático de vendas
+
+✅ PIX automático
+✅ Entrega automática
+✅ Suporte rápido
+
+Digite um comando abaixo 👇`
+}
     );
 
     await bot.sendMessage(
       chatId,
-`Olá 👋
+`📋 COMANDOS USER
 
-Sou seu assistente virtual 🤖
-
-🔥 Confira nossos produtos e planos.
-
-Escolha abaixo 👇`,
-{
-  reply_markup: {
-    keyboard: [
-      ["📦 Produtos", "📊 Planos"],
-      ["🤖 Alugar Bot", "📲 Suporte"],
-      ["🔗 Meu Link"]
-    ],
-    resize_keyboard: true
-  }
-});
+/start
+/produtos
+/planos
+/suporte
+/alugarbot
+/meulink`
+    );
 
     if (
       id === MASTER ||
@@ -280,7 +283,7 @@ Escolha abaixo 👇`,
 
       await bot.sendMessage(
         chatId,
-`🔐 ADMIN LIBERADO
+`🔐 COMANDOS ADMIN
 
 /comandos_admin`
       );
@@ -293,9 +296,9 @@ Escolha abaixo 👇`,
   }
 });
 
-// ======================================
-// ADMIN
-// ======================================
+// =========================================
+// COMANDOS ADMIN
+// =========================================
 
 bot.onText(/\/comandos_admin/, async (msg) => {
 
@@ -306,7 +309,7 @@ bot.onText(/\/comandos_admin/, async (msg) => {
     !ADMINS.includes(id)
   ) return;
 
-  await bot.sendMessage(
+  bot.sendMessage(
     msg.chat.id,
 `🔐 PAINEL ADMIN
 
@@ -314,15 +317,16 @@ bot.onText(/\/comandos_admin/, async (msg) => {
 /del_produto ID
 /listar_produtos
 
-👑 MASTER:
+👑 MASTER
+
 /desligar_bot
 /ligar_bot`
   );
 });
 
-// ======================================
+// =========================================
 // ADD PRODUTO
-// ======================================
+// =========================================
 
 bot.onText(/\/add_produto/, async (msg) => {
 
@@ -343,9 +347,9 @@ bot.onText(/\/add_produto/, async (msg) => {
   );
 });
 
-// ======================================
+// =========================================
 // DELETE PRODUTO
-// ======================================
+// =========================================
 
 bot.onText(
   /\/del_produto (.+)/,
@@ -360,11 +364,9 @@ bot.onText(
         !ADMINS.includes(id)
       ) return;
 
-      const produtoId = match[1];
-
       await db
         .collection('produtos')
-        .doc(produtoId)
+        .doc(match[1])
         .delete();
 
       bot.sendMessage(
@@ -379,9 +381,9 @@ bot.onText(
   }
 );
 
-// ======================================
-// LISTAR PRODUTOS
-// ======================================
+// =========================================
+// LISTAR PRODUTOS ADMIN
+// =========================================
 
 bot.onText(
   /\/listar_produtos/,
@@ -408,7 +410,8 @@ bot.onText(
         );
       }
 
-      let texto = "📦 PRODUTOS:\n\n";
+      let texto =
+"📦 PRODUTOS CADASTRADOS\n\n";
 
       snap.forEach(doc => {
 
@@ -435,9 +438,9 @@ bot.onText(
   }
 );
 
-// ======================================
+// =========================================
 // BOT ON/OFF
-// ======================================
+// =========================================
 
 bot.onText(/\/desligar_bot/, (msg) => {
 
@@ -467,9 +470,137 @@ bot.onText(/\/ligar_bot/, (msg) => {
   );
 });
 
-// ======================================
-// MESSAGE
-// ======================================
+// =========================================
+// PRODUTOS USER
+// =========================================
+
+bot.onText(/\/produtos/, async (msg) => {
+
+  try {
+
+    const snap = await db
+      .collection('produtos')
+      .get();
+
+    if (snap.empty) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "❌ Nenhum produto"
+      );
+    }
+
+    for (const doc of snap.docs) {
+
+      const p = doc.data();
+
+      await bot.sendPhoto(
+        msg.chat.id,
+        p.img,
+{
+  caption:
+`📦 ${p.nome}
+
+💰 R$ ${p.preco}
+
+📝 ${p.desc}
+
+⚠️ Aprovação PIX pode levar até 2 minutos.`,
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "🛒 Comprar",
+      callback_data:
+`buy_${doc.id}`
+    }]]
+  }
+}
+      );
+    }
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// PLANOS
+// =========================================
+
+bot.onText(/\/planos/, async (msg) => {
+
+  bot.sendMessage(
+    msg.chat.id,
+`📊 PLANOS DISPONÍVEIS
+
+1D = R$5
+3D = R$15
+10D = R$30
+20D = R$60
+30D = R$90`
+  );
+});
+
+// =========================================
+// SUPORTE
+// =========================================
+
+bot.onText(/\/suporte/, async (msg) => {
+
+  bot.sendMessage(
+    msg.chat.id,
+`📲 SUPORTE`,
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "WhatsApp",
+      url:
+`https://wa.me/${WHATSAPP}`
+    }]]
+  }
+});
+});
+
+// =========================================
+// ALUGAR BOT
+// =========================================
+
+bot.onText(/\/alugarbot/, async (msg) => {
+
+  bot.sendMessage(
+    msg.chat.id,
+`🤖 ALUGAR BOT
+
+24h = R$6
+48h = R$8`,
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "📲 Contratar",
+      url:
+`https://wa.me/${WHATSAPP}`
+    }]]
+  }
+});
+});
+
+// =========================================
+// MEU LINK
+// =========================================
+
+bot.onText(/\/meulink/, async (msg) => {
+
+  bot.sendMessage(
+    msg.chat.id,
+`🔗 Seu link:
+
+https://t.me/${BOT_USERNAME}`
+  );
+});
+
+// =========================================
+// FLUXO ADD PRODUTO
+// =========================================
 
 bot.on(
   "message",
@@ -480,17 +611,13 @@ bot.on(
       if (!msg.text) return;
 
       const id =
-        String(msg.from.id);
+String(msg.from.id);
 
       const text =
-        msg.text;
+msg.text;
 
       const state =
-        userState[id];
-
-      console.log(
-        `[MSG] ${id}: ${text}`
-      );
+userState[id];
 
       if (text.startsWith("/")) {
         return;
@@ -506,10 +633,6 @@ bot.on(
           "🚫 Bot desligado"
         );
       }
-
-      // ======================================
-      // ADD PRODUTO
-      // ======================================
 
       if (state?.step === "nome") {
 
@@ -596,136 +719,16 @@ bot.on(
         );
       }
 
-      // ======================================
-      // PRODUTOS
-      // ======================================
-
-      if (text === "📦 Produtos") {
-
-        const snap = await db
-          .collection('produtos')
-          .get();
-
-        if (snap.empty) {
-
-          return bot.sendMessage(
-            msg.chat.id,
-            "❌ Nenhum produto"
-          );
-        }
-
-        for (const doc of snap.docs) {
-
-          const p = doc.data();
-
-          await bot.sendPhoto(
-            msg.chat.id,
-            p.img,
-            {
-              caption:
-`📦 ${p.nome}
-
-💰 R$ ${p.preco}
-
-📝 ${p.desc}`,
-              reply_markup: {
-                inline_keyboard: [[{
-                  text: "🛒 Comprar",
-                  callback_data:
-                    `buy_${doc.id}`
-                }]]
-              }
-            }
-          );
-        }
-      }
-
-      // ======================================
-      // PLANOS
-      // ======================================
-
-      if (text === "📊 Planos") {
-
-        return bot.sendMessage(
-          msg.chat.id,
-`📊 PLANOS DISPONÍVEIS
-
-1D = R$5
-3D = R$15
-10D = R$30
-20D = R$60
-30D = R$90`
-        );
-      }
-
-      // ======================================
-      // ALUGAR BOT
-      // ======================================
-
-      if (text === "🤖 Alugar Bot") {
-
-        return bot.sendMessage(
-          msg.chat.id,
-`🤖 ALUGAR BOT
-
-24h = R$6
-48h = R$8`,
-{
-  reply_markup: {
-    inline_keyboard: [[{
-      text: "📲 Contratar",
-      url:
-`https://wa.me/${WHATSAPP}`
-    }]]
-  }
-});
-      }
-
-      // ======================================
-      // SUPORTE
-      // ======================================
-
-      if (text === "📲 Suporte") {
-
-        return bot.sendMessage(
-          msg.chat.id,
-          "📲 Fale conosco:",
-{
-  reply_markup: {
-    inline_keyboard: [[{
-      text: "WhatsApp",
-      url:
-`https://wa.me/${WHATSAPP}`
-    }]]
-  }
-});
-      }
-
-      // ======================================
-      // LINK
-      // ======================================
-
-      if (text === "🔗 Meu Link") {
-
-        return bot.sendMessage(
-          msg.chat.id,
-`🔗 Seu link:
-
-https://t.me/${BOT_USERNAME}`
-        );
-      }
-
     } catch (err) {
 
-      console.log("❌ MESSAGE ERROR");
       console.log(err);
     }
   }
 );
 
-// ======================================
-// CALLBACK PIX
-// ======================================
+// =========================================
+// PIX CALLBACK
+// =========================================
 
 bot.on(
   "callback_query",
@@ -738,10 +741,10 @@ bot.on(
       );
 
       const idProduto =
-        q.data.replace(
-          "buy_",
-          ""
-        );
+q.data.replace(
+  "buy_",
+  ""
+);
 
       const doc = await db
         .collection('produtos')
@@ -759,76 +762,77 @@ bot.on(
       const p = doc.data();
 
       const valor =
-        Number(p.preco);
+Number(p.preco);
 
       const payment =
-        await mpPayment.create({
-          body: {
+await mpPayment.create({
+  body: {
 
-            transaction_amount:
-              valor,
+    transaction_amount:
+valor,
 
-            description:
-              p.nome,
+    description:
+p.nome,
 
-            payment_method_id:
-              "pix",
+    payment_method_id:
+"pix",
 
-            notification_url:
+    notification_url:
 `${process.env.RENDER_EXTERNAL_URL}/webhook/mp`,
 
-            payer: {
-              email:
+    payer: {
+      email:
 "cliente@email.com"
-            }
-          }
-        });
+    }
+  }
+});
 
       const qr =
-        payment
-        .point_of_interaction
-        .transaction_data
-        .qr_code_base64;
+payment
+.point_of_interaction
+.transaction_data
+.qr_code_base64;
 
       const copia =
-        payment
-        .point_of_interaction
-        .transaction_data
-        .qr_code;
+payment
+.point_of_interaction
+.transaction_data
+.qr_code;
 
       await db
         .collection('pagamentos')
         .doc(
-          String(payment.id)
+String(payment.id)
         )
         .set({
+
           chatId:
-            q.message.chat.id,
+q.message.chat.id,
 
           produto:
-            p.nome,
+p.nome,
 
           valor:
-            valor,
+valor,
 
           whatsapp:
-            p.whatsapp,
+p.whatsapp,
 
           status:
-            "pending",
+"pending",
 
           aprovado:
-            false,
+false,
 
           createdAt:
-            Date.now()
+Date.now()
         });
 
       await bot.sendPhoto(
         q.message.chat.id,
         Buffer.from(
-          qr,
-          'base64'
+qr,
+'base64'
         ),
 {
   caption:
@@ -842,7 +846,9 @@ bot.on(
 
 ${copia}
 
-⏳ Aguardando pagamento...`
+⏳ Aguardando pagamento...
+
+⚠️ Aprovação pode levar até 2 minutos.`
 }
       );
 
@@ -859,18 +865,15 @@ ${copia}
   }
 );
 
-// ======================================
+// =========================================
 // ERROR GLOBAL
-// ======================================
+// =========================================
 
 process.on(
   'unhandledRejection',
   (err) => {
 
-    console.log(
-      "❌ UNHANDLED"
-    );
-
+    console.log("❌ UNHANDLED");
     console.log(err);
   }
 );
@@ -879,27 +882,24 @@ process.on(
   'uncaughtException',
   (err) => {
 
-    console.log(
-      "❌ UNCAUGHT"
-    );
-
+    console.log("❌ UNCAUGHT");
     console.log(err);
   }
 );
 
-// ======================================
+// =========================================
 // SERVER
-// ======================================
+// =========================================
 
 const PORT =
-  process.env.PORT || 3000;
+process.env.PORT || 3000;
 
 app.listen(
   PORT,
   async () => {
 
     console.log(
-      `🚀 ONLINE ${PORT}`
+`🚀 ONLINE ${PORT}`
     );
 
     try {
@@ -908,11 +908,11 @@ app.listen(
 `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
 
       await bot.setWebHook(
-        webhook
+webhook
       );
 
       console.log(
-        "✅ WEBHOOK SETADO:"
+"✅ WEBHOOK SETADO"
       );
 
       console.log(webhook);
@@ -920,7 +920,7 @@ app.listen(
     } catch (err) {
 
       console.log(
-        "❌ WEBHOOK ERROR"
+"❌ WEBHOOK ERROR"
       );
 
       console.log(err);
