@@ -23,11 +23,7 @@ const {
 
 const app = express();
 
-app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
+app.use(express.json());
 
 // =========================================
 // CONFIG
@@ -460,7 +456,7 @@ bot.on(
 
           return bot.sendMessage(
             q.message.chat.id,
-            "❌ Nenhum produto"
+            "❌ Nenhum produto cadastrado"
           );
         }
 
@@ -468,16 +464,16 @@ bot.on(
 
           const p = doc.data();
 
-          await bot.sendPhoto(
+          await bot.sendMessage(
             q.message.chat.id,
-            p.img,
+`📦 ${p.nome || "Sem nome"}
+
+💰 R$ ${p.preco || 0}
+
+📝 ${p.desc || "Sem descrição"}
+
+⚠️ Aprovação PIX pode levar até 2 minutos.`,
 {
-  caption:
-`📦 ${p.nome}
-
-💰 R$ ${p.preco}
-
-📝 ${p.desc}`,
   reply_markup: {
     inline_keyboard: [[{
       text: "🛒 Comprar",
@@ -509,7 +505,7 @@ bot.on(
       }
 
       // =====================================
-      // BOT
+      // ALUGAR BOT
       // =====================================
 
       if (data === "menu_bot") {
@@ -662,11 +658,13 @@ qr,
 
 💲 R$ ${p.preco}
 
-📋 PIX:
+📋 PIX COPIA E COLA:
 
 ${copia}
 
-⏳ Aguardando pagamento...`
+⏳ Aguardando pagamento...
+
+⚠️ Aprovação pode levar até 2 minutos.`
 }
         );
       }
@@ -736,18 +734,6 @@ userState[id];
 
         state.desc = text;
 
-        state.step = "img";
-
-        return bot.sendMessage(
-          msg.chat.id,
-          "🖼 Link imagem:"
-        );
-      }
-
-      if (state.step === "img") {
-
-        state.img = text;
-
         state.step = "zap";
 
         return bot.sendMessage(
@@ -770,9 +756,6 @@ state.preco,
 
             desc:
 state.desc,
-
-            img:
-state.img,
 
             whatsapp:
 text
