@@ -130,7 +130,7 @@ app.get('/', (req, res) => {
 });
 
 // =========================================
-// WEBHOOK MERCADO PAGO
+// WEBHOOK MP
 // =========================================
 
 app.post('/webhook/mp', async (req, res) => {
@@ -173,12 +173,17 @@ app.post('/webhook/mp', async (req, res) => {
       info.chatId,
 `✅ PAGAMENTO APROVADO!
 
-📦 ${info.produto}
+📦 Produto:
+${info.produto}
 
-💰 R$ ${info.valor}
+💰 Valor:
+R$ ${info.valor}
 
-📲 Finalize:
-https://wa.me/${info.whatsapp}`
+👤 Vendedor:
+${info.vendedor}
+
+🔗 Link:
+${info.link}`
     );
 
     res.sendStatus(200);
@@ -214,9 +219,14 @@ bot.onText(/\/start/, async (msg) => {
 
 ✅ PIX AUTOMÁTICO
 ✅ ENTREGA AUTOMÁTICA
-✅ SUPORTE 24H
+✅ SUPORTE 24H`
+}
+    );
 
-Escolha abaixo 👇`,
+    await bot.sendMessage(
+      chatId,
+`📋 MENU`,
+{
   reply_markup: {
     inline_keyboard: [
 
@@ -226,23 +236,15 @@ Escolha abaixo 👇`,
       }],
 
       [{
-        text: "📊 Planos",
-        callback_data: "menu_planos"
-      }],
-
-      [{
-        text: "🤖 Alugar Bot",
-        callback_data: "menu_bot"
-      }],
-
-      [{
         text: "📲 Suporte",
-        callback_data: "menu_suporte"
+        url:
+`https://wa.me/${WHATSAPP}`
       }],
 
       [{
         text: "🔗 Meu Link",
-        callback_data: "menu_link"
+        url:
+`https://t.me/${BOT_USERNAME}`
       }]
     ]
   }
@@ -286,8 +288,9 @@ bot.onText(/\/comandos_admin/, async (msg) => {
 `🔐 PAINEL ADMIN
 
 /add_produto
-/del_produto ID
 /listar_produtos
+/del_produto ID
+/del_todos
 
 👑 MASTER
 
@@ -310,7 +313,7 @@ bot.onText(/\/add_produto/, async (msg) => {
   ) return;
 
   userState[id] = {
-    step: "nome"
+    step: "produto"
   };
 
   bot.sendMessage(
@@ -318,33 +321,6 @@ bot.onText(/\/add_produto/, async (msg) => {
     "📦 Nome do produto:"
   );
 });
-
-// =========================================
-// DELETE PRODUTO
-// =========================================
-
-bot.onText(
-  /\/del_produto (.+)/,
-  async (msg, match) => {
-
-    const id = String(msg.from.id);
-
-    if (
-      id !== MASTER &&
-      !ADMINS.includes(id)
-    ) return;
-
-    await db
-      .collection('produtos')
-      .doc(match[1])
-      .delete();
-
-    bot.sendMessage(
-      msg.chat.id,
-      "🗑 Produto deletado"
-    );
-  }
-);
 
 // =========================================
 // LISTAR PRODUTOS
@@ -385,6 +361,7 @@ bot.onText(
 
 📦 ${p.nome}
 💰 R$ ${p.preco}
+👤 ${p.vendedor}
 
 `;
     });
@@ -392,6 +369,66 @@ bot.onText(
     bot.sendMessage(
       msg.chat.id,
       texto
+    );
+  }
+);
+
+// =========================================
+// DELETE PRODUTO
+// =========================================
+
+bot.onText(
+  /\/del_produto (.+)/,
+  async (msg, match) => {
+
+    const id = String(msg.from.id);
+
+    if (
+      id !== MASTER &&
+      !ADMINS.includes(id)
+    ) return;
+
+    await db
+      .collection('produtos')
+      .doc(match[1])
+      .delete();
+
+    bot.sendMessage(
+      msg.chat.id,
+      "🗑 Produto deletado"
+    );
+  }
+);
+
+// =========================================
+// DELETE TODOS
+// =========================================
+
+bot.onText(
+  /\/del_todos/,
+  async (msg) => {
+
+    const id = String(msg.from.id);
+
+    if (
+      id !== MASTER
+    ) return;
+
+    const snap = await db
+      .collection('produtos')
+      .get();
+
+    for (const doc of snap.docs) {
+
+      await db
+        .collection('produtos')
+        .doc(doc.id)
+        .delete();
+    }
+
+    bot.sendMessage(
+      msg.chat.id,
+      "🗑 Todos produtos deletados"
     );
   }
 );
@@ -466,13 +503,14 @@ bot.on(
 
           await bot.sendMessage(
             q.message.chat.id,
-`📦 ${p.nome || "Sem nome"}
+`📦 ${p.nome}
 
-💰 R$ ${p.preco || 0}
+💰 R$ ${p.preco}
 
-📝 ${p.desc || "Sem descrição"}
+📝 ${p.desc}
 
-⚠️ Aprovação PIX pode levar até 2 minutos.`,
+👤 Vendedor:
+${p.vendedor}`,
 {
   reply_markup: {
     inline_keyboard: [[{
@@ -484,79 +522,6 @@ bot.on(
 }
           );
         }
-      }
-
-      // =====================================
-      // PLANOS
-      // =====================================
-
-      if (data === "menu_planos") {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-`📊 PLANOS
-
-1D = R$5
-3D = R$15
-10D = R$30
-20D = R$60
-30D = R$90`
-        );
-      }
-
-      // =====================================
-      // ALUGAR BOT
-      // =====================================
-
-      if (data === "menu_bot") {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-`🤖 ALUGAR BOT
-
-24h = R$6
-48h = R$8`,
-{
-  reply_markup: {
-    inline_keyboard: [[{
-      text: "📲 Contratar",
-      url:
-`https://wa.me/${WHATSAPP}`
-    }]]
-  }
-});
-      }
-
-      // =====================================
-      // SUPORTE
-      // =====================================
-
-      if (data === "menu_suporte") {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-`📲 SUPORTE`,
-{
-  reply_markup: {
-    inline_keyboard: [[{
-      text: "WhatsApp",
-      url:
-`https://wa.me/${WHATSAPP}`
-    }]]
-  }
-});
-      }
-
-      // =====================================
-      // LINK
-      // =====================================
-
-      if (data === "menu_link") {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-`🔗 https://t.me/${BOT_USERNAME}`
-        );
       }
 
       // =====================================
@@ -637,8 +602,11 @@ p.nome,
             valor:
 p.preco,
 
-            whatsapp:
-p.whatsapp,
+            vendedor:
+p.vendedor,
+
+            link:
+p.link,
 
             aprovado:
 false
@@ -662,9 +630,7 @@ qr,
 
 ${copia}
 
-⏳ Aguardando pagamento...
-
-⚠️ Aprovação pode levar até 2 minutos.`
+⏳ Aguardando pagamento...`
 }
         );
       }
@@ -703,11 +669,15 @@ userState[id];
       if (!state)
         return;
 
-      if (state.step === "nome") {
+      // =====================================
+      // PRODUTO
+      // =====================================
+
+      if (state.step === "produto") {
 
         state.nome = text;
 
-        state.step = "preco";
+        state.step = "valor";
 
         return bot.sendMessage(
           msg.chat.id,
@@ -715,14 +685,17 @@ userState[id];
         );
       }
 
-      if (state.step === "preco") {
+      // =====================================
+      // VALOR
+      // =====================================
+
+      if (state.step === "valor") {
 
         state.preco = Number(
-          text
-            .replace(",", ".")
+          text.replace(",", ".")
         );
 
-        state.step = "desc";
+        state.step = "descricao";
 
         return bot.sendMessage(
           msg.chat.id,
@@ -730,19 +703,43 @@ userState[id];
         );
       }
 
-      if (state.step === "desc") {
+      // =====================================
+      // DESCRIÇÃO
+      // =====================================
+
+      if (state.step === "descricao") {
 
         state.desc = text;
 
-        state.step = "zap";
+        state.step = "vendedor";
 
         return bot.sendMessage(
           msg.chat.id,
-          "📲 WhatsApp:"
+          "👤 Vendedor:"
         );
       }
 
-      if (state.step === "zap") {
+      // =====================================
+      // VENDEDOR
+      // =====================================
+
+      if (state.step === "vendedor") {
+
+        state.vendedor = text;
+
+        state.step = "link";
+
+        return bot.sendMessage(
+          msg.chat.id,
+          "🔗 Link produto:"
+        );
+      }
+
+      // =====================================
+      // LINK
+      // =====================================
+
+      if (state.step === "link") {
 
         await db
           .collection('produtos')
@@ -757,8 +754,14 @@ state.preco,
             desc:
 state.desc,
 
-            whatsapp:
-text
+            vendedor:
+state.vendedor,
+
+            link:
+text,
+
+            createdAt:
+Date.now()
           });
 
         userState[id] = null;
