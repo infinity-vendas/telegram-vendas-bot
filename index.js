@@ -42,7 +42,11 @@ const BOT_USERNAME = "SellForge_bot";
 const LOGO =
 "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
-let BOT_ATIVO = true;
+const VERSION = "Máx Full";
+
+const VENDEDOR = "Faelzin";
+
+const startTime = Date.now();
 
 const userState = {};
 
@@ -130,7 +134,7 @@ app.get('/', (req, res) => {
 });
 
 // =========================================
-// WEBHOOK MERCADO PAGO
+// WEBHOOK MP
 // =========================================
 
 app.post('/webhook/mp', async (req, res) => {
@@ -182,14 +186,17 @@ ${info.produto}
 R$ ${info.valor}
 
 👤 Vendedor:
-${info.vendedor}
+${info.whatsapp}
 
-🔗 Link:
+🔗 Link do Produto:
 ${info.link}
 
 ━━━━━━━━━━━━━━━━━━━
 
-🚀 Obrigado pela compra!`
+🚀 Obrigado pela compra!
+
+⚠️ Caso tenha dúvidas:
+https://wa.me/${WHATSAPP}`
     );
 
     res.sendStatus(200);
@@ -214,68 +221,125 @@ bot.onText(/\/start/, async (msg) => {
 
     const id = String(msg.from.id);
 
+    const ping =
+    Date.now() - startTime;
+
     await bot.sendPhoto(
       chatId,
       LOGO,
 {
   caption:
-`🚀 BEM-VINDO À INFINITY CLIENTES 🚀
+`Olá 👋 sou assistente virtual oficial.
 
-━━━━━━━━━━━━━━━━━━━
-🤖 SISTEMA AUTOMÁTICO
-━━━━━━━━━━━━━━━━━━━
-
-✅ PIX automático
-✅ Aprovação automática
-✅ Entrega rápida
-✅ Produtos digitais
-✅ Suporte rápido
-✅ Atendimento 24H
+Sejam bem vindo ao nosso canal oficial de vendas geral 🚀
 
 ━━━━━━━━━━━━━━━━━━━
 
-⚠️ Algumas aprovações PIX
-podem levar até 2 minutos.
+🏢 APRESENTO PARA VOCÊ A EMPRESA:
 
-👇 ESCOLHA UMA OPÇÃO ABAIXO 👇`
+🔥 INFINITY CLIENTES 🔥
+
+━━━━━━━━━━━━━━━━━━━
+
+👑 Nick Dono:
++55 51 98152-8372
+
+━━━━━━━━━━━━━━━━━━━
+
+❌ Cansado de comprar produtos falsos e não receber seus pedidos após o pagamento?
+
+✅ Aqui é o seu começo real dentro da plataforma Telegram.
+
+━━━━━━━━━━━━━━━━━━━
+
+🚀 Nós entregamos:
+
+✔️ Qualidade
+✔️ Resultados
+✔️ Transparência
+✔️ Segurança
+
+━━━━━━━━━━━━━━━━━━━
+
+💰 Facilitamos suas compras!
+
+Após o pagamento confirmado você recebe automaticamente seu produto sem burocracia.
+
+━━━━━━━━━━━━━━━━━━━
+
+⚠️ Antes de continuar confira:
+
+🔥 Ganhe descontos de até 80% em compras dentro do nosso canal oficial.
+
+━━━━━━━━━━━━━━━━━━━
+
+💳 FORMAS DE PAGAMENTO:
+
+✅ PIX
+✅ Mercado Pago
+✅ Cartão até 2X
+
+━━━━━━━━━━━━━━━━━━━
+
+🔐 PAGAMENTO 100% SEGURO
+
+Autorizado por:
+MERCADO PAGO - Payment
+
+━━━━━━━━━━━━━━━━━━━
+
+⚠️ NÃO CAIA EM GOLPES!
+
+Compre somente dentro do canal oficial.
+
+Não nos responsabilizamos por compras feitas fora da plataforma.
+
+━━━━━━━━━━━━━━━━━━━
+
+👇 CONFIRA NOSSOS SERVIÇOS ABAIXO 👇`
 }
     );
 
+    // =====================================
+    // MENU USER
+    // =====================================
+
     await bot.sendMessage(
       chatId,
-`📋 MENU PRINCIPAL`,
+`📋 MENU USER`,
 {
   reply_markup: {
     inline_keyboard: [
 
       [
         {
-          text: "📦 VER PRODUTOS",
+          text: "📦 PRODUTOS",
           callback_data: "menu_produtos"
         }
       ],
 
       [
         {
-          text: "📲 SUPORTE",
-          callback_data: "menu_suporte"
-        },
-        {
-          text: "🔗 MEU LINK",
-          callback_data: "menu_link"
+          text: "ℹ️ INFORMAÇÕES BOT",
+          callback_data: "menu_info"
         }
       ],
 
       [
         {
-          text: "ℹ️ INFORMAÇÕES",
-          callback_data: "menu_info"
+          text: "📲 SUPORTE",
+          url:
+`https://wa.me/${WHATSAPP}`
         }
       ]
     ]
   }
 }
     );
+
+    // =====================================
+    // MENU ADMIN
+    // =====================================
 
     if (
       id === MASTER ||
@@ -284,37 +348,29 @@ podem levar até 2 minutos.
 
       await bot.sendMessage(
         chatId,
-`🔐 PAINEL ADMIN`,
+`🔐 MENU ADMIN`,
 {
   reply_markup: {
     inline_keyboard: [
 
       [
         {
-          text: "➕ ADD PRODUTO",
+          text: "➕ ADICIONAR PRODUTO",
           callback_data: "admin_add"
         }
       ],
 
       [
         {
-          text: "📦 LISTAR",
+          text: "📦 LISTAR PRODUTOS",
           callback_data: "admin_listar"
-        },
-        {
-          text: "🗑 LIMPAR",
-          callback_data: "admin_limpar"
         }
       ],
 
       [
         {
-          text: "🔴 OFF",
-          callback_data: "admin_off"
-        },
-        {
-          text: "🟢 ON",
-          callback_data: "admin_on"
+          text: "🗑 DELETAR TODOS",
+          callback_data: "admin_del_all"
         }
       ]
     ]
@@ -370,14 +426,21 @@ bot.on(
 
           await bot.sendMessage(
             q.message.chat.id,
-`📦 ${p.nome}
+`📦 PRODUTO
 
-💰 R$ ${p.preco}
+━━━━━━━━━━━━━━━━━━━
 
-📝 ${p.desc}
+📦 Nome:
+${p.nome}
 
-👤 Vendedor:
-${p.vendedor}
+💰 Valor:
+R$ ${p.preco}
+
+📝 Descrição:
+${p.desc}
+
+👤 WhatsApp:
+${p.whatsapp}
 
 ━━━━━━━━━━━━━━━━━━━
 
@@ -396,55 +459,38 @@ ${p.vendedor}
       }
 
       // =====================================
-      // MENU SUPORTE
-      // =====================================
-
-      if (data === "menu_suporte") {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-`📲 SUPORTE OFICIAL`,
-{
-  reply_markup: {
-    inline_keyboard: [[{
-      text: "ABRIR WHATSAPP",
-      url:
-      `https://wa.me/${WHATSAPP}`
-    }]]
-  }
-});
-      }
-
-      // =====================================
-      // MENU LINK
-      // =====================================
-
-      if (data === "menu_link") {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-`🔗 Seu link:
-
-https://t.me/${BOT_USERNAME}`
-        );
-      }
-
-      // =====================================
       // MENU INFO
       // =====================================
 
       if (data === "menu_info") {
 
+        const latency =
+        Date.now() - startTime;
+
         return bot.sendMessage(
           q.message.chat.id,
-`ℹ️ INFORMAÇÕES
+`🤖 INFORMAÇÕES BOT
 
-🚀 Sistema automático
-💰 PIX automático
-⚡ Aprovação rápida
-📲 Atendimento rápido
+━━━━━━━━━━━━━━━━━━━
 
-🛡️ Trabalhamos com transparência e segurança.`
+🚀 Versão Atual:
+${VERSION}
+
+📡 Ping:
+ONLINE
+
+⚡ Latência:
+${latency}ms
+
+👑 Vendedor:
+${VENDEDOR}
+
+📲 Suporte:
+https://wa.me/${WHATSAPP}
+
+━━━━━━━━━━━━━━━━━━━
+
+🔥 Sistema funcionando normalmente`
         );
       }
 
@@ -465,7 +511,9 @@ https://t.me/${BOT_USERNAME}`
 
         return bot.sendMessage(
           q.message.chat.id,
-          "📦 Nome do produto:"
+`📦 CADASTRO DE PRODUTO
+
+Digite o nome do produto:`
         );
       }
 
@@ -488,12 +536,16 @@ https://t.me/${BOT_USERNAME}`
 
           return bot.sendMessage(
             q.message.chat.id,
-            "❌ Nenhum produto"
+            "❌ Nenhum produto cadastrado"
           );
         }
 
         let texto =
-"📦 PRODUTOS CADASTRADOS\n\n";
+`📦 LISTA DE PRODUTOS
+
+━━━━━━━━━━━━━━━━━━━
+
+`;
 
         snap.forEach(doc => {
 
@@ -505,6 +557,8 @@ https://t.me/${BOT_USERNAME}`
 📦 ${p.nome}
 💰 R$ ${p.preco}
 
+━━━━━━━━━━━━━━━━━━━
+
 `;
         });
 
@@ -515,10 +569,10 @@ https://t.me/${BOT_USERNAME}`
       }
 
       // =====================================
-      // ADMIN LIMPAR
+      // ADMIN DELETAR TODOS
       // =====================================
 
-      if (data === "admin_limpar") {
+      if (data === "admin_del_all") {
 
         if (
           userId !== MASTER
@@ -538,41 +592,7 @@ https://t.me/${BOT_USERNAME}`
 
         return bot.sendMessage(
           q.message.chat.id,
-          "🗑 Todos produtos deletados"
-        );
-      }
-
-      // =====================================
-      // BOT OFF
-      // =====================================
-
-      if (data === "admin_off") {
-
-        if (userId !== MASTER)
-          return;
-
-        BOT_ATIVO = false;
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "🔴 BOT DESLIGADO"
-        );
-      }
-
-      // =====================================
-      // BOT ON
-      // =====================================
-
-      if (data === "admin_on") {
-
-        if (userId !== MASTER)
-          return;
-
-        BOT_ATIVO = true;
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "🟢 BOT LIGADO"
+          "🗑 Todos os produtos foram deletados"
         );
       }
 
@@ -654,8 +674,8 @@ https://t.me/${BOT_USERNAME}`
             valor:
             p.preco,
 
-            vendedor:
-            p.vendedor,
+            whatsapp:
+            p.whatsapp,
 
             link:
             p.link,
@@ -676,9 +696,13 @@ https://t.me/${BOT_USERNAME}`
 
 ━━━━━━━━━━━━━━━━━━━
 
-📦 ${p.nome}
+📦 Produto:
+${p.nome}
 
-💲 R$ ${p.preco}
+💲 Valor:
+R$ ${p.preco}
+
+━━━━━━━━━━━━━━━━━━━
 
 📋 PIX COPIA E COLA:
 
@@ -688,7 +712,7 @@ ${copia}
 
 ⏳ Aguardando pagamento...
 
-⚠️ Aprovação pode levar até 2 minutos.`
+⚠️ Aprovação automática pode levar até 2 minutos.`
 }
         );
       }
@@ -739,7 +763,7 @@ bot.on(
 
         return bot.sendMessage(
           msg.chat.id,
-          "💰 Valor:"
+          "💰 Digite o valor:"
         );
       }
 
@@ -757,7 +781,7 @@ bot.on(
 
         return bot.sendMessage(
           msg.chat.id,
-          "📝 Descrição:"
+          "📝 Digite a descrição:"
         );
       }
 
@@ -769,27 +793,27 @@ bot.on(
 
         state.desc = text;
 
-        state.step = "vendedor";
+        state.step = "whatsapp";
 
         return bot.sendMessage(
           msg.chat.id,
-          "👤 Vendedor:"
+          "📲 Digite o WhatsApp:"
         );
       }
 
       // =====================================
-      // VENDEDOR
+      // WHATSAPP
       // =====================================
 
-      if (state.step === "vendedor") {
+      if (state.step === "whatsapp") {
 
-        state.vendedor = text;
+        state.whatsapp = text;
 
         state.step = "link";
 
         return bot.sendMessage(
           msg.chat.id,
-          "🔗 Link do produto:"
+          "🔗 Digite o link do produto:"
         );
       }
 
@@ -812,8 +836,8 @@ bot.on(
             desc:
             state.desc,
 
-            vendedor:
-            state.vendedor,
+            whatsapp:
+            state.whatsapp,
 
             link:
             text,
