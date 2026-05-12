@@ -23,7 +23,11 @@ const {
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 // =========================================
 // CONFIG
@@ -137,6 +141,8 @@ app.post('/webhook/mp', async (req, res) => {
 
     const data = req.body;
 
+    console.log("📩 WEBHOOK:", data);
+
     if (data.type !== "payment")
       return res.sendStatus(200);
 
@@ -144,6 +150,8 @@ app.post('/webhook/mp', async (req, res) => {
       await mpPayment.get({
         id: data.data.id
       });
+
+    console.log("💰 PAGAMENTO:", payment);
 
     if (payment.status !== "approved")
       return res.sendStatus(200);
@@ -169,7 +177,7 @@ app.post('/webhook/mp', async (req, res) => {
 
     await bot.sendMessage(
       info.chatId,
-`✅ PAGAMENTO APROVADO
+`✅ PAGAMENTO APROVADO!
 
 ━━━━━━━━━━━━━━━━━━━
 
@@ -179,7 +187,7 @@ ${info.produto}
 💰 Valor:
 R$ ${info.valor}
 
-👤 Vendedor:
+👤 WhatsApp:
 ${info.whatsapp}
 
 🔗 Link:
@@ -194,7 +202,7 @@ ${info.link}
 
   } catch (err) {
 
-    console.log(err);
+    console.log("❌ ERRO WEBHOOK:", err);
 
     res.sendStatus(500);
   }
@@ -213,14 +221,10 @@ bot.onText(/\/start/, async (msg) => {
     const userId =
     String(msg.from.id);
 
-    // FOTO
-
     await bot.sendPhoto(
       chatId,
       LOGO
     );
-
-    // TEXTO
 
     await bot.sendMessage(
       chatId,
@@ -230,27 +234,20 @@ Você está na INFINITY CLIENTES.
 
 ✅ Produtos digitais
 ✅ PIX automático
+✅ Aprovação automática
 ✅ Entrega automática
 ✅ Suporte rápido
 
 ━━━━━━━━━━━━━━━━━━━
 
 ⚠️ Não caia em golpes.
-
-Compre somente pelo nosso canal oficial.
-
-━━━━━━━━━━━━━━━━━━━
-
-💳 Pagamentos via Mercado Pago
-
-⚡ Aprovação automática
-⚡ QR Code PIX
-⚡ PIX copia e cola
+Compre apenas pelo canal oficial.
 
 ━━━━━━━━━━━━━━━━━━━
 
-👇 Escolha uma opção abaixo`
-,
+💳 Pagamento seguro via Mercado Pago
+
+👇 Escolha uma opção abaixo`,
 {
   reply_markup: {
     inline_keyboard: [
@@ -311,7 +308,7 @@ Compre somente pelo nosso canal oficial.
 
       [
         {
-          text: "🗑 LIMPAR TUDO",
+          text: "🗑 LIMPAR",
           callback_data: "admin_limpar"
         }
       ]
@@ -352,18 +349,15 @@ bot.on(
 
         return bot.sendMessage(
           q.message.chat.id,
-`ℹ️ INFORMAÇÕES BOT
+`ℹ️ INFORMAÇÕES
 
-🚀 Versão:
+🚀 Sistema:
 MAX FULL
 
-⚡ Ping:
-Online
+⚡ Status:
+ONLINE
 
-🧠 Latência:
-Baixa
-
-👤 Vendedor:
+👤 Desenvolvedor:
 Faelzin
 
 📲 Suporte:
@@ -406,7 +400,7 @@ ${p.whatsapp}`,
 {
   reply_markup: {
     inline_keyboard: [[{
-      text: "🛒 COMPRAR",
+      text: "🛒 COMPRAR AGORA",
       callback_data:
       `buy_${doc.id}`
     }]]
@@ -536,6 +530,10 @@ ${p.whatsapp}`,
 
         const p = doc.data();
 
+        // =================================
+        // MERCADO PAGO PIX
+        // =================================
+
         const payment =
         await mpPayment.create({
           body: {
@@ -554,10 +552,12 @@ ${p.whatsapp}`,
 
             payer: {
               email:
-              "cliente@email.com"
+              `cliente${Date.now()}@gmail.com`
             }
           }
         });
+
+        console.log(payment);
 
         const qr =
         payment
@@ -594,14 +594,21 @@ ${p.whatsapp}`,
             p.link,
 
             aprovado:
-            false
+            false,
+
+            createdAt:
+            Date.now()
           });
+
+        // =================================
+        // ENVIA PIX
+        // =================================
 
         await bot.sendPhoto(
           q.message.chat.id,
           Buffer.from(
-          qr,
-          'base64'
+            qr,
+            'base64'
           ),
 {
   caption:
@@ -619,14 +626,16 @@ ${copia}
 
 ━━━━━━━━━━━━━━━━━━━
 
-⏳ Aguardando pagamento...`
+⏳ Aguardando pagamento...
+
+⚠️ Aprovação automática.`
 }
         );
       }
 
     } catch (err) {
 
-      console.log(err);
+      console.log("❌ CALLBACK ERROR:", err);
     }
   }
 );
@@ -659,7 +668,9 @@ bot.on(
       if (!state)
         return;
 
+      // =====================================
       // PRODUTO
+      // =====================================
 
       if (state.step === "produto") {
 
@@ -673,7 +684,9 @@ bot.on(
         );
       }
 
+      // =====================================
       // VALOR
+      // =====================================
 
       if (state.step === "valor") {
 
@@ -689,7 +702,9 @@ bot.on(
         );
       }
 
+      // =====================================
       // DESCRIÇÃO
+      // =====================================
 
       if (state.step === "descricao") {
 
@@ -703,7 +718,9 @@ bot.on(
         );
       }
 
+      // =====================================
       // WHATSAPP
+      // =====================================
 
       if (state.step === "whatsapp") {
 
@@ -717,7 +734,9 @@ bot.on(
         );
       }
 
+      // =====================================
       // LINK
+      // =====================================
 
       if (state.step === "link") {
 
