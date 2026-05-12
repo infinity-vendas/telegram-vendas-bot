@@ -148,7 +148,7 @@ app.get('/', (req, res) => {
 });
 
 // =========================================
-// WEBHOOK MP
+// WEBHOOK MERCADO PAGO
 // =========================================
 
 app.post(
@@ -207,14 +207,10 @@ async (req, res) => {
       "approved"
     });
 
-    // =====================================
-    // ENTREGA AUTOMÁTICA
-    // =====================================
-
     await bot.sendMessage(
       info.chatId,
 
-`✅ PAGAMENTO APROVADO!
+`✅ PAGAMENTO APROVADO
 
 ━━━━━━━━━━━━━━━━━━━
 
@@ -224,12 +220,9 @@ ${info.produto}
 💰 Valor:
 R$ ${info.valor}
 
-📲 WhatsApp:
-${info.whatsapp}
-
 ━━━━━━━━━━━━━━━━━━━
 
-🔓 LINK LIBERADO:
+🔗 LINK LIBERADO:
 
 ${info.link}
 
@@ -273,79 +266,100 @@ async (msg) => {
 {
   caption:
 
-`Olá 👋 seja bem-vindo(a)!
-sou seu assistente virtual
-
-Nick Dono +55 51981528372
-Faelzin ⚡ Melhores referências
+`👋 Olá, seja bem-vindo(a)!
 
 ━━━━━━━━━━━━━━━━━━━
 
-✅ Produtos digitais
-✅ PIX automático
-✅ Aprovação automática
-✅ Entrega automática
-✅ Suporte rápido
+🚀 INFINITY CLIENTES
+
+Sistema automático
+de vendas online.
+
+━━━━━━━━━━━━━━━━━━━
+
+⚡ Entrega automática
+✅ Aprovação instantânea
+💳 Pagamento seguro
+🎧 Suporte rápido
+⭐ Produtos premium
 
 ━━━━━━━━━━━━━━━━━━━
 
 ⚠️ Não caia em golpes.
-Compre apenas pelo canal oficial.
+Compre apenas pelo
+canal oficial.
 
 ━━━━━━━━━━━━━━━━━━━
 
-📲 Pagamento seguro
-via Mercado Pago
-
-👇 Escolha uma opção abaixo`
+🛒 Escolha uma opção abaixo`
 }
     );
 
+    // =====================================
+    // KEYBOARD FLUTUANTE
+    // =====================================
+
     await bot.sendMessage(
       chatId,
-
-`⬛ MENU PRINCIPAL`,
-
+      "👇 MENU RÁPIDO",
 {
   reply_markup: {
-    inline_keyboard: [
+
+    keyboard: [
 
       [
         {
           text:
-          "⬛ PRODUTOS",
+          "🛍 Produtos"
+        },
 
-          callback_data:
-          "menu_produtos"
+        {
+          text:
+          "🔥 Promoções"
         }
       ],
 
       [
         {
           text:
-          "⬛ INFORMAÇÕES",
+          "📦 Pedidos"
+        },
 
-          callback_data:
-          "menu_info"
+        {
+          text:
+          "🎧 Suporte"
         }
       ],
 
       [
         {
           text:
-          "⬛SUPORTE",
+          "💳 Pagamentos"
+        },
 
-          url:
-`https://wa.me/${WHATSAPP}`
+        {
+          text:
+          "ℹ️ Informações"
+        }
+      ],
+
+      [
+        {
+          text:
+          "👑 Painel Cliente"
         }
       ]
-    ]
+
+    ],
+
+    resize_keyboard: true
+
   }
 }
     );
 
     // =====================================
-    // ADMIN
+    // PAINEL ADMIN
     // =====================================
 
     if (
@@ -356,7 +370,7 @@ via Mercado Pago
       await bot.sendMessage(
         chatId,
 
-`👑 PAINEL ADMIN`,
+`🔐 PAINEL ADMIN`,
 
 {
   reply_markup: {
@@ -365,7 +379,7 @@ via Mercado Pago
       [
         {
           text:
-          "⬛ ADD PRODUTO",
+          "➕ ADD PRODUTO",
 
           callback_data:
           "admin_add"
@@ -375,7 +389,7 @@ via Mercado Pago
       [
         {
           text:
-          "⬛ LISTAR",
+          "📦 LISTAR",
 
           callback_data:
           "admin_listar"
@@ -385,7 +399,7 @@ via Mercado Pago
       [
         {
           text:
-          "⬛ LIMPAR",
+          "🗑 LIMPAR",
 
           callback_data:
           "admin_limpar"
@@ -394,6 +408,347 @@ via Mercado Pago
     ]
   }
 }
+      );
+    }
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// MENSAGENS KEYBOARD
+// =========================================
+
+bot.on(
+"message",
+async (msg) => {
+
+  try {
+
+    if (!msg.text)
+      return;
+
+    const text =
+    msg.text;
+
+    const id =
+    String(msg.from.id);
+
+    const state =
+    userState[id];
+
+    // =====================================
+    // PRODUTOS
+    // =====================================
+
+    if (
+      text === "🛍 Produtos"
+    ) {
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      if (snap.empty) {
+
+        return bot.sendMessage(
+          msg.chat.id,
+          "❌ Nenhum produto cadastrado"
+        );
+      }
+
+      const buttons = [];
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        buttons.push([
+          {
+            text:
+`📦 ${p.nome} - R$ ${p.preco}`,
+
+            callback_data:
+`view_${doc.id}`
+          }
+        ]);
+      });
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`🛍 LISTA DE PRODUTOS
+
+Escolha um produto abaixo 👇`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    // =====================================
+    // SUPORTE
+    // =====================================
+
+    if (
+      text === "🎧 Suporte"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📲 SUPORTE OFICIAL
+
+Clique abaixo:`,
+
+{
+  reply_markup: {
+    inline_keyboard: [[{
+
+      text:
+      "ABRIR WHATSAPP",
+
+      url:
+`https://wa.me/${WHATSAPP}`
+
+    }]]
+  }
+}
+      );
+    }
+
+    // =====================================
+    // INFORMAÇÕES
+    // =====================================
+
+    if (
+      text === "ℹ️ Informações"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`ℹ️ INFORMAÇÕES
+
+🚀 Sistema:
+MAX FULL
+
+⚡ Status:
+ONLINE
+
+👤 Desenvolvedor:
+Faelzin
+
+📲 Suporte:
+${WHATSAPP}`
+      );
+    }
+
+    // =====================================
+    // PROMOÇÕES
+    // =====================================
+
+    if (
+      text === "🔥 Promoções"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`🔥 PROMOÇÕES
+
+Ganhe até 80% OFF
+em produtos selecionados.`
+      );
+    }
+
+    // =====================================
+    // PAGAMENTOS
+    // =====================================
+
+    if (
+      text === "💳 Pagamentos"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`💳 FORMAS DE PAGAMENTO
+
+✅ PIX
+✅ Mercado Pago
+✅ Aprovação automática`
+      );
+    }
+
+    // =====================================
+    // PEDIDOS
+    // =====================================
+
+    if (
+      text === "📦 Pedidos"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📦 Seus pedidos serão
+liberados automaticamente
+após confirmação do pagamento.`
+      );
+    }
+
+    // =====================================
+    // PAINEL CLIENTE
+    // =====================================
+
+    if (
+      text === "👑 Painel Cliente"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`👑 PAINEL CLIENTE
+
+🚀 Conta ativa
+✅ Sistema online`
+      );
+    }
+
+    // =====================================
+    // FLUXO ADD PRODUTO
+    // =====================================
+
+    if (
+      text.startsWith("/")
+    ) return;
+
+    if (!state)
+      return;
+
+    // NOME
+
+    if (
+      state.step ===
+      "produto"
+    ) {
+
+      state.nome =
+      text;
+
+      state.step =
+      "valor";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "💰 Valor:"
+      );
+    }
+
+    // VALOR
+
+    if (
+      state.step ===
+      "valor"
+    ) {
+
+      state.preco =
+      Number(
+        text.replace(",", ".")
+      );
+
+      state.step =
+      "descricao";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "📝 Descrição:"
+      );
+    }
+
+    // DESCRIÇÃO
+
+    if (
+      state.step ===
+      "descricao"
+    ) {
+
+      state.desc =
+      text;
+
+      state.step =
+      "imagem";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "🖼 Link da imagem:"
+      );
+    }
+
+    // IMAGEM
+
+    if (
+      state.step ===
+      "imagem"
+    ) {
+
+      state.img =
+      text;
+
+      state.step =
+      "link";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "🔗 Link produto:"
+      );
+    }
+
+    // LINK
+
+    if (
+      state.step ===
+      "link"
+    ) {
+
+      await db
+      .collection('produtos')
+      .add({
+
+        nome:
+        state.nome,
+
+        preco:
+        state.preco,
+
+        desc:
+        state.desc,
+
+        img:
+        state.img,
+
+        link:
+        text,
+
+        createdAt:
+        Date.now()
+      });
+
+      userState[id] =
+      null;
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "✅ Produto adicionado"
       );
     }
 
@@ -422,88 +777,6 @@ async (q) => {
 
     const userId =
     String(q.from.id);
-
-    // =====================================
-    // INFO
-    // =====================================
-
-    if (
-      data === "menu_info"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`⬛ INFORMAÇÕES
-
-➡️ Sistema:
-MAX FULL
-
-➡️ Status:
-ONLINE
-
-👑 Desenvolvedor:
-Faelzin
-
-📲 Suporte:
-${WHATSAPP}`
-      );
-    }
-
-    // =====================================
-    // PRODUTOS
-    // =====================================
-
-    if (
-      data === "menu_produtos"
-    ) {
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhum produto cadastrado"
-        );
-      }
-
-      const buttons = [];
-
-      snap.forEach(doc => {
-
-        const p =
-        doc.data();
-
-        buttons.push([
-          {
-            text:
-`⬛ ${p.nome} - R$ ${p.preco}`,
-
-            callback_data:
-`view_${doc.id}`
-          }
-        ]);
-      });
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`⬛ LISTA DE PRODUTOS
-
-Selecione um produto abaixo 👇`,
-
-{
-  reply_markup: {
-    inline_keyboard:
-    buttons
-  }
-}
-      );
-    }
 
     // =====================================
     // VER PRODUTO
@@ -538,55 +811,26 @@ Selecione um produto abaixo 👇`,
       const p =
       doc.data();
 
-      if (p.img) {
-
-        return bot.sendPhoto(
-          q.message.chat.id,
-          p.img,
+      return bot.sendPhoto(
+        q.message.chat.id,
+        p.img,
 
 {
   caption:
 
-`⬛ ${p.nome}
+`📦 ${p.nome}
 
-⬛ Valor:
+💰 Valor:
 R$ ${p.preco}
 
-⬛ Descrição:
+📝 Descrição:
 ${p.desc}`,
 
   reply_markup: {
     inline_keyboard: [[{
 
       text:
-      "⬛ COMPRAR AGORA",
-
-      callback_data:
-      `buy_${doc.id}`
-
-    }]]
-  }
-}
-        );
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`⬛ ${p.nome}
-
-⬛ Valor:
-R$ ${p.preco}
-
-⬛ Descrição:
-${p.desc}`,
-
-{
-  reply_markup: {
-    inline_keyboard: [[{
-
-      text:
-      "📲 COMPRAR AGORA",
+      "🛒 COMPRAR",
 
       callback_data:
       `buy_${doc.id}`
@@ -602,7 +846,8 @@ ${p.desc}`,
     // =====================================
 
     if (
-      data === "admin_add"
+      data ===
+      "admin_add"
     ) {
 
       if (
@@ -611,16 +856,15 @@ ${p.desc}`,
       ) return;
 
       userState[userId] = {
-        step: "imagem"
+        step: "produto"
       };
 
       return bot.sendMessage(
         q.message.chat.id,
 
-`⬛ ENVIE O LINK DA IMAGEM
+`📦 CADASTRAR PRODUTO
 
-Exemplo:
-https://site.com/img.jpg`
+Envie o nome do produto:`
       );
     }
 
@@ -629,13 +873,9 @@ https://site.com/img.jpg`
     // =====================================
 
     if (
-      data === "admin_listar"
+      data ===
+      "admin_listar"
     ) {
-
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
 
       const snap =
       await db
@@ -651,7 +891,7 @@ https://site.com/img.jpg`
       }
 
       let texto =
-"⬛ PRODUTOS\n\n";
+"📦 PRODUTOS\n\n";
 
       snap.forEach(doc => {
 
@@ -660,10 +900,10 @@ https://site.com/img.jpg`
 
         texto +=
 
-`⬛ ${doc.id}
+`🆔 ${doc.id}
 
-⬛${p.nome}
-⬛R$ ${p.preco}
+📦 ${p.nome}
+💰 R$ ${p.preco}
 
 `;
       });
@@ -679,7 +919,8 @@ https://site.com/img.jpg`
     // =====================================
 
     if (
-      data === "admin_limpar"
+      data ===
+      "admin_limpar"
     ) {
 
       if (
@@ -704,7 +945,7 @@ https://site.com/img.jpg`
 
       return bot.sendMessage(
         q.message.chat.id,
-        "🗑 Todos produtos deletados"
+        "🗑 Produtos deletados"
       );
     }
 
@@ -740,10 +981,6 @@ https://site.com/img.jpg`
 
       const p =
       doc.data();
-
-      // =====================================
-      // GERAR PIX
-      // =====================================
 
       const payment =
       await mpPayment.create({
@@ -797,9 +1034,6 @@ https://site.com/img.jpg`
         valor:
         p.preco,
 
-        whatsapp:
-        p.whatsapp,
-
         link:
         p.link,
 
@@ -809,10 +1043,6 @@ https://site.com/img.jpg`
         createdAt:
         Date.now()
       });
-
-      // =====================================
-      // ENVIA PIX
-      // =====================================
 
       await bot.sendPhoto(
         q.message.chat.id,
@@ -825,24 +1055,24 @@ https://site.com/img.jpg`
 {
   caption:
 
-`⬛PAGAMENTO PIX
+`💳 PAGAMENTO PIX
 
 ━━━━━━━━━━━━━━━━━━━
 
-⬛ ${p.nome}
+📦 ${p.nome}
 
-⬛ R$ ${p.preco}
+💰 Valor:
+R$ ${p.preco}
 
-📲 PIX COPIA E COLA:
+━━━━━━━━━━━━━━━━━━━
+
+📋 PIX COPIA E COLA:
 
 ${copia}
 
 ━━━━━━━━━━━━━━━━━━━
 
-⏳ Aguardando pagamento...
-
-⚡ Aprovação automática.`
-
+⏳ Aguardando pagamento...`
 }
       );
     }
@@ -853,195 +1083,6 @@ ${copia}
       "❌ CALLBACK ERROR:",
       err
     );
-  }
-});
-
-// =========================================
-// ADD PRODUTO
-// =========================================
-
-bot.on(
-"message",
-async (msg) => {
-
-  try {
-
-    if (!msg.text)
-      return;
-
-    const id =
-    String(msg.from.id);
-
-    const text =
-    msg.text;
-
-    const state =
-    userState[id];
-
-    if (
-      text.startsWith("/")
-    ) return;
-
-    if (!state)
-      return;
-
-    // =====================================
-    // IMAGEM
-    // =====================================
-
-    if (
-      state.step ===
-      "imagem"
-    ) {
-
-      state.img =
-      text;
-
-      state.step =
-      "produto";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "⬛Nome do produto:"
-      );
-    }
-
-    // =====================================
-    // PRODUTO
-    // =====================================
-
-    if (
-      state.step ===
-      "produto"
-    ) {
-
-      state.nome =
-      text;
-
-      state.step =
-      "valor";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "⬛ Valor:"
-      );
-    }
-
-    // =====================================
-    // VALOR
-    // =====================================
-
-    if (
-      state.step ===
-      "valor"
-    ) {
-
-      state.preco =
-      Number(
-        text.replace(",", ".")
-      );
-
-      state.step =
-      "descricao";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "⬛Descrição:"
-      );
-    }
-
-    // =====================================
-    // DESCRIÇÃO
-    // =====================================
-
-    if (
-      state.step ===
-      "descricao"
-    ) {
-
-      state.desc =
-      text;
-
-      state.step =
-      "whatsapp";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "📲 WhatsApp:"
-      );
-    }
-
-    // =====================================
-    // WHATSAPP
-    // =====================================
-
-    if (
-      state.step ===
-      "whatsapp"
-    ) {
-
-      state.whatsapp =
-      text;
-
-      state.step =
-      "link";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "🔗 Link produto:"
-      );
-    }
-
-    // =====================================
-    // LINK
-    // =====================================
-
-    if (
-      state.step ===
-      "link"
-    ) {
-
-      await db
-      .collection('produtos')
-      .add({
-
-        nome:
-        state.nome,
-
-        preco:
-        state.preco,
-
-        desc:
-        state.desc,
-
-        img:
-        state.img,
-
-        whatsapp:
-        state.whatsapp,
-
-        link:
-        text,
-
-        createdAt:
-        Date.now()
-      });
-
-      userState[id] =
-      null;
-
-      return bot.sendMessage(
-        msg.chat.id,
-`⚡ PRODUTO ADICIONADO!
-
-⬛ ${state.nome}
-⬛ R$ ${state.preco}`
-      );
-    }
-
-  } catch (err) {
-
-    console.log(err);
   }
 });
 
