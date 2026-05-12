@@ -130,7 +130,7 @@ app.get('/', (req, res) => {
 });
 
 // =========================================
-// WEBHOOK MP
+// WEBHOOK MERCADO PAGO
 // =========================================
 
 app.post('/webhook/mp', async (req, res) => {
@@ -173,17 +173,12 @@ app.post('/webhook/mp', async (req, res) => {
       info.chatId,
 `✅ PAGAMENTO APROVADO!
 
-📦 Produto:
-${info.produto}
+📦 ${info.produto}
 
-💰 Valor:
-R$ ${info.valor}
+💰 R$ ${info.valor}
 
-👤 Vendedor:
-${info.vendedor}
-
-🔗 Link:
-${info.link}`
+📲 Finalize:
+https://wa.me/${info.whatsapp}`
     );
 
     res.sendStatus(200);
@@ -213,38 +208,81 @@ bot.onText(/\/start/, async (msg) => {
       LOGO,
 {
   caption:
-`🚀 INFINITY CLIENTES
+`INFINITY CLIENTES | VENDAS OFICIAL
 
-🤖 Sistema automático
+👑@Infinity_clientes_vendas
+👑Suporte contato oficial
+Nick Chefinho +55 51 98152-8372
+official Bot@SellForge_bot
+
+Boas Vindas ao Telegram oficial Vendas!
+
+sejam bem - vindo ao nosso canal oficial de vendas
+autorizadas. confira nossos produtos simples e completos , entregas
+100% rápidas e automáticos
+
+cansado de cair em golpes ? apresento para vocês 
+Infinity Clientes canal oficial de vendas seguras e sem
+nenhum risco
+
+entregamos qualidade , resultados , transparência em
+serviços ONLINE
+
+usamos METADOS de pagamentos seguros , sem taxas
+de transações e sem taxas de entregas
+
+aceitamos forma de pagamento via PIX / QR code e chaves
+aleatórios totalmente seguro e rápido
+
+aviso : lembre-se caso tenha problemas futuros com nossos
+produtos após usar e concluir pagamento , por motivos
+de segurança do vendedor será necessário entrar em
+contato através de nosso whatsapp oficial
++55 51 98152-8372 , caso não consiga entrar em contato , 
+favor procure e digite o comandos correto abaixo
+
+Confira logo abaixo oque preparamos para você (a) 😉
 
 ✅ PIX AUTOMÁTICO
-✅ ENTREGA AUTOMÁTICA
-✅ SUPORTE 24H`
-}
-    );
+✅ ENTREGA RÁPIDA E SEGURA
+✅ SUPORTE AO CLIENTE 12/24h
+✅ REEMBOLSOS ACEITOS (Conforme a Lei)
+✅ LINK DIRETO PRODUTO
 
-    await bot.sendMessage(
-      chatId,
-`📋 MENU`,
-{
+atendimento ao cliente , veja os horários disponíveis 
+
+segunda a segunda . abre 18:00 - fecha 23:59
+
+caso deseja agendar uma data , favor entrem em contato
+direto com proprietário e responsável pelas vendas!
+
+👑Escolha serviços disponíveis atualmente ,`,
   reply_markup: {
     inline_keyboard: [
 
       [{
-        text: "📦 Produtos",
+        text: "🆔 Produtos",
         callback_data: "menu_produtos"
       }],
 
       [{
-        text: "📲 Suporte",
-        url:
-`https://wa.me/${WHATSAPP}`
+        text: "🆔 Planos",
+        callback_data: "menu_planos"
       }],
 
       [{
-        text: "🔗 Meu Link",
-        url:
-`https://t.me/${BOT_USERNAME}`
+        text: " 🗯️Anunciar meu produto",
+        callback_data: "menu_bot"
+      }],
+
+      [{
+        text: "💬 Suporte",
+        callback_data: "menu_suporte"
+      }],
+
+      [{
+        text: " 📲compartilhe nosso Bot",
+        callback_data: "menu_link"
       }]
     ]
   }
@@ -285,14 +323,13 @@ bot.onText(/\/comandos_admin/, async (msg) => {
 
   bot.sendMessage(
     msg.chat.id,
-`🔐 PAINEL ADMIN
+`🔥👿 PAINEL ADMIN
 
 /add_produto
-/listar_produtos
 /del_produto ID
-/del_todos
+/listar_produtos
 
-👑 MASTER
+🆔 MASTER
 
 /desligar_bot
 /ligar_bot`
@@ -313,7 +350,7 @@ bot.onText(/\/add_produto/, async (msg) => {
   ) return;
 
   userState[id] = {
-    step: "produto"
+    step: "nome"
   };
 
   bot.sendMessage(
@@ -321,6 +358,33 @@ bot.onText(/\/add_produto/, async (msg) => {
     "📦 Nome do produto:"
   );
 });
+
+// =========================================
+// DELETE PRODUTO
+// =========================================
+
+bot.onText(
+  /\/del_produto (.+)/,
+  async (msg, match) => {
+
+    const id = String(msg.from.id);
+
+    if (
+      id !== MASTER &&
+      !ADMINS.includes(id)
+    ) return;
+
+    await db
+      .collection('produtos')
+      .doc(match[1])
+      .delete();
+
+    bot.sendMessage(
+      msg.chat.id,
+      "🗑 Produto deletado"
+    );
+  }
+);
 
 // =========================================
 // LISTAR PRODUTOS
@@ -361,7 +425,6 @@ bot.onText(
 
 📦 ${p.nome}
 💰 R$ ${p.preco}
-👤 ${p.vendedor}
 
 `;
     });
@@ -369,66 +432,6 @@ bot.onText(
     bot.sendMessage(
       msg.chat.id,
       texto
-    );
-  }
-);
-
-// =========================================
-// DELETE PRODUTO
-// =========================================
-
-bot.onText(
-  /\/del_produto (.+)/,
-  async (msg, match) => {
-
-    const id = String(msg.from.id);
-
-    if (
-      id !== MASTER &&
-      !ADMINS.includes(id)
-    ) return;
-
-    await db
-      .collection('produtos')
-      .doc(match[1])
-      .delete();
-
-    bot.sendMessage(
-      msg.chat.id,
-      "🗑 Produto deletado"
-    );
-  }
-);
-
-// =========================================
-// DELETE TODOS
-// =========================================
-
-bot.onText(
-  /\/del_todos/,
-  async (msg) => {
-
-    const id = String(msg.from.id);
-
-    if (
-      id !== MASTER
-    ) return;
-
-    const snap = await db
-      .collection('produtos')
-      .get();
-
-    for (const doc of snap.docs) {
-
-      await db
-        .collection('produtos')
-        .doc(doc.id)
-        .delete();
-    }
-
-    bot.sendMessage(
-      msg.chat.id,
-      "🗑 Todos produtos deletados"
     );
   }
 );
@@ -503,14 +506,13 @@ bot.on(
 
           await bot.sendMessage(
             q.message.chat.id,
-`📦 ${p.nome}
+`📦 ${p.nome || "Sem nome"}
 
-💰 R$ ${p.preco}
+💰 R$ ${p.preco || 0}
 
-📝 ${p.desc}
+📝 ${p.desc || "Sem descrição"}
 
-👤 Vendedor:
-${p.vendedor}`,
+⚠️ Aprovação PIX pode levar até 2 minutos.`,
 {
   reply_markup: {
     inline_keyboard: [[{
@@ -522,6 +524,79 @@ ${p.vendedor}`,
 }
           );
         }
+      }
+
+      // =====================================
+      // PLANOS
+      // =====================================
+
+      if (data === "menu_planos") {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+`🔥Divulgue os seus produtos em nosso Telegram
+
+1D = R$15
+3D = R$30
+10D = R$50
+20D = R$75
+30D = R$100`
+        );
+      }
+
+      // =====================================
+      // ALUGAR BOT
+      // =====================================
+
+      if (data === "menu_bot") {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+`🤖 ALUGAR BOT
+
+24h = R$30
+48h = R$60`,
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "📲 Contratar",
+      url:
+`https://wa.me/${WHATSAPP}`
+    }]]
+  }
+});
+      }
+
+      // =====================================
+      // SUPORTE
+      // =====================================
+
+      if (data === "menu_suporte") {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+`📲 SUPORTE`,
+{
+  reply_markup: {
+    inline_keyboard: [[{
+      text: "WhatsApp",
+      url:
+`https://wa.me/${WHATSAPP}`
+    }]]
+  }
+});
+      }
+
+      // =====================================
+      // LINK
+      // =====================================
+
+      if (data === "menu_link") {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+`🔗 https://t.me/${BOT_USERNAME}`
+        );
       }
 
       // =====================================
@@ -602,11 +677,8 @@ p.nome,
             valor:
 p.preco,
 
-            vendedor:
-p.vendedor,
-
-            link:
-p.link,
+            whatsapp:
+p.whatsapp,
 
             aprovado:
 false
@@ -620,17 +692,19 @@ qr,
           ),
 {
   caption:
-`💰 PAGAMENTO PIX
+`Chave PIX Gerada com sucesso 💙 
 
 📦 ${p.nome}
 
 💲 R$ ${p.preco}
 
-📋 PIX COPIA E COLA:
+🔵 PIX COPIA E COLA:
 
 ${copia}
 
-⏳ Aguardando pagamento...`
+⏳ Aguardando pagamento...
+
+⚠️ Aprovação pode levar até 2 minutos.`
 }
         );
       }
@@ -669,15 +743,11 @@ userState[id];
       if (!state)
         return;
 
-      // =====================================
-      // PRODUTO
-      // =====================================
-
-      if (state.step === "produto") {
+      if (state.step === "nome") {
 
         state.nome = text;
 
-        state.step = "valor";
+        state.step = "preco";
 
         return bot.sendMessage(
           msg.chat.id,
@@ -685,17 +755,14 @@ userState[id];
         );
       }
 
-      // =====================================
-      // VALOR
-      // =====================================
-
-      if (state.step === "valor") {
+      if (state.step === "preco") {
 
         state.preco = Number(
-          text.replace(",", ".")
+          text
+            .replace(",", ".")
         );
 
-        state.step = "descricao";
+        state.step = "desc";
 
         return bot.sendMessage(
           msg.chat.id,
@@ -703,43 +770,19 @@ userState[id];
         );
       }
 
-      // =====================================
-      // DESCRIÇÃO
-      // =====================================
-
-      if (state.step === "descricao") {
+      if (state.step === "desc") {
 
         state.desc = text;
 
-        state.step = "vendedor";
+        state.step = "zap";
 
         return bot.sendMessage(
           msg.chat.id,
-          "👤 Vendedor:"
+          "📲 WhatsApp:"
         );
       }
 
-      // =====================================
-      // VENDEDOR
-      // =====================================
-
-      if (state.step === "vendedor") {
-
-        state.vendedor = text;
-
-        state.step = "link";
-
-        return bot.sendMessage(
-          msg.chat.id,
-          "🔗 Link produto:"
-        );
-      }
-
-      // =====================================
-      // LINK
-      // =====================================
-
-      if (state.step === "link") {
+      if (state.step === "zap") {
 
         await db
           .collection('produtos')
@@ -754,14 +797,8 @@ state.preco,
             desc:
 state.desc,
 
-            vendedor:
-state.vendedor,
-
-            link:
-text,
-
-            createdAt:
-Date.now()
+            whatsapp:
+text
           });
 
         userState[id] = null;
