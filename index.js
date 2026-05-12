@@ -273,10 +273,11 @@ async (msg) => {
 {
   caption:
 
-`🚀 Olá 👋 seja bem-vindo(a)!
+`Olá 👋 seja bem-vindo(a)!
+sou seu assistente virtual
 
-Você está na
-INFINITY CLIENTES
+Nick Dono +55 51981528372
+Faelzin ⚡ Melhores referências
 
 ━━━━━━━━━━━━━━━━━━━
 
@@ -293,7 +294,7 @@ Compre apenas pelo canal oficial.
 
 ━━━━━━━━━━━━━━━━━━━
 
-💳 Pagamento seguro
+📲 Pagamento seguro
 via Mercado Pago
 
 👇 Escolha uma opção abaixo`
@@ -303,7 +304,7 @@ via Mercado Pago
     await bot.sendMessage(
       chatId,
 
-`📋 MENU PRINCIPAL`,
+`⬛ MENU PRINCIPAL`,
 
 {
   reply_markup: {
@@ -312,7 +313,7 @@ via Mercado Pago
       [
         {
           text:
-          "📦 PRODUTOS",
+          "⬛ PRODUTOS",
 
           callback_data:
           "menu_produtos"
@@ -322,7 +323,7 @@ via Mercado Pago
       [
         {
           text:
-          "ℹ️ INFORMAÇÕES",
+          "⬛ INFORMAÇÕES",
 
           callback_data:
           "menu_info"
@@ -332,7 +333,7 @@ via Mercado Pago
       [
         {
           text:
-          "📲 SUPORTE",
+          "⬛SUPORTE",
 
           url:
 `https://wa.me/${WHATSAPP}`
@@ -355,7 +356,7 @@ via Mercado Pago
       await bot.sendMessage(
         chatId,
 
-`🔐 PAINEL ADMIN`,
+`👑 PAINEL ADMIN`,
 
 {
   reply_markup: {
@@ -364,7 +365,7 @@ via Mercado Pago
       [
         {
           text:
-          "➕ ADD PRODUTO",
+          "⬛ ADD PRODUTO",
 
           callback_data:
           "admin_add"
@@ -374,7 +375,7 @@ via Mercado Pago
       [
         {
           text:
-          "📦 LISTAR",
+          "⬛ LISTAR",
 
           callback_data:
           "admin_listar"
@@ -384,7 +385,7 @@ via Mercado Pago
       [
         {
           text:
-          "🗑 LIMPAR",
+          "⬛ LIMPAR",
 
           callback_data:
           "admin_limpar"
@@ -433,15 +434,15 @@ async (q) => {
       return bot.sendMessage(
         q.message.chat.id,
 
-`ℹ️ INFORMAÇÕES
+`⬛ INFORMAÇÕES
 
-🚀 Sistema:
+➡️ Sistema:
 MAX FULL
 
-⚡ Status:
+➡️ Status:
 ONLINE
 
-👤 Desenvolvedor:
+👑 Desenvolvedor:
 Faelzin
 
 📲 Suporte:
@@ -480,7 +481,7 @@ ${WHATSAPP}`
         buttons.push([
           {
             text:
-`📦 ${p.nome} - R$ ${p.preco}`,
+`⬛ ${p.nome} - R$ ${p.preco}`,
 
             callback_data:
 `view_${doc.id}`
@@ -491,7 +492,7 @@ ${WHATSAPP}`
       return bot.sendMessage(
         q.message.chat.id,
 
-`📦 LISTA DE PRODUTOS
+`⬛ LISTA DE PRODUTOS
 
 Selecione um produto abaixo 👇`,
 
@@ -546,19 +547,19 @@ Selecione um produto abaixo 👇`,
 {
   caption:
 
-`📦 ${p.nome}
+`⬛ ${p.nome}
 
-💰 Valor:
+⬛ Valor:
 R$ ${p.preco}
 
-📝 Descrição:
+⬛ Descrição:
 ${p.desc}`,
 
   reply_markup: {
     inline_keyboard: [[{
 
       text:
-      "🛒 COMPRAR AGORA",
+      "⬛ COMPRAR AGORA",
 
       callback_data:
       `buy_${doc.id}`
@@ -572,12 +573,12 @@ ${p.desc}`,
       return bot.sendMessage(
         q.message.chat.id,
 
-`📦 ${p.nome}
+`⬛ ${p.nome}
 
-💰 Valor:
+⬛ Valor:
 R$ ${p.preco}
 
-📝 Descrição:
+⬛ Descrição:
 ${p.desc}`,
 
 {
@@ -585,7 +586,7 @@ ${p.desc}`,
     inline_keyboard: [[{
 
       text:
-      "🛒 COMPRAR AGORA",
+      "📲 COMPRAR AGORA",
 
       callback_data:
       `buy_${doc.id}`
@@ -616,7 +617,7 @@ ${p.desc}`,
       return bot.sendMessage(
         q.message.chat.id,
 
-`🖼 ENVIE O LINK DA IMAGEM
+`⬛ ENVIE O LINK DA IMAGEM
 
 Exemplo:
 https://site.com/img.jpg`
@@ -650,7 +651,7 @@ https://site.com/img.jpg`
       }
 
       let texto =
-"📦 PRODUTOS\n\n";
+"⬛ PRODUTOS\n\n";
 
       snap.forEach(doc => {
 
@@ -659,10 +660,10 @@ https://site.com/img.jpg`
 
         texto +=
 
-`🆔 ${doc.id}
+`⬛ ${doc.id}
 
-📦 ${p.nome}
-💰 R$ ${p.preco}
+⬛${p.nome}
+⬛R$ ${p.preco}
 
 `;
       });
@@ -824,15 +825,15 @@ https://site.com/img.jpg`
 {
   caption:
 
-`💰 PAGAMENTO PIX
+`⬛PAGAMENTO PIX
 
 ━━━━━━━━━━━━━━━━━━━
 
-📦 ${p.nome}
+⬛ ${p.nome}
 
-💲 R$ ${p.preco}
+⬛ R$ ${p.preco}
 
-📋 PIX COPIA E COLA:
+📲 PIX COPIA E COLA:
 
 ${copia}
 
@@ -901,7 +902,7 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "📦 Nome do produto:"
+        "⬛Nome do produto:"
       );
     }
 
@@ -922,7 +923,7 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "💰 Valor:"
+        "⬛ Valor:"
       );
     }
 
@@ -945,7 +946,7 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "📝 Descrição:"
+        "⬛Descrição:"
       );
     }
 
@@ -1031,10 +1032,10 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-`✅ PRODUTO ADICIONADO!
+`⚡ PRODUTO ADICIONADO!
 
-📦 ${state.nome}
-💰 R$ ${state.preco}`
+⬛ ${state.nome}
+⬛ R$ ${state.preco}`
       );
     }
 
