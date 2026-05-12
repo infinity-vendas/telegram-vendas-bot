@@ -160,11 +160,6 @@ async (req, res) => {
     const data =
     req.body;
 
-    console.log(
-      "📩 WEBHOOK:",
-      data
-    );
-
     if (
       data.type !== "payment"
     ) {
@@ -176,11 +171,6 @@ async (req, res) => {
       id:
       data.data.id
     });
-
-    console.log(
-      "💰 PAGAMENTO:",
-      payment
-    );
 
     if (
       payment.status !==
@@ -217,6 +207,10 @@ async (req, res) => {
       "approved"
     });
 
+    // =====================================
+    // ENTREGA AUTOMÁTICA
+    // =====================================
+
     await bot.sendMessage(
       info.chatId,
 
@@ -233,7 +227,10 @@ R$ ${info.valor}
 📲 WhatsApp:
 ${info.whatsapp}
 
-🔗 Link:
+━━━━━━━━━━━━━━━━━━━
+
+🔓 LINK LIBERADO:
+
 ${info.link}
 
 ━━━━━━━━━━━━━━━━━━━
@@ -272,11 +269,9 @@ async (msg) => {
 
     await bot.sendPhoto(
       chatId,
-      LOGO
-    );
-
-    await bot.sendMessage(
-      chatId,
+      LOGO,
+{
+  caption:
 
 `🚀 Olá 👋 seja bem-vindo(a)!
 
@@ -288,7 +283,7 @@ INFINITY CLIENTES
 ✅ Produtos digitais
 ✅ PIX automático
 ✅ Aprovação automática
-✅ Entrega rápida
+✅ Entrega automática
 ✅ Suporte rápido
 
 ━━━━━━━━━━━━━━━━━━━
@@ -301,7 +296,14 @@ Compre apenas pelo canal oficial.
 💳 Pagamento seguro
 via Mercado Pago
 
-👇 Escolha uma opção abaixo`,
+👇 Escolha uma opção abaixo`
+}
+    );
+
+    await bot.sendMessage(
+      chatId,
+
+`📋 MENU PRINCIPAL`,
 
 {
   reply_markup: {
@@ -341,7 +343,9 @@ via Mercado Pago
 }
     );
 
+    // =====================================
     // ADMIN
+    // =====================================
 
     if (
       userId === MASTER ||
@@ -446,7 +450,7 @@ ${WHATSAPP}`
     }
 
     // =====================================
-    // MENU PRODUTOS
+    // PRODUTOS
     // =====================================
 
     if (
@@ -533,8 +537,6 @@ Selecione um produto abaixo 👇`,
       const p =
       doc.data();
 
-      // COM IMG
-
       if (p.img) {
 
         return bot.sendPhoto(
@@ -550,16 +552,13 @@ Selecione um produto abaixo 👇`,
 R$ ${p.preco}
 
 📝 Descrição:
-${p.desc}
-
-🔗 Produto:
-${p.link}`,
+${p.desc}`,
 
   reply_markup: {
     inline_keyboard: [[{
 
       text:
-      "🛒 COMPRAR",
+      "🛒 COMPRAR AGORA",
 
       callback_data:
       `buy_${doc.id}`
@@ -570,8 +569,6 @@ ${p.link}`,
         );
       }
 
-      // SEM IMG
-
       return bot.sendMessage(
         q.message.chat.id,
 
@@ -581,17 +578,14 @@ ${p.link}`,
 R$ ${p.preco}
 
 📝 Descrição:
-${p.desc}
-
-🔗 Produto:
-${p.link}`,
+${p.desc}`,
 
 {
   reply_markup: {
     inline_keyboard: [[{
 
       text:
-      "🛒 COMPRAR",
+      "🛒 COMPRAR AGORA",
 
       callback_data:
       `buy_${doc.id}`
@@ -616,12 +610,16 @@ ${p.link}`,
       ) return;
 
       userState[userId] = {
-        step: "produto"
+        step: "imagem"
       };
 
       return bot.sendMessage(
         q.message.chat.id,
-        "📦 Nome do produto:"
+
+`🖼 ENVIE O LINK DA IMAGEM
+
+Exemplo:
+https://site.com/img.jpg`
       );
     }
 
@@ -742,7 +740,9 @@ ${p.link}`,
       const p =
       doc.data();
 
-      // PIX
+      // =====================================
+      // GERAR PIX
+      // =====================================
 
       const payment =
       await mpPayment.create({
@@ -767,8 +767,6 @@ ${p.link}`,
           }
         }
       });
-
-      console.log(payment);
 
       const qr =
       payment
@@ -811,7 +809,9 @@ ${p.link}`,
         Date.now()
       });
 
+      // =====================================
       // ENVIA PIX
+      // =====================================
 
       await bot.sendPhoto(
         q.message.chat.id,
@@ -885,6 +885,27 @@ async (msg) => {
       return;
 
     // =====================================
+    // IMAGEM
+    // =====================================
+
+    if (
+      state.step ===
+      "imagem"
+    ) {
+
+      state.img =
+      text;
+
+      state.step =
+      "produto";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "📦 Nome do produto:"
+      );
+    }
+
+    // =====================================
     // PRODUTO
     // =====================================
 
@@ -938,27 +959,6 @@ async (msg) => {
     ) {
 
       state.desc =
-      text;
-
-      state.step =
-      "imagem";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "🖼 Link da imagem:"
-      );
-    }
-
-    // =====================================
-    // IMAGEM
-    // =====================================
-
-    if (
-      state.step ===
-      "imagem"
-    ) {
-
-      state.img =
       text;
 
       state.step =
@@ -1031,7 +1031,10 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "✅ Produto adicionado"
+`✅ PRODUTO ADICIONADO!
+
+📦 ${state.nome}
+💰 R$ ${state.preco}`
       );
     }
 
