@@ -42,9 +42,6 @@ const ADMINS = [
 const WHATSAPP =
 "551981528372";
 
-const BOT_USERNAME =
-"SellForge_bot";
-
 const LOGO =
 "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
@@ -157,8 +154,7 @@ async (req, res) => {
 
   try {
 
-    const data =
-    req.body;
+    const data = req.body;
 
     if (
       data.type !== "payment"
@@ -211,25 +207,19 @@ async (req, res) => {
     // DIMINUIR ESTOQUE
     // =====================================
 
-    const produtos =
-    await db
-    .collection('produtos')
-    .where(
-      "nome",
-      "==",
-      info.produto
-    )
-    .get();
+    const produtoRef =
+    db.collection('produtos')
+    .doc(info.produtoId);
 
-    if (!produtos.empty) {
+    const produtoDoc =
+    await produtoRef.get();
 
-      const produtoDoc =
-      produtos.docs[0];
+    if (produtoDoc.exists) {
 
       const produtoData =
       produtoDoc.data();
 
-      await produtoDoc.ref.update({
+      await produtoRef.update({
 
         estoque:
         Math.max(
@@ -284,6 +274,33 @@ ${info.link}
 });
 
 // =========================================
+// MENU FLUTUANTE
+// =========================================
+
+async function enviarMenu(chatId) {
+
+  await bot.sendMessage(
+    chatId,
+    "⬇️ Use os botões abaixo",
+    {
+      reply_markup: {
+        keyboard: [
+          [
+            { text: "📦 Produtos" },
+            { text: "ℹ️ Informações" }
+          ],
+          [
+            { text: "📲 Suporte" }
+          ]
+        ],
+        resize_keyboard: true,
+        persistent: true
+      }
+    }
+  );
+}
+
+// =========================================
 // START
 // =========================================
 
@@ -306,10 +323,6 @@ async (msg) => {
   caption:
 
 `Olá 👋 seja bem-vindo(a)!
-sou seu assistente virtual
-
-Nick Dono:
-+55 51 98152-8372
 
 Faelzin ⚡
 
@@ -320,68 +333,16 @@ Faelzin ⚡
 ✅ Aprovação automática
 ✅ Entrega automática
 ✅ Sistema com estoque
-✅ Suporte rápido
 
 ━━━━━━━━━━━━━━━━━━━
 
-⚠️ Não caia em golpes.
-Compre apenas pelo canal oficial.
-
-━━━━━━━━━━━━━━━━━━━
-
-💳 Pagamento seguro
-via Mercado Pago
-
-👇 Escolha uma opção abaixo`
+👇 Use os botões abaixo`
 }
     );
 
-    await bot.sendMessage(
-      chatId,
+    await enviarMenu(chatId);
 
-`⬛ MENU PRINCIPAL`,
-
-{
-  reply_markup: {
-    inline_keyboard: [
-
-      [
-        {
-          text:
-          "📦 PRODUTOS",
-
-          callback_data:
-          "menu_produtos"
-        }
-      ],
-
-      [
-        {
-          text:
-          "ℹ️ INFORMAÇÕES",
-
-          callback_data:
-          "menu_info"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📲 SUPORTE",
-
-          url:
-`https://wa.me/${WHATSAPP}`
-        }
-      ]
-    ]
-  }
-}
-    );
-
-    // =====================================
     // ADMIN
-    // =====================================
 
     if (
       userId === MASTER ||
@@ -439,59 +400,19 @@ via Mercado Pago
 });
 
 // =========================================
-// CALLBACKS
+// BOTÕES FLUTUANTES
 // =========================================
 
-bot.on(
-"callback_query",
-async (q) => {
+bot.on('message', async (msg) => {
 
   try {
 
-    await bot.answerCallbackQuery(
-      q.id
-    );
+    if (!msg.text)
+      return;
 
-    const data =
-    q.data;
+    const text = msg.text;
 
-    const userId =
-    String(q.from.id);
-
-    // =====================================
-    // INFO
-    // =====================================
-
-    if (
-      data === "menu_info"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`ℹ️ INFORMAÇÕES
-
-🚀 Sistema:
-MAX FULL
-
-⚡ Status:
-ONLINE
-
-👑 Desenvolvedor:
-Faelzin
-
-📲 Suporte:
-${WHATSAPP}`
-      );
-    }
-
-    // =====================================
-    // MENU PRODUTOS
-    // =====================================
-
-    if (
-      data === "menu_produtos"
-    ) {
+    if (text === '📦 Produtos') {
 
       const snap =
       await db
@@ -501,8 +422,8 @@ ${WHATSAPP}`
       if (snap.empty) {
 
         return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhum produto cadastrado"
+          msg.chat.id,
+          '❌ Nenhum produto cadastrado'
         );
       }
 
@@ -510,8 +431,7 @@ ${WHATSAPP}`
 
       snap.forEach(doc => {
 
-        const p =
-        doc.data();
+        const p = doc.data();
 
         buttons.push([
           {
@@ -525,11 +445,9 @@ ${WHATSAPP}`
       });
 
       return bot.sendMessage(
-        q.message.chat.id,
+        msg.chat.id,
 
-`📦 LISTA DE PRODUTOS
-
-Selecione um produto abaixo 👇`,
+`📦 LISTA DE PRODUTOS`,
 
 {
   reply_markup: {
@@ -539,6 +457,52 @@ Selecione um produto abaixo 👇`,
 }
       );
     }
+
+    if (text === 'ℹ️ Informações') {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`ℹ️ INFORMAÇÕES
+
+🚀 Sistema online
+⚡ Desenvolvido por Faelzin
+📲 Suporte: ${WHATSAPP}`
+      );
+    }
+
+    if (text === '📲 Suporte') {
+
+      return bot.sendMessage(
+        msg.chat.id,
+`https://wa.me/${WHATSAPP}`
+      );
+    }
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// CALLBACKS
+// =========================================
+
+bot.on(
+"callback_query",
+async (q) => {
+
+  try {
+
+    await bot.answerCallbackQuery(
+      q.id
+    );
+
+    const data = q.data;
+
+    const userId =
+    String(q.from.id);
 
     // =====================================
     // VER PRODUTO
@@ -581,11 +545,9 @@ Selecione um produto abaixo 👇`,
       ? "🟢 Disponível"
       : "🔴 Esgotado";
 
-      if (p.img) {
-
-        return bot.sendPhoto(
-          q.message.chat.id,
-          p.img,
+      return bot.sendPhoto(
+        q.message.chat.id,
+        p.img,
 
 {
   caption:
@@ -617,45 +579,11 @@ ${status}`,
     }]]
   }
 }
-        );
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`📦 ${p.nome}
-
-💰 Valor:
-R$ ${p.preco}
-
-📝 Descrição:
-${p.desc}
-
-📦 Estoque:
-${estoque}
-
-${status}`,
-
-{
-  reply_markup: {
-    inline_keyboard: [[{
-
-      text:
-      estoque > 0
-      ? "🛒 COMPRAR"
-      : "❌ ESGOTADO",
-
-      callback_data:
-      `buy_${doc.id}`
-
-    }]]
-  }
-}
       );
     }
 
     // =====================================
-    // ADMIN ADD
+    // ADD PRODUTO
     // =====================================
 
     if (
@@ -674,38 +602,22 @@ ${status}`,
       return bot.sendMessage(
         q.message.chat.id,
 
-`🖼 ENVIE O LINK DA IMAGEM
-
-Exemplo:
-https://site.com/img.jpg`
+`🖼 ENVIE O LINK DA IMAGEM`
       );
     }
 
     // =====================================
-    // ADMIN LISTAR
+    // LISTAR
     // =====================================
 
     if (
       data === "admin_listar"
     ) {
 
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
-
       const snap =
       await db
       .collection('produtos')
       .get();
-
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhum produto"
-        );
-      }
 
       let texto =
 "📦 PRODUTOS\n\n";
@@ -716,53 +628,12 @@ https://site.com/img.jpg`
         doc.data();
 
         texto +=
-
-`🆔 ${doc.id}
-
-📦 ${p.nome}
-💰 R$ ${p.preco}
-📦 Estoque: ${p.estoque || 0}
-
-`;
+`📦 ${p.nome}\n💰 ${p.preco}\n📦 Estoque: ${p.estoque}\n\n`;
       });
 
       return bot.sendMessage(
         q.message.chat.id,
         texto
-      );
-    }
-
-    // =====================================
-    // ADMIN LIMPAR
-    // =====================================
-
-    if (
-      data === "admin_limpar"
-    ) {
-
-      if (
-        userId !== MASTER
-      ) return;
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      for (
-        const doc
-        of snap.docs
-      ) {
-
-        await db
-        .collection('produtos')
-        .doc(doc.id)
-        .delete();
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-        "🗑 Todos produtos deletados"
       );
     }
 
@@ -796,12 +667,7 @@ https://site.com/img.jpg`
         );
       }
 
-      const p =
-      doc.data();
-
-      // =====================================
-      // VERIFICAR ESTOQUE
-      // =====================================
+      const p = doc.data();
 
       if (
         !p.estoque ||
@@ -813,10 +679,6 @@ https://site.com/img.jpg`
           "❌ Produto esgotado"
         );
       }
-
-      // =====================================
-      // GERAR PIX
-      // =====================================
 
       const payment =
       await mpPayment.create({
@@ -861,6 +723,9 @@ https://site.com/img.jpg`
       )
       .set({
 
+        produtoId:
+        doc.id,
+
         chatId:
         q.message.chat.id,
 
@@ -882,10 +747,6 @@ https://site.com/img.jpg`
         createdAt:
         Date.now()
       });
-
-      // =====================================
-      // ENVIA PIX
-      // =====================================
 
       await bot.sendPhoto(
         q.message.chat.id,
@@ -912,9 +773,7 @@ ${copia}
 
 ━━━━━━━━━━━━━━━━━━━
 
-⏳ Aguardando pagamento...
-
-⚡ Aprovação automática.`
+⏳ Aguardando pagamento...`
 
 }
       );
@@ -930,7 +789,7 @@ ${copia}
 });
 
 // =========================================
-// ADD PRODUTO
+// CADASTRAR PRODUTO
 // =========================================
 
 bot.on(
@@ -958,20 +817,13 @@ async (msg) => {
     if (!state)
       return;
 
-    // =====================================
-    // IMAGEM
-    // =====================================
-
     if (
       state.step ===
       "imagem"
     ) {
 
-      state.img =
-      text;
-
-      state.step =
-      "produto";
+      state.img = text;
+      state.step = "produto";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -979,20 +831,13 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // PRODUTO
-    // =====================================
-
     if (
       state.step ===
       "produto"
     ) {
 
-      state.nome =
-      text;
-
-      state.step =
-      "valor";
+      state.nome = text;
+      state.step = "valor";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -1000,22 +845,16 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // VALOR
-    // =====================================
-
     if (
       state.step ===
       "valor"
     ) {
 
-      state.preco =
-      Number(
-        text.replace(",", ".")
+      state.preco = Number(
+        text.replace(',', '.')
       );
 
-      state.step =
-      "descricao";
+      state.step = "descricao";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -1023,20 +862,13 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // DESCRIÇÃO
-    // =====================================
-
     if (
       state.step ===
       "descricao"
     ) {
 
-      state.desc =
-      text;
-
-      state.step =
-      "whatsapp";
+      state.desc = text;
+      state.step = "whatsapp";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -1044,20 +876,13 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // WHATSAPP
-    // =====================================
-
     if (
       state.step ===
       "whatsapp"
     ) {
 
-      state.whatsapp =
-      text;
-
-      state.step =
-      "estoque";
+      state.whatsapp = text;
+      state.step = "estoque";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -1065,30 +890,19 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // ESTOQUE
-    // =====================================
-
     if (
       state.step ===
       "estoque"
     ) {
 
-      state.estoque =
-      Number(text);
-
-      state.step =
-      "link";
+      state.estoque = Number(text);
+      state.step = "link";
 
       return bot.sendMessage(
         msg.chat.id,
-        "🔗 Link produto:"
+        "🔗 Link do produto:"
       );
     }
-
-    // =====================================
-    // LINK
-    // =====================================
 
     if (
       state.step ===
@@ -1124,8 +938,7 @@ async (msg) => {
         Date.now()
       });
 
-      userState[id] =
-      null;
+      userState[id] = null;
 
       return bot.sendMessage(
         msg.chat.id,
