@@ -1,741 +1,640 @@
 require('dotenv').config();
 
-const express = require('express');
-const TelegramBot = require('node-telegram-bot-api');
+const express = require('express'); const TelegramBot = require('node-telegram-bot-api');
 
-const {
-  MercadoPagoConfig,
-  Payment
-} = require('mercadopago');
+const { MercadoPagoConfig, Payment } = require('mercadopago');
 
-const {
-  initializeApp,
-  cert
-} = require('firebase-admin/app');
+const { initializeApp, cert } = require('firebase-admin/app');
 
-const {
-  getFirestore,
-  FieldValue
-} = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
-// =========================================
-// EXPRESS
-// =========================================
+// ========================================= // EXPRESS // =========================================
 
 const app = express();
 
-app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
 
-// =========================================
-// CONFIG
-// =========================================
+// ========================================= // CONFIG // =========================================
 
 const MASTER = "6863505946";
 
-const WHATSAPP =
-"551981528372";
+const SUPPORT = "@suporte_inifnity_clientes_oficial";
 
-const SUPPORT =
-"@suporte_inifnity_clientes_oficial";
+const LOGO = "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
-const LOGO =
-"https://i.postimg.cc/g2JJvqHN/logo.jpg";
+const SECRET_ADMIN = "/staff_dono";
 
-const SECRET_ADMIN =
-"/staff_dono";
+const userState = {}; const antiFlood = {}; const adminAttempts = {}; const blockedUsers = {};
 
-const userState = {};
-const antiFlood = {};
+// ========================================= // VALIDAÇÕES // =========================================
 
-// =========================================
-// VALIDAÇÕES
-// =========================================
+if (!process.env.BOT_TOKEN) throw new Error("BOT_TOKEN ausente");
 
-if (!process.env.BOT_TOKEN)
-  throw new Error("BOT_TOKEN ausente");
+if (!process.env.MP_ACCESS_TOKEN) throw new Error("MP_ACCESS_TOKEN ausente");
 
-if (!process.env.MP_ACCESS_TOKEN)
-  throw new Error("MP_ACCESS_TOKEN ausente");
+if (!process.env.RENDER_EXTERNAL_URL) throw new Error("RENDER_EXTERNAL_URL ausente");
 
-if (!process.env.RENDER_EXTERNAL_URL)
-  throw new Error("RENDER_EXTERNAL_URL ausente");
+if (!process.env.FIREBASE_CONFIG) throw new Error("FIREBASE_CONFIG ausente");
 
-if (!process.env.FIREBASE_CONFIG)
-  throw new Error("FIREBASE_CONFIG ausente");
+// ========================================= // MERCADO PAGO // =========================================
 
-// =========================================
-// MERCADO PAGO
-// =========================================
+const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 
-const mpClient =
-new MercadoPagoConfig({
-  accessToken:
-  process.env.MP_ACCESS_TOKEN
-});
+const mpPayment = new Payment(mpClient);
 
-const mpPayment =
-new Payment(mpClient);
+// ========================================= // FIREBASE // =========================================
 
-// =========================================
-// FIREBASE
-// =========================================
+const serviceAccount = JSON.parse( process.env.FIREBASE_CONFIG );
 
-const serviceAccount =
-JSON.parse(
-  process.env.FIREBASE_CONFIG
-);
+initializeApp({ credential: cert(serviceAccount) });
 
-initializeApp({
-  credential:
-  cert(serviceAccount)
-});
-
-const db =
-getFirestore();
+const db = getFirestore();
 
 console.log("🔥 Firebase conectado");
 
-// =========================================
-// TELEGRAM
-// =========================================
+// ========================================= // TELEGRAM // =========================================
 
-const bot =
-new TelegramBot(
-  process.env.BOT_TOKEN,
-{
-  webHook: true
-}
+const bot = new TelegramBot( process.env.BOT_TOKEN, { webHook: true } );
+
+const SECRET_PATH = /bot${process.env.BOT_TOKEN};
+
+app.post( SECRET_PATH, async (req, res) => {
+
+try {
+
+await bot.processUpdate(
+  req.body
 );
 
-const SECRET_PATH =
-`/bot${process.env.BOT_TOKEN}`;
+res.sendStatus(200);
 
-app.post(
-SECRET_PATH,
-async (req, res) => {
+} catch (err) {
 
-  try {
+console.log(err);
 
-    await bot.processUpdate(
-      req.body
-    );
+res.sendStatus(500);
 
-    res.sendStatus(200);
+} });
 
-  } catch (err) {
-
-    console.log(err);
-
-    res.sendStatus(500);
-  }
-});
-
-// =========================================
-// HOME
-// =========================================
+// ========================================= // HOME // =========================================
 
 app.get('/', (req, res) => {
 
-  res.send("🚀 BOT ONLINE");
-});
+res.send("🚀 BOT ONLINE"); });
 
-// =========================================
-// ANTI FLOOD
-// =========================================
+// ========================================= // ANTI FLOOD // =========================================
 
 function isFlood(id) {
 
-  const now = Date.now();
+const now = Date.now();
 
-  if (
-    antiFlood[id] &&
-    now - antiFlood[id] < 1500
-  ) {
-    return true;
-  }
+if ( antiFlood[id] && now - antiFlood[id] < 1500 ) { return true; }
 
-  antiFlood[id] = now;
+antiFlood[id] = now;
 
-  return false;
-}
+return false; }
 
-// =========================================
-// BOTÃO FLUTUANTE MENU
-// =========================================
+// ========================================= // BLOCK CHECK // =========================================
+
+function isBlocked(id) {
+
+if (!blockedUsers[id]) return false;
+
+if ( Date.now() > blockedUsers[id] ) { delete blockedUsers[id]; return false; }
+
+return true; }
+
+// ========================================= // FLOAT MENU // =========================================
 
 async function sendFloatingMenu(chatId) {
 
-  return bot.sendMessage(
-    chatId,
+return bot.sendMessage( chatId,
 
-`⚡ MENU RÁPIDO SELLFORGE`,
+⚡ MENU RÁPIDO SELLFORGE,
 
-{
-  reply_markup: {
-    inline_keyboard: [
+{ reply_markup: { inline_keyboard: [
 
-      [
-        {
-          text: "📦 Produtos",
-          callback_data:
-          "menu_produtos"
-        },
+[
+    {
+      text: "📦 Produtos",
+      callback_data:
+      "menu_produtos"
+    },
 
-        {
-          text: "🛒 Compras",
-          callback_data:
-          "menu_compras"
-        }
-      ],
+    {
+      text: "🛒 Compras",
+      callback_data:
+      "menu_compras"
+    }
+  ],
 
-      [
-        {
-          text: "📡 Status",
-          callback_data:
-          "menu_status"
-        },
+  [
+    {
+      text: "📡 Status",
+      callback_data:
+      "menu_status"
+    },
 
-        {
-          text: "📲 Suporte",
-          url:
-`https://t.me/${SUPPORT.replace('@','')}`
-        }
-      ]
-    ]
-  }
+    {
+      text: "📲 Suporte",
+      url:
+
+https://t.me/${SUPPORT.replace('@','')} } ] ] } } ); }
+
+// ========================================= // WEBHOOK MP // =========================================
+
+app.post( '/webhook/mp', async (req, res) => {
+
+try {
+
+const data = req.body;
+
+if (
+  data.type !== "payment"
+) {
+  return res.sendStatus(200);
 }
-  );
+
+const payment =
+await mpPayment.get({
+  id: data.data.id
+});
+
+if (
+  payment.status !==
+  "approved"
+) {
+  return res.sendStatus(200);
 }
 
-// =========================================
-// WEBHOOK MP
-// =========================================
+const vendaRef =
+db.collection('pagamentos')
+.doc(String(payment.id));
 
-app.post(
-'/webhook/mp',
-async (req, res) => {
+const venda =
+await vendaRef.get();
 
-  try {
+if (!venda.exists)
+  return res.sendStatus(200);
 
-    const data = req.body;
+const info =
+venda.data();
 
-    if (
-      data.type !== "payment"
-    ) {
-      return res.sendStatus(200);
-    }
+if (info.aprovado)
+  return res.sendStatus(200);
 
-    const payment =
-    await mpPayment.get({
-      id: data.data.id
-    });
+await vendaRef.update({
 
-    if (
-      payment.status !==
-      "approved"
-    ) {
-      return res.sendStatus(200);
-    }
+  aprovado: true,
 
-    const vendaRef =
-    db.collection('pagamentos')
-    .doc(String(payment.id));
+  status: "approved"
+});
 
-    const venda =
-    await vendaRef.get();
+const produtoRef =
+db.collection('produtos')
+.doc(info.produtoId);
 
-    if (!venda.exists)
-      return res.sendStatus(200);
+const produtoDoc =
+await produtoRef.get();
 
-    const info =
-    venda.data();
+if (produtoDoc.exists) {
 
-    if (info.aprovado)
-      return res.sendStatus(200);
+  const produto =
+  produtoDoc.data();
 
-    await vendaRef.update({
+  await produtoRef.update({
 
-      aprovado: true,
+    estoque:
+    Math.max(
+      (produto.estoque || 1) - 1,
+      0
+    ),
 
-      status: "approved"
-    });
+    vendas:
+    FieldValue.increment(1)
+  });
+}
 
-    const produtoRef =
-    db.collection('produtos')
-    .doc(info.produtoId);
+await db
+.collection('historico')
+.add({
 
-    const produtoDoc =
-    await produtoRef.get();
+  user:
+  info.chatId,
 
-    if (produtoDoc.exists) {
+  produto:
+  info.produto,
 
-      const produto =
-      produtoDoc.data();
+  valor:
+  info.valor,
 
-      await produtoRef.update({
+  createdAt:
+  Date.now()
+});
 
-        estoque:
-        Math.max(
-          (produto.estoque || 1) - 1,
-          0
-        ),
-
-        vendas:
-        FieldValue.increment(1)
-      });
-    }
-
-    await db
-    .collection('historico')
-    .add({
-
-      user:
-      info.chatId,
-
-      produto:
-      info.produto,
-
-      valor:
-      info.valor,
-
-      createdAt:
-      Date.now()
-    });
-
-    await bot.sendMessage(
-      info.chatId,
+await bot.sendMessage(
+  info.chatId,
 
 `✅ PAGAMENTO APROVADO
 
 ━━━━━━━━━━━━━━━━━━━
 
-📦 Produto:
-${info.produto}
+📦 Produto: ${info.produto}
 
-💰 Valor:
-R$ ${info.valor}
+💰 Valor: R$ ${info.valor}
 
-👤 Vendedor:
-${info.vendedor}
+👤 Vendedor: ${info.vendedor}
 
 ━━━━━━━━━━━━━━━━━━━
 
-🔓 LINK:
-${info.link}
+🔓 LINK: ${info.link}
 
-🚀 Obrigado pela compra!`
-    );
+🚀 Obrigado pela compra!` );
 
-    await bot.sendMessage(
-      MASTER,
+await bot.sendMessage(
+  MASTER,
 
 `💸 NOVA VENDA
 
-📦 ${info.produto}
-💰 R$ ${info.valor}`
-    );
+📦 ${info.produto} 💰 R$ ${info.valor}` );
 
-    res.sendStatus(200);
+res.sendStatus(200);
 
-  } catch (err) {
+} catch (err) {
 
-    console.log(
-      "❌ WEBHOOK ERROR:",
-      err
-    );
+console.log(
+  "❌ WEBHOOK ERROR:",
+  err
+);
 
-    res.sendStatus(500);
-  }
-});
+res.sendStatus(500);
 
-// =========================================
-// START
-// =========================================
+} });
 
-bot.onText(
-/\/start/,
-async (msg) => {
+// ========================================= // START // =========================================
 
-  try {
+bot.onText( //start/, async (msg) => {
 
-    const chatId =
-    msg.chat.id;
+try {
 
-    await bot.sendPhoto(
-      chatId,
-      LOGO,
-{
-  caption:
+const chatId =
+msg.chat.id;
+
+await bot.sendPhoto(
+  chatId,
+  LOGO,
+
+{ caption:
 
 `🚀 Bem-vindo ao SellForge ⚡
 
-✅ PIX automático
-✅ Aprovação automática
-✅ Entrega instantânea
-✅ Produtos VIP
-✅ Painel ADMIN secreto
+✅ PIX automático ✅ Aprovação automática ✅ Entrega instantânea ✅ Produtos VIP ✅ Painel ADMIN secreto
 
 👑 Desenvolvido por Faelzin
 
-📲 Suporte:
-${SUPPORT}`
-}
-    );
+📲 Suporte: ${SUPPORT}` } );
 
-    await sendFloatingMenu(chatId);
+await sendFloatingMenu(chatId);
 
-  } catch (err) {
+} catch (err) {
 
-    console.log(err);
-  }
-});
+console.log(err);
 
-// =========================================
-// ADMIN SECRETO
-// =========================================
+} });
 
-bot.onText(
-/\/staff_dono/,
-async (msg) => {
+// ========================================= // ADMIN // =========================================
 
-  const userId =
-  String(msg.from.id);
+bot.onText( //staff_dono/, async (msg) => {
 
-  if (
-    userId !== MASTER
-  ) {
+const userId = String(msg.from.id);
 
-    return bot.sendMessage(
-      msg.chat.id,
+if ( userId !== MASTER ) {
+
+adminAttempts[userId] =
+(adminAttempts[userId] || 0) + 1;
+
+if (
+  adminAttempts[userId] >= 2
+) {
+
+  blockedUsers[userId] =
+  Date.now() + 60000;
+
+  return bot.sendMessage(
+    msg.chat.id,
+
+`❌ 1/2 não têm autorização!
+
+⚠️ 1/2 mais uma tentativa seus acesso aos comandos será bloqueado.
+
+🚫 Comandos bloqueados temporariamente por 1 minuto.` ); }
+
+return bot.sendMessage(
+  msg.chat.id,
 
 `❌ Apenas proprietário do Bot tem autorização!
 
-📲 Entre em contato:
-${SUPPORT}`
+📲 Entre em contato: ${SUPPORT}` ); }
+
+await bot.sendMessage( msg.chat.id,
+
+👑 PAINEL ADMIN SECRETO,
+
+{ reply_markup: { inline_keyboard: [
+
+[
+    {
+      text:
+      "➕ ADD PRODUTO",
+      callback_data:
+      "admin_add"
+    }
+  ],
+
+  [
+    {
+      text:
+      "📦 LISTAR",
+      callback_data:
+      "admin_listar"
+    },
+
+    {
+      text:
+      "📈 DASHBOARD",
+      callback_data:
+      "admin_dash"
+    }
+  ],
+
+  [
+    {
+      text:
+      "🔥 LIMPAR",
+      callback_data:
+      "admin_limpar"
+    }
+  ]
+]
+
+} } ); });
+
+// ========================================= // CALLBACKS // =========================================
+
+bot.on( "callback_query", async (q) => {
+
+try {
+
+const data =
+q.data;
+
+const userId =
+String(q.from.id);
+
+if (isBlocked(userId)) {
+
+  return bot.answerCallbackQuery(
+    q.id,
+
+{ text: "🚫 Você está bloqueado temporariamente" } ); }
+
+if (isFlood(userId)) {
+
+  return bot.answerCallbackQuery(
+    q.id,
+
+{ text: "⚠️ Evite spam" } ); }
+
+await bot.answerCallbackQuery(q.id);
+
+if (
+  data === "menu_produtos"
+) {
+
+  const snap =
+  await db
+  .collection('produtos')
+  .get();
+
+  if (snap.empty) {
+
+    return bot.sendMessage(
+      q.message.chat.id,
+      "❌ Nenhum produto"
     );
   }
 
-  await bot.sendMessage(
-    msg.chat.id,
+  const buttons = [];
 
-`👑 PAINEL ADMIN SECRETO`,
+  snap.forEach(doc => {
 
-{
-  reply_markup: {
-    inline_keyboard: [
+    const p =
+    doc.data();
 
-      [
-        {
-          text:
-          "➕ ADD PRODUTO",
-          callback_data:
-          "admin_add"
-        }
-      ],
+    buttons.push([{
 
-      [
-        {
-          text:
-          "📦 LISTAR",
-          callback_data:
-          "admin_listar"
-        },
+      text:
 
-        {
-          text:
-          "📈 DASHBOARD",
-          callback_data:
-          "admin_dash"
-        }
-      ],
+${p.nome} | R$ ${p.preco},
 
-      [
-        {
-          text:
-          "➕ ESTOQUE",
-          callback_data:
-          "admin_estoque"
-        },
+callback_data:
 
-        {
-          text:
-          "🗑 DELETE ID",
-          callback_data:
-          "admin_delete"
-        }
-      ],
+view_${doc.id}
 
-      [
-        {
-          text:
-          "🔥 LIMPAR TUDO",
-          callback_data:
-          "admin_limpar"
-        }
-      ]
-    ]
-  }
-}
-  );
-});
+}]);
+  });
 
-// =========================================
-// CALLBACKS
-// =========================================
+  return bot.sendMessage(
+    q.message.chat.id,
 
-bot.on(
-"callback_query",
-async (q) => {
+📦 PRODUTOS DISPONÍVEIS,
 
-  try {
+{ reply_markup: { inline_keyboard: buttons } } ); }
 
-    const data =
-    q.data;
+if (
+  data === "menu_status"
+) {
 
-    const userId =
-    String(q.from.id);
-
-    if (isFlood(userId)) {
-
-      return bot.answerCallbackQuery(
-        q.id,
-{
-  text:
-  "⚠️ Aguarde..."
-}
-      );
-    }
-
-    await bot.answerCallbackQuery(q.id);
-
-    // Produtos
-
-    if (
-      data === "menu_produtos"
-    ) {
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      const buttons = [];
-
-      snap.forEach(doc => {
-
-        const p =
-        doc.data();
-
-        buttons.push([{
-
-          text:
-`${p.nome} | R$ ${p.preco}`,
-
-          callback_data:
-`view_${doc.id}`
-
-        }]);
-      });
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`📦 PRODUTOS DISPONÍVEIS`,
-
-{
-  reply_markup: {
-    inline_keyboard:
-    buttons
-  }
-}
-      );
-    }
-
-    // Status
-
-    if (
-      data === "menu_status"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
+  return bot.sendMessage(
+    q.message.chat.id,
 
 `📡 STATUS BOT
 
-🟢 BOT ONLINE
-🟢 FIREBASE ONLINE
-🟢 MERCADO PAGO ONLINE
-🟢 WEBHOOK ONLINE`
-      );
-    }
+🟢 BOT ONLINE 🟢 FIREBASE ONLINE 🟢 MERCADO PAGO ONLINE 🟢 WEBHOOK ONLINE` ); }
 
-    // Ver produto
+if (
+  data.startsWith(
+    "view_"
+  )
+) {
 
-    if (
-      data.startsWith(
-        "view_"
-      )
-    ) {
+  const id =
+  data.replace(
+    "view_",
+    ""
+  );
 
-      const id =
-      data.replace(
-        "view_",
-        ""
-      );
+  const doc =
+  await db
+  .collection('produtos')
+  .doc(id)
+  .get();
 
-      const doc =
-      await db
-      .collection('produtos')
-      .doc(id)
-      .get();
+  if (!doc.exists)
+    return;
 
-      if (!doc.exists)
-        return;
+  const p =
+  doc.data();
 
-      const p =
-      doc.data();
+  return bot.sendPhoto(
+    q.message.chat.id,
+    p.img,
 
-      return bot.sendPhoto(
-        q.message.chat.id,
-        p.img,
-
-{
-  caption:
+{ caption:
 
 `📦 ${p.nome}
 
-👤 Vendedor:
-${p.vendedor}
+👤 Vendedor: ${p.vendedor}
 
-💰 Valor:
-R$ ${p.preco}
+💰 Valor: R$ ${p.preco}
 
-📦 Estoque:
-${p.estoque || 0}
+📦 Estoque: ${p.estoque || 0}
 
 📝 ${p.desc}`,
 
-  reply_markup: {
-    inline_keyboard: [[{
+reply_markup: { inline_keyboard: [[{
 
-      text:
-      "🛒 COMPRAR",
+text:
+  "🛒 COMPRAR",
 
-      callback_data:
-      `buy_${doc.id}`
+  callback_data:
+  `buy_${doc.id}`
 
-    }]]
-  }
+}]]
+
+} } ); }
+
+if (
+  data === "cancel_buy"
+) {
+
+  return bot.sendMessage(
+    q.message.chat.id,
+    "❌ Compra cancelada"
+  );
 }
-      );
-    }
 
-    // Comprar PIX Mercado Pago
+if (
+  data.startsWith(
+    "buy_"
+  )
+) {
 
-    if (
-      data.startsWith(
-        "buy_"
-      )
-    ) {
+  await bot.sendMessage(
+    q.message.chat.id,
 
-      const id =
-      data.replace(
-        "buy_",
-        ""
-      );
+⚠️ Compre somente com administrador oficial. Evite golpes! );
 
-      const doc =
-      await db
-      .collection('produtos')
-      .doc(id)
-      .get();
+const id =
+  data.replace(
+    "buy_",
+    ""
+  );
 
-      if (!doc.exists)
-        return;
+  const doc =
+  await db
+  .collection('produtos')
+  .doc(id)
+  .get();
 
-      const p =
-      doc.data();
+  if (!doc.exists)
+    return;
 
-      const payment =
-      await mpPayment.create({
+  const p =
+  doc.data();
 
-        body: {
+  const payment =
+  await mpPayment.create({
 
-          transaction_amount:
-          Number(p.preco),
+    body: {
 
-          description:
-          p.nome,
+      transaction_amount:
+      Number(p.preco),
 
-          payment_method_id:
-          "pix",
+      description:
+      p.nome,
 
-          notification_url:
-`${process.env.RENDER_EXTERNAL_URL}/webhook/mp`,
+      payment_method_id:
+      "pix",
 
-          payer: {
-            email:
-`cliente${Date.now()}@gmail.com`
-          }
-        }
-      });
+      notification_url:
 
-      const qr =
-      payment
-      .point_of_interaction
-      .transaction_data
-      .qr_code_base64;
+${process.env.RENDER_EXTERNAL_URL}/webhook/mp,
 
-      const copia =
-      payment
-      .point_of_interaction
-      .transaction_data
-      .qr_code;
+payer: {
+        email:
 
-      await db
-      .collection('pagamentos')
-      .doc(String(payment.id))
-      .set({
+cliente${Date.now()}@gmail.com } } });
 
-        chatId:
-        q.message.chat.id,
+const qr =
+  payment
+  .point_of_interaction
+  ?.transaction_data
+  ?.qr_code_base64;
 
-        produtoId:
-        doc.id,
+  const copia =
+  payment
+  .point_of_interaction
+  ?.transaction_data
+  ?.qr_code;
 
-        produto:
-        p.nome,
+  if (!qr || !copia) {
 
-        valor:
-        p.preco,
+    return bot.sendMessage(
+      q.message.chat.id,
+      "❌ Erro ao gerar PIX"
+    );
+  }
 
-        vendedor:
-        p.vendedor,
+  await db
+  .collection('pagamentos')
+  .doc(String(payment.id))
+  .set({
 
-        link:
-        p.link,
+    chatId:
+    q.message.chat.id,
 
-        aprovado:
-        false,
+    produtoId:
+    doc.id,
 
-        createdAt:
-        Date.now()
-      });
+    produto:
+    p.nome,
 
-      return bot.sendPhoto(
-        q.message.chat.id,
+    valor:
+    p.preco,
 
-        Buffer.from(
-          qr,
-          'base64'
-        ),
+    vendedor:
+    p.vendedor,
 
-{
-  caption:
+    link:
+    p.link,
+
+    aprovado:
+    false,
+
+    createdAt:
+    Date.now()
+  });
+
+  return bot.sendPhoto(
+    q.message.chat.id,
+
+    Buffer.from(
+      qr,
+      'base64'
+    ),
+
+{ caption:
 
 `💳 PAGAMENTO PIX
 
@@ -747,41 +646,26 @@ ${p.estoque || 0}
 
 ${copia}
 
-⏳ Aprovação automática.`
-}
-      );
-    }
+⏳ Aprovação automática.`,
 
-  } catch (err) {
+reply_markup: { inline_keyboard: [[ { text: "❌ Cancelar Compra", callback_data: "cancel_buy" } ]] } } ); }
 
-    console.log(err);
-  }
-});
+} catch (err) {
 
-// =========================================
-// SERVER
-// =========================================
+console.log(err);
 
-const PORT =
-process.env.PORT || 3000;
+} });
 
-app.listen(
-PORT,
-async () => {
+// ========================================= // SERVER // =========================================
 
-  console.log(
-`🚀 ONLINE ${PORT}`
-  );
+const PORT = process.env.PORT || 3000;
 
-  const webhook =
-`${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
+app.listen( PORT, async () => {
 
-  await bot.setWebHook(
-    webhook
-  );
+console.log( 🚀 ONLINE ${PORT} );
 
-  console.log(
-    "✅ WEBHOOK SETADO"
-  );
-}
-);
+const webhook = ${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH};
+
+await bot.setWebHook( webhook );
+
+console.log( "✅ WEBHOOK SETADO" ); } );
