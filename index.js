@@ -144,6 +144,58 @@ app.get('/', (req, res) => {
 });
 
 // =========================================
+// BUTTON FLUTUANTE
+// =========================================
+
+async function sendFloatingMenu(chatId) {
+
+  return bot.sendMessage(
+    chatId,
+
+`⚡ MENU RÁPIDO SELLFORGE`,
+
+{
+  reply_markup: {
+    inline_keyboard: [
+
+      [
+        {
+          text: "📦 Produtos",
+          callback_data: "menu_produtos"
+        },
+
+        {
+          text: "🛒 Compras",
+          callback_data: "menu_compras"
+        }
+      ],
+
+      [
+        {
+          text: "📡 Status",
+          callback_data: "menu_status"
+        },
+
+        {
+          text: "👑 Painel",
+          callback_data: "menu_admin_info"
+        }
+      ],
+
+      [
+        {
+          text: "📲 Suporte",
+          url:
+`https://t.me/${SUPPORT.replace("@","")}`
+        }
+      ]
+    ]
+  }
+}
+  );
+}
+
+// =========================================
 // ANTI FLOOD
 // =========================================
 
@@ -286,7 +338,7 @@ R$ ${info.valor}
 👤 Vendedor:
 ${info.vendedor}
 
-📲 Chave PIX:
+💳 Chave PIX:
 ${info.pix}
 
 ━━━━━━━━━━━━━━━━━━━
@@ -363,56 +415,11 @@ Sua plataforma automática de produtos digitais.
 👑 Desenvolvido por Faelzin
 
 📲 Suporte:
-${SUPPORT}
-
-👇 Escolha uma opção abaixo`
+${SUPPORT}`
 }
     );
 
-    await bot.sendMessage(
-      chatId,
-
-`⬛ MENU PRINCIPAL`,
-
-{
-  reply_markup: {
-    inline_keyboard: [
-
-      [
-        {
-          text: "📦 Produtos",
-          callback_data:
-          "menu_produtos"
-        }
-      ],
-
-      [
-        {
-          text: "🛒 Compras",
-          callback_data:
-          "menu_compras"
-        }
-      ],
-
-      [
-        {
-          text: "📡 Status Bot",
-          callback_data:
-          "menu_status"
-        }
-      ],
-
-      [
-        {
-          text: "📲 Suporte",
-          url:
-`https://t.me/${SUPPORT.replace("@","")}`
-        }
-      ]
-    ]
-  }
-}
-    );
+    await sendFloatingMenu(chatId);
 
   } catch (err) {
 
@@ -543,55 +550,28 @@ async (q) => {
     await bot.answerCallbackQuery(q.id);
 
     // =====================================
-    // PRODUTOS
+    // MENU ADMIN INFO
     // =====================================
 
     if (
-      data === "menu_produtos"
+      data === "menu_admin_info"
     ) {
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhum produto"
-        );
-      }
-
-      const buttons = [];
-
-      snap.forEach(doc => {
-
-        const p =
-        doc.data();
-
-        buttons.push([{
-
-          text:
-`${p.nome} | R$ ${p.preco}`,
-
-          callback_data:
-`view_${doc.id}`
-
-        }]);
-      });
 
       return bot.sendMessage(
         q.message.chat.id,
 
-`📦 PRODUTOS DISPONÍVEIS`,
+`👑 SELLFORGE ADMIN
 
-{
-  reply_markup: {
-    inline_keyboard:
-    buttons
-  }
-}
+🔐 Painel protegido
+⚡ Sistema automático
+💳 PIX Mercado Pago
+📦 Estoque inteligente
+📈 Dashboard vendas
+🛒 Histórico compras
+🚀 Firebase online
+
+📲 Use:
+/staff_dono`
       );
     }
 
@@ -666,6 +646,59 @@ ${Math.floor(Math.random()*40)+10}ms`
     }
 
     // =====================================
+    // PRODUTOS
+    // =====================================
+
+    if (
+      data === "menu_produtos"
+    ) {
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      if (snap.empty) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "❌ Nenhum produto"
+        );
+      }
+
+      const buttons = [];
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        buttons.push([{
+
+          text:
+`${p.nome} | R$ ${p.preco}`,
+
+          callback_data:
+`view_${doc.id}`
+
+        }]);
+      });
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`📦 PRODUTOS DISPONÍVEIS`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    // =====================================
     // VIEW PRODUTO
     // =====================================
 
@@ -710,6 +743,9 @@ R$ ${p.preco}
 
 📦 Estoque:
 ${p.estoque || 0}
+
+📈 Vendas:
+${p.vendas || 0}
 
 📝 ${p.desc}`,
 
@@ -779,12 +815,6 @@ ${p.estoque || 0}
 
           payment_method_id:
           "pix",
-
-          date_of_expiration:
-          new Date(
-            Date.now() +
-            5 * 60 * 1000
-          ),
 
           notification_url:
 `${process.env.RENDER_EXTERNAL_URL}/webhook/mp`,
@@ -858,12 +888,34 @@ ${p.estoque || 0}
 
 💰 R$ ${p.preco}
 
-⏳ Expira em 5 minutos
-
 📲 PIX COPIA E COLA:
 
-${copia}`
+${copia}
+
+⏳ Expira em 5 minutos`
 }
+      );
+    }
+
+    // =====================================
+    // ADMIN ADD
+    // =====================================
+
+    if (
+      data === "admin_add"
+    ) {
+
+      if (
+        userId !== MASTER
+      ) return;
+
+      userState[userId] = {
+        step: "imagem"
+      };
+
+      return bot.sendMessage(
+        q.message.chat.id,
+        "🖼 Envie imagem produto:"
       );
     }
 
@@ -1110,29 +1162,3 @@ async (msg) => {
 });
 
 // =========================================
-// SERVER
-// =========================================
-
-const PORT =
-process.env.PORT || 3000;
-
-app.listen(
-PORT,
-async () => {
-
-  console.log(
-`🚀 ONLINE ${PORT}`
-  );
-
-  const webhook =
-`${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
-
-  await bot.setWebHook(
-    webhook
-  );
-
-  console.log(
-    "✅ WEBHOOK SETADO"
-  );
-}
-);
