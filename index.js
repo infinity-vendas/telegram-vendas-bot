@@ -1,29 +1,7 @@
 require('dotenv').config();
 
-process.on(
-'unhandledRejection',
-(err) => {
-  console.log(
-    'UNHANDLED:',
-    err
-  );
-}
-);
-
-process.on(
-'uncaughtException',
-(err) => {
-  console.log(
-    'UNCAUGHT:',
-    err
-  );
-}
-);
-
 const express = require('express');
-
-const TelegramBot =
-require('node-telegram-bot-api');
+const TelegramBot = require('node-telegram-bot-api');
 
 const {
   MercadoPagoConfig,
@@ -39,35 +17,19 @@ const {
   getFirestore
 } = require('firebase-admin/firestore');
 
-// =========================================
+// ========================================
 // EXPRESS
-// =========================================
+// ========================================
 
 const app = express();
 
-app.use(express.json({
-  limit: '10mb',
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
+app.use(express.json());
 
-// =========================================
+// ========================================
 // CONFIG
-// =========================================
+// ========================================
 
-const MASTER =
-"6863505946";
-
-const ADMINS = [
-  "8510878195"
-];
-
-const WHATSAPP =
-"551981528372";
-
-const SUPPORT =
-"@suporte_inifnity_clientes_oficial";
+const MASTER = "6863505946";
 
 const BOT_USERNAME =
 "SellForge_bot";
@@ -75,56 +37,130 @@ const BOT_USERNAME =
 const LOGO =
 "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
-// =========================================
-// SISTEMAS
-// =========================================
+const SUPPORT =
+"@suporte_inifnity_clientes_oficial";
+
+// ========================================
+// PLANOS
+// ========================================
+
+const PLANOS = {
+
+  "1": {
+    nome: "1 Dia",
+    preco: 0.97,
+    dias: 1
+  },
+
+  "2": {
+    nome: "2 Dias",
+    preco: 2.15,
+    dias: 2
+  },
+
+  "3": {
+    nome: "3 Dias",
+    preco: 2.80,
+    dias: 3
+  },
+
+  "4": {
+    nome: "4 Dias",
+    preco: 4.60,
+    dias: 4
+  },
+
+  "5": {
+    nome: "5 Dias",
+    preco: 6.00,
+    dias: 5
+  },
+
+  "6": {
+    nome: "6 Dias",
+    preco: 8.00,
+    dias: 6
+  },
+
+  "7": {
+    nome: "7 Dias",
+    preco: 10.00,
+    dias: 7
+  },
+
+  "8": {
+    nome: "8 Dias",
+    preco: 14.00,
+    dias: 8
+  },
+
+  "9": {
+    nome: "9 Dias",
+    preco: 16.00,
+    dias: 9
+  },
+
+  "10": {
+    nome: "10 Dias",
+    preco: 18.00,
+    dias: 10
+  },
+
+  "20": {
+    nome: "20 Dias",
+    preco: 30.00,
+    dias: 20
+  },
+
+  "30": {
+    nome: "30 Dias",
+    preco: 60.00,
+    dias: 30
+  }
+};
+
+// ========================================
+// ESTADOS
+// ========================================
 
 const userState = {};
 
-const spamControl = {};
-
-const blockedUsers = {};
-
-const bannedAdmins = {};
-
-const adminLimits = {};
-
-const adminExpire = {
-
-  "8510878195":
-  Date.now() +
-  (
-    30 * 24 * 60 * 60 * 1000
-  )
-};
-
-// =========================================
+// ========================================
 // VALIDAÇÕES
-// =========================================
+// ========================================
 
 if (!process.env.BOT_TOKEN)
-  throw new Error(
-    "BOT_TOKEN ausente"
-  );
+  throw new Error("BOT_TOKEN ausente");
 
 if (!process.env.MP_ACCESS_TOKEN)
-  throw new Error(
-    "MP_ACCESS_TOKEN ausente"
-  );
-
-if (!process.env.RENDER_EXTERNAL_URL)
-  throw new Error(
-    "RENDER_EXTERNAL_URL ausente"
-  );
+  throw new Error("MP_ACCESS_TOKEN ausente");
 
 if (!process.env.FIREBASE_CONFIG)
-  throw new Error(
-    "FIREBASE_CONFIG ausente"
-  );
+  throw new Error("FIREBASE_CONFIG ausente");
 
-// =========================================
+if (!process.env.RENDER_EXTERNAL_URL)
+  throw new Error("RENDER_EXTERNAL_URL ausente");
+
+// ========================================
+// FIREBASE
+// ========================================
+
+const serviceAccount =
+JSON.parse(
+  process.env.FIREBASE_CONFIG
+);
+
+initializeApp({
+  credential:
+  cert(serviceAccount)
+});
+
+const db =
+getFirestore();
+
+// ========================================
 // MERCADO PAGO
-// =========================================
+// ========================================
 
 const mpClient =
 new MercadoPagoConfig({
@@ -136,31 +172,9 @@ new MercadoPagoConfig({
 const mpPayment =
 new Payment(mpClient);
 
-// =========================================
-// FIREBASE
-// =========================================
-
-const serviceAccount =
-JSON.parse(
-  process.env.FIREBASE_CONFIG
-);
-
-initializeApp({
-
-  credential:
-  cert(serviceAccount)
-});
-
-const db =
-getFirestore();
-
-console.log(
-"🔥 Firebase conectado"
-);
-
-// =========================================
+// ========================================
 // TELEGRAM
-// =========================================
+// ========================================
 
 const bot =
 new TelegramBot(
@@ -187,238 +201,716 @@ async (req, res) => {
 
   } catch (err) {
 
-    console.log(
-      "WEBHOOK BOT ERROR:",
-      err
-    );
+    console.log(err);
 
     res.sendStatus(500);
   }
 });
 
-// =========================================
+// ========================================
 // HOME
-// =========================================
+// ========================================
 
-app.get('/',
-(req, res) => {
+app.get('/', (req, res) => {
 
   res.send(
-    "🚀 BOT ONLINE"
+    "🚀 SELLFORGE ONLINE"
   );
 });
 
-// =========================================
-// LOG ADMIN
-// =========================================
+// ========================================
+// VERIFICAR PLANO
+// ========================================
 
-async function adminLog(texto) {
+async function sellerActive(userId) {
+
+  const doc =
+  await db
+  .collection('sellers')
+  .doc(userId)
+  .get();
+
+  if (!doc.exists)
+    return false;
+
+  const data =
+  doc.data();
+
+  if (
+    !data.expiraEm
+  ) return false;
+
+  return (
+    Date.now() <
+    data.expiraEm
+  );
+}
+
+// ========================================
+// START
+// ========================================
+
+bot.onText(
+/\/start(.*)/,
+async (msg, match) => {
 
   try {
 
+    const chatId =
+    msg.chat.id;
+
+    const args =
+    match[1];
+
+    // ====================================
+    // LOJA VENDEDOR
+    // ====================================
+
+    if (
+      args &&
+      args.includes("loja_")
+    ) {
+
+      const sellerId =
+      args
+      .replace(" loja_", "")
+      .trim();
+
+      const ativo =
+      await sellerActive(
+        sellerId
+      );
+
+      if (!ativo) {
+
+        return bot.sendMessage(
+          chatId,
+
+`⛔ Loja indisponível.
+
+Plano expirado.`
+        );
+      }
+
+      const sellerDoc =
+      await db
+      .collection('sellers')
+      .doc(sellerId)
+      .get();
+
+      if (!sellerDoc.exists) {
+
+        return bot.sendMessage(
+          chatId,
+          "❌ Loja não encontrada"
+        );
+      }
+
+      const seller =
+      sellerDoc.data();
+
+      const produtos =
+      await db
+      .collection('produtos')
+      .where(
+        "sellerId",
+        "==",
+        sellerId
+      )
+      .get();
+
+      if (
+        produtos.empty
+      ) {
+
+        return bot.sendMessage(
+          chatId,
+
+`📦 Loja sem produtos`
+        );
+      }
+
+      const buttons = [];
+
+      produtos.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        buttons.push([{
+
+          text:
+`${p.nome} - R$ ${p.preco}`,
+
+          callback_data:
+`buy_${doc.id}`
+        }]);
+      });
+
+      return bot.sendMessage(
+        chatId,
+
+`🏪 ${seller.loja}
+
+📦 Produtos disponíveis:`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    // ====================================
+    // MENU
+    // ====================================
+
+    await bot.sendPhoto(
+      chatId,
+      LOGO,
+{
+  caption:
+
+`🚀 SELLFORGE BOT
+
+💰 Alugue sua loja
+📦 Venda produtos
+⚡ PIX automático
+🏪 Sua própria loja
+
+📲 Suporte:
+${SUPPORT}`
+}
+    );
+
     await bot.sendMessage(
-      MASTER,
-      texto
-    );
+      chatId,
 
-    await db
-    .collection('admin_logs')
-    .add({
-
-      texto,
-
-      createdAt:
-      Date.now()
-    });
-
-  } catch (err) {
-
-    console.log(
-      "ADMIN LOG ERROR:",
-      err
-    );
-  }
-}
-
-// =========================================
-// SPAM
-// =========================================
-
-function isBlocked(userId) {
-
-  if (
-    !blockedUsers[userId]
-  ) return false;
-
-  return Date.now() <
-  blockedUsers[userId];
-}
-
-function addSpam(userId) {
-
-  if (
-    !spamControl[userId]
-  ) {
-
-    spamControl[userId] = {
-
-      count: 0
-    };
-  }
-
-  spamControl[userId]
-  .count++;
-
-  if (
-    spamControl[userId]
-    .count >= 5
-  ) {
-
-    blockedUsers[userId] =
-    Date.now() + 60000;
-
-    spamControl[userId]
-    .count = 0;
-
-    return true;
-  }
-
-  return false;
-}
-
-// =========================================
-// ADMIN
-// =========================================
-
-function isAdminBanned(
-  userId
-) {
-
-  if (
-    !bannedAdmins[userId]
-  ) return false;
-
-  return Date.now() <
-  bannedAdmins[userId];
-}
-
-function isAdminExpired(
-  userId
-) {
-
-  if (
-    !adminExpire[userId]
-  ) return false;
-
-  return Date.now() >
-  adminExpire[userId];
-}
-
-function adminCanAction(
-  userId,
-  action
-) {
-
-  if (
-    userId === MASTER
-  ) return true;
-
-  if (
-    !adminLimits[userId]
-  ) {
-
-    adminLimits[userId] = {
-
-      add: 0,
-
-      delete: 0,
-
-      date:
-      new Date()
-      .toDateString()
-    };
-  }
-
-  const today =
-  new Date()
-  .toDateString();
-
-  if (
-    adminLimits[userId]
-    .date !== today
-  ) {
-
-    adminLimits[userId] = {
-
-      add: 0,
-
-      delete: 0,
-
-      date: today
-    };
-  }
-
-  if (
-    action === "add" &&
-    adminLimits[userId]
-    .add >= 2
-  ) {
-
-    return false;
-  }
-
-  if (
-    action === "delete" &&
-    adminLimits[userId]
-    .delete >= 2
-  ) {
-
-    return false;
-  }
-
-  return true;
-}
-
-// =========================================
-// TECLADO FLUTUANTE
-// =========================================
-
-async function sendKeyboard(
-  chatId
-) {
-
-  return bot.sendMessage(
-    chatId,
-
-`⬛ MENU RÁPIDO`,
+`👇 Escolha uma opção`,
 
 {
   reply_markup: {
 
-    keyboard: [
+    inline_keyboard: [
 
       [
-        "📦 Produtos",
-        "🛒 Compras"
+        {
+          text:
+          "💰 ALUGAR BOT",
+
+          callback_data:
+          "alugar_bot"
+        }
       ],
 
       [
-        "📡 Status",
-        "📲 Suporte"
+        {
+          text:
+          "🏪 MINHA LOJA",
+
+          callback_data:
+          "minha_loja"
+        }
+      ],
+
+      [
+        {
+          text:
+          "➕ ADD PRODUTO",
+
+          callback_data:
+          "add_produto"
+        }
       ]
-    ],
-
-    resize_keyboard: true,
-
-    persistent: true
+    ]
   }
 }
-  );
-}
+    );
 
-// =========================================
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// ========================================
+// CALLBACK
+// ========================================
+
+bot.on(
+"callback_query",
+async (q) => {
+
+  try {
+
+    await bot.answerCallbackQuery(
+      q.id
+    );
+
+    const data =
+    q.data;
+
+    const userId =
+    String(q.from.id);
+
+    // ====================================
+    // ALUGAR BOT
+    // ====================================
+
+    if (
+      data === "alugar_bot"
+    ) {
+
+      const buttons = [];
+
+      Object.keys(PLANOS)
+      .forEach(key => {
+
+        const p =
+        PLANOS[key];
+
+        buttons.push([{
+
+          text:
+`${p.nome} - R$ ${p.preco}`,
+
+          callback_data:
+`plan_${key}`
+        }]);
+      });
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`💰 ESCOLHA UM PLANO`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    // ====================================
+    // GERAR PIX
+    // ====================================
+
+    if (
+      data.startsWith(
+        "plan_"
+      )
+    ) {
+
+      const idPlano =
+      data.replace(
+        "plan_",
+        ""
+      );
+
+      const plano =
+      PLANOS[idPlano];
+
+      const payment =
+      await mpPayment.create({
+
+        body: {
+
+          transaction_amount:
+          plano.preco,
+
+          description:
+`Plano ${plano.nome}`,
+
+          payment_method_id:
+          "pix",
+
+          notification_url:
+`${process.env.RENDER_EXTERNAL_URL}/webhook/mp`,
+
+          payer: {
+            email:
+`cliente${Date.now()}@gmail.com`
+          }
+        }
+      });
+
+      const qr =
+      payment
+      .point_of_interaction
+      .transaction_data
+      .qr_code_base64;
+
+      const copia =
+      payment
+      .point_of_interaction
+      .transaction_data
+      .qr_code;
+
+      await db
+      .collection('payments')
+      .doc(
+        String(payment.id)
+      )
+      .set({
+
+        tipo:
+        "plano",
+
+        sellerId:
+        userId,
+
+        plano:
+        idPlano,
+
+        aprovado:
+        false
+      });
+
+      return bot.sendPhoto(
+        q.message.chat.id,
+
+        Buffer.from(
+          qr,
+          'base64'
+        ),
+
+{
+  caption:
+
+`💳 PAGAMENTO PIX
+
+📦 ${plano.nome}
+
+💰 R$ ${plano.preco}
+
+PIX:
+
+${copia}`
+}
+      );
+    }
+
+    // ====================================
+    // MINHA LOJA
+    // ====================================
+
+    if (
+      data === "minha_loja"
+    ) {
+
+      const ativo =
+      await sellerActive(
+        userId
+      );
+
+      if (!ativo) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`⛔ Seu plano expirou.
+
+Renove para continuar.`
+        );
+      }
+
+      const doc =
+      await db
+      .collection('sellers')
+      .doc(userId)
+      .get();
+
+      const seller =
+      doc.data();
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`🏪 SUA LOJA
+
+👤 ${seller.loja}
+
+🔗 LINK:
+
+https://t.me/${BOT_USERNAME}?start=loja_${userId}`
+      );
+    }
+
+    // ====================================
+    // ADD PRODUTO
+    // ====================================
+
+    if (
+      data === "add_produto"
+    ) {
+
+      const ativo =
+      await sellerActive(
+        userId
+      );
+
+      if (!ativo) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`⛔ Compre um plano primeiro`
+        );
+      }
+
+      userState[userId] = {
+
+        step: "nome"
+      };
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`📦 Nome produto`
+      );
+    }
+
+    // ====================================
+    // COMPRAR PRODUTO
+    // ====================================
+
+    if (
+      data.startsWith(
+        "buy_"
+      )
+    ) {
+
+      const idProduto =
+      data.replace(
+        "buy_",
+        ""
+      );
+
+      const doc =
+      await db
+      .collection('produtos')
+      .doc(idProduto)
+      .get();
+
+      if (!doc.exists) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`❌ Produto removido`
+        );
+      }
+
+      const p =
+      doc.data();
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`💳 PAGAMENTO
+
+📦 ${p.nome}
+
+💰 R$ ${p.preco}
+
+🔑 PIX:
+
+${p.pix}`
+      );
+    }
+
+  } catch (err) {
+
+    console.log(
+      "CALLBACK ERROR:",
+      err
+    );
+  }
+});
+
+// ========================================
+// MENSAGENS
+// ========================================
+
+bot.on(
+"message",
+async (msg) => {
+
+  try {
+
+    if (!msg.text)
+      return;
+
+    const userId =
+    String(msg.from.id);
+
+    const text =
+    msg.text;
+
+    const state =
+    userState[userId];
+
+    if (
+      text.startsWith("/")
+    ) return;
+
+    if (!state)
+      return;
+
+    // ====================================
+    // NOME
+    // ====================================
+
+    if (
+      state.step === "nome"
+    ) {
+
+      state.nome =
+      text;
+
+      state.step =
+      "preco";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "💰 Valor"
+      );
+    }
+
+    // ====================================
+    // PREÇO
+    // ====================================
+
+    if (
+      state.step === "preco"
+    ) {
+
+      state.preco =
+      Number(
+        text.replace(",", ".")
+      );
+
+      state.step =
+      "desc";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "📝 Descrição"
+      );
+    }
+
+    // ====================================
+    // DESC
+    // ====================================
+
+    if (
+      state.step === "desc"
+    ) {
+
+      state.desc =
+      text;
+
+      state.step =
+      "pix";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "🔑 Chave PIX"
+      );
+    }
+
+    // ====================================
+    // PIX
+    // ====================================
+
+    if (
+      state.step === "pix"
+    ) {
+
+      state.pix =
+      text;
+
+      state.step =
+      "img";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "🖼 Link imagem"
+      );
+    }
+
+    // ====================================
+    // IMG
+    // ====================================
+
+    if (
+      state.step === "img"
+    ) {
+
+      const sellerDoc =
+      await db
+      .collection('sellers')
+      .doc(userId)
+      .get();
+
+      const seller =
+      sellerDoc.data();
+
+      await db
+      .collection('produtos')
+      .add({
+
+        sellerId:
+        userId,
+
+        loja:
+        seller.loja,
+
+        nome:
+        state.nome,
+
+        preco:
+        state.preco,
+
+        desc:
+        state.desc,
+
+        pix:
+        state.pix,
+
+        img:
+        text,
+
+        createdAt:
+        Date.now()
+      });
+
+      userState[userId] =
+      null;
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`✅ PRODUTO ADICIONADO`
+      );
+    }
+
+  } catch (err) {
+
+    console.log(
+      "MESSAGE ERROR:",
+      err
+    );
+  }
+});
+
+// ========================================
 // WEBHOOK MP
-// =========================================
+// ========================================
 
 app.post(
 '/webhook/mp',
@@ -430,8 +922,7 @@ async (req, res) => {
     req.body;
 
     if (
-      data.type !==
-      "payment"
+      data.type !== "payment"
     ) {
 
       return res.sendStatus(200);
@@ -452,22 +943,19 @@ async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const vendaRef =
-    db.collection(
-      'pagamentos'
-    )
+    const payDoc =
+    await db
+    .collection('payments')
     .doc(
       String(payment.id)
-    );
+    )
+    .get();
 
-    const venda =
-    await vendaRef.get();
-
-    if (!venda.exists)
+    if (!payDoc.exists)
       return res.sendStatus(200);
 
     const info =
-    venda.data();
+    payDoc.data();
 
     if (
       info.aprovado
@@ -476,103 +964,73 @@ async (req, res) => {
       return res.sendStatus(200);
     }
 
-    await vendaRef.update({
+    const plano =
+    PLANOS[
+      info.plano
+    ];
 
-      aprovado: true,
+    await db
+    .collection('payments')
+    .doc(
+      String(payment.id)
+    )
+    .update({
 
-      status:
-      "approved"
+      aprovado: true
     });
 
-    // =====================================
-    // ESTOQUE
-    // =====================================
+    const expiraEm =
+    Date.now() + (
 
-    const produtoRef =
-    db.collection('produtos')
-    .doc(info.produtoId);
+      plano.dias *
+      24 *
+      60 *
+      60 *
+      1000
+    );
 
-    const produtoDoc =
-    await produtoRef.get();
+    const sellerRef =
+    db
+    .collection('sellers')
+    .doc(
+      info.sellerId
+    );
 
-    if (
-      produtoDoc.exists
-    ) {
+    const sellerDoc =
+    await sellerRef.get();
 
-      const produto =
-      produtoDoc.data();
+    if (!sellerDoc.exists) {
 
-      let estoque =
-      produto.estoque || 0;
+      await sellerRef.set({
 
-      estoque--;
+        loja:
+`Loja_${info.sellerId}`,
 
-      if (
-        estoque <= 0
-      ) {
+        ativo: true,
 
-        await produtoRef.delete();
+        expiraEm
+      });
 
-        await adminLog(
+    } else {
 
-`📦 PRODUTO REMOVIDO
+      await sellerRef.update({
 
-Motivo:
-Estoque zerado
+        ativo: true,
 
-📦 ${produto.nome}`
-        );
-
-      } else {
-
-        await produtoRef.update({
-
-          estoque
-        });
-      }
-
-      await produtoRef.update({
-
-        vendas:
-        (
-          produto.vendas || 0
-        ) + 1
+        expiraEm
       });
     }
 
-    // =====================================
-    // ENTREGA
-    // =====================================
-
     await bot.sendMessage(
-      info.chatId,
+      info.sellerId,
 
-`✅ PAGAMENTO APROVADO
+`✅ PLANO ATIVADO
 
-━━━━━━━━━━━━━━━━━━━
+🚀 Agora você pode vender.
 
-📦 Produto:
-${info.produto}
+🏪 Sua loja:
 
-💰 Valor:
-R$ ${info.valor}
-
-🔓 LINK LIBERADO:
-
-${info.link}
-
-━━━━━━━━━━━━━━━━━━━
-
-🚀 Obrigado pela compra!`
-    );
-
-    await adminLog(
-
-`💰 PAGAMENTO APROVADO
-
-📦 ${info.produto}
-
-💵 ${info.valor}`
+https://t.me/${BOT_USERNAME}?start=loja_${info.sellerId}`
     );
 
     res.sendStatus(200);
@@ -580,7 +1038,7 @@ ${info.link}
   } catch (err) {
 
     console.log(
-      "WEBHOOK MP ERROR:",
+      "WEBHOOK ERROR:",
       err
     );
 
@@ -588,274 +1046,9 @@ ${info.link}
   }
 });
 
-// =========================================
-// START
-// =========================================
-
-bot.onText(
-/\/start/,
-async (msg) => {
-
-  try {
-
-    const chatId =
-    msg.chat.id;
-
-    const userId =
-    String(msg.from.id);
-
-    // =====================================
-    // FOTO
-    // =====================================
-
-    await bot.sendPhoto(
-      chatId,
-      LOGO,
-{
-  caption:
-
-`🚀 SELLFORGE MARKETPLACE
-
-⚡ Plataforma automática premium
-💳 PIX automático
-📦 Entrega instantânea
-🛡️ Segurança total
-
-👑 Desenvolvido por Faelzin`
-}
-    );
-
-    // =====================================
-    // TEXTO GRANDE
-    // =====================================
-
-    await bot.sendMessage(
-      chatId,
-
-`🚀 BEM-VINDO AO SELLFORGE MARKETPLACE ⚡
-
-━━━━━━━━━━━━━━━━━━━
-👑 PLATAFORMA PREMIUM
-━━━━━━━━━━━━━━━━━━━
-
-Olá 👋 Seja muito bem-vindo(a) ao SellForge ⚡
-
-Aqui você encontra uma experiência profissional, automática e totalmente segura para compras digitais diretamente pelo Telegram.
-
-━━━━━━━━━━━━━━━━━━━
-⚡ RECURSOS DISPONÍVEIS
-━━━━━━━━━━━━━━━━━━━
-
-✅ Produtos digitais premium
-✅ Aprovação automática
-✅ Entrega instantânea
-✅ PIX automático Mercado Pago
-✅ Sistema inteligente de estoque
-✅ Painel ADMIN secreto
-✅ Segurança anti-flood
-✅ Dashboard profissional
-✅ Histórico de compras
-✅ Sistema automático de vendas
-✅ Atendimento rápido
-✅ Plataforma 24 horas online
-
-━━━━━━━━━━━━━━━━━━━
-🛡️ SEGURANÇA & GARANTIA
-━━━━━━━━━━━━━━━━━━━
-
-⚠️ Não compre fora do bot oficial.
-
-🔒 Sistema protegido
-🔒 Pagamentos verificados
-🔒 Entrega automática instantânea
-
-━━━━━━━━━━━━━━━━━━━
-📈 STATUS SISTEMA
-━━━━━━━━━━━━━━━━━━━
-
-🟢 BOT ONLINE
-🟢 FIREBASE ONLINE
-🟢 MERCADO PAGO ONLINE
-🟢 WEBHOOK ONLINE
-🟢 ESTOQUE ATIVO
-
-━━━━━━━━━━━━━━━━━━━
-📲 SUPORTE
-━━━━━━━━━━━━━━━━━━━
-
-${SUPPORT}
-
-👇 Escolha uma opção abaixo.`,
-
-{
-  reply_markup: {
-    inline_keyboard: [
-
-      [
-        {
-          text:
-          "📦 PRODUTOS",
-
-          callback_data:
-          "menu_produtos"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📡 STATUS",
-
-          callback_data:
-          "menu_status"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📲 SUPORTE",
-
-          url:
-`https://wa.me/${WHATSAPP}`
-        }
-      ]
-    ]
-  }
-}
-    );
-
-    // =====================================
-    // TECLADO
-    // =====================================
-
-    await sendKeyboard(
-      chatId
-    );
-
-    // =====================================
-    // ADMIN
-    // =====================================
-
-    if (
-      userId === MASTER ||
-      ADMINS.includes(userId)
-    ) {
-
-      await bot.sendMessage(
-        chatId,
-
-`👑 PAINEL ADMIN
-
-Use:
-/staff_dono`
-      );
-    }
-
-  } catch (err) {
-
-    console.log(
-      "START ERROR:",
-      err
-    );
-  }
-});
-
-// =========================================
-// STAFF
-// =========================================
-
-bot.onText(
-/\/staff_dono/,
-async (msg) => {
-
-  try {
-
-    const userId =
-    String(msg.from.id);
-
-    if (
-      userId !== MASTER &&
-      !ADMINS.includes(userId)
-    ) return;
-
-    if (
-      isAdminBanned(userId)
-    ) {
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`⛔ Identificamos tentativas não autorizadas dentro painel ADMIN.`
-      );
-    }
-
-    if (
-      isAdminExpired(userId)
-    ) {
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`⛔ Cargo ADMIN expirado`
-      );
-    }
-
-    await bot.sendMessage(
-      msg.chat.id,
-
-`👑 PAINEL ADMIN`,
-
-{
-  reply_markup: {
-    inline_keyboard: [
-
-      [
-        {
-          text:
-          "➕ ADD PRODUTO",
-
-          callback_data:
-          "admin_add"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📦 LISTAR",
-
-          callback_data:
-          "admin_listar"
-        }
-      ],
-
-      [
-        {
-          text:
-          "🔥 LIMPAR",
-
-          callback_data:
-          "admin_limpar"
-        }
-      ]
-    ]
-  }
-}
-    );
-
-  } catch (err) {
-
-    console.log(
-      "STAFF ERROR:",
-      err
-    );
-  }
-});
-
-// =========================================
+// ========================================
 // SERVER
-// =========================================
+// ========================================
 
 const PORT =
 process.env.PORT || 3000;
@@ -868,29 +1061,15 @@ async () => {
 `🚀 ONLINE ${PORT}`
   );
 
-  try {
-
-    const webhook =
+  const webhook =
 `${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
 
-    await bot.setWebHook(
-      webhook
-    );
+  await bot.setWebHook(
+    webhook
+  );
 
-    console.log(
-      "✅ WEBHOOK SETADO"
-    );
-
-    console.log(
-      webhook
-    );
-
-  } catch (err) {
-
-    console.log(
-      "WEBHOOK ERROR:",
-      err
-    );
-  }
+  console.log(
+    "✅ WEBHOOK SETADO"
+  );
 }
 );
