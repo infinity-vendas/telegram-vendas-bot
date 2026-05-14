@@ -14,8 +14,7 @@ const {
 } = require('firebase-admin/app');
 
 const {
-  getFirestore,
-  FieldValue
+  getFirestore
 } = require('firebase-admin/firestore');
 
 // =========================================
@@ -36,6 +35,10 @@ app.use(express.json({
 
 const MASTER = "6863505946";
 
+const ADMINS = [
+  "8510878195"
+];
+
 const WHATSAPP =
 "551981528372";
 
@@ -45,13 +48,30 @@ const SUPPORT =
 const LOGO =
 "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
-const SECRET_ADMIN =
-"/staff_dono";
+const BOT_USERNAME =
+"SellForge_bot";
+
+// =========================================
+// SISTEMAS
+// =========================================
 
 const userState = {};
 
 const spamControl = {};
+
 const blockedUsers = {};
+
+const bannedAdmins = {};
+
+const adminLimits = {};
+
+const adminExpire = {
+
+  "8510878195":
+  Date.now() + (
+    30 * 24 * 60 * 60 * 1000
+  )
+};
 
 // =========================================
 // VALIDAÇÕES
@@ -150,7 +170,38 @@ app.get('/', (req, res) => {
 });
 
 // =========================================
-// SISTEMA SPAM
+// LOG ADMIN
+// =========================================
+
+async function adminLog(texto) {
+
+  try {
+
+    await bot.sendMessage(
+      MASTER,
+      texto
+    );
+
+    await db
+    .collection('admin_logs')
+    .add({
+
+      texto,
+      createdAt:
+      Date.now()
+    });
+
+  } catch (err) {
+
+    console.log(
+      "LOG ERROR:",
+      err
+    );
+  }
+}
+
+// =========================================
+// SPAM
 // =========================================
 
 function isBlocked(userId) {
@@ -173,14 +224,6 @@ function addSpam(userId) {
 
   spamControl[userId].count++;
 
-  setTimeout(() => {
-
-    if (spamControl[userId]) {
-      spamControl[userId].count--;
-    }
-
-  }, 5000);
-
   if (
     spamControl[userId].count >= 5
   ) {
@@ -194,6 +237,125 @@ function addSpam(userId) {
   }
 
   return false;
+}
+
+// =========================================
+// ADMIN
+// =========================================
+
+function isAdminBanned(userId) {
+
+  if (!bannedAdmins[userId])
+    return false;
+
+  return Date.now() <
+  bannedAdmins[userId];
+}
+
+function isAdminExpired(userId) {
+
+  if (
+    !adminExpire[userId]
+  ) return false;
+
+  return Date.now() >
+  adminExpire[userId];
+}
+
+function adminCanAction(
+  userId,
+  action
+) {
+
+  if (
+    userId === MASTER
+  ) return true;
+
+  if (
+    !adminLimits[userId]
+  ) {
+
+    adminLimits[userId] = {
+
+      add: 0,
+      delete: 0,
+      date:
+      new Date()
+      .toDateString()
+    };
+  }
+
+  const today =
+  new Date()
+  .toDateString();
+
+  if (
+    adminLimits[userId]
+    .date !== today
+  ) {
+
+    adminLimits[userId] = {
+
+      add: 0,
+      delete: 0,
+      date: today
+    };
+  }
+
+  if (
+    action === "add" &&
+    adminLimits[userId]
+    .add >= 2
+  ) {
+
+    return false;
+  }
+
+  if (
+    action === "delete" &&
+    adminLimits[userId]
+    .delete >= 2
+  ) {
+
+    return false;
+  }
+
+  return true;
+}
+
+// =========================================
+// TECLADO FLUTUANTE
+// =========================================
+
+async function sendKeyboard(chatId) {
+
+  return bot.sendMessage(
+    chatId,
+
+`⬛ MENU RÁPIDO`,
+
+{
+  reply_markup: {
+
+    keyboard: [
+
+      [
+        "📦 Produtos",
+        "🛒 Compras"
+      ],
+
+      [
+        "📡 Status",
+        "📲 Suporte"
+      ]
+    ],
+
+    resize_keyboard: true,
+
+    persistent: true
+  }
+}
+  );
 }
 
 // =========================================
@@ -212,24 +374,31 @@ async (req, res) => {
     if (
       data.type !== "payment"
     ) {
+
       return res.sendStatus(200);
     }
 
     const payment =
     await mpPayment.get({
-      id: data.data.id
+      id:
+      data.data.id
     });
 
     if (
       payment.status !==
       "approved"
     ) {
+
       return res.sendStatus(200);
     }
 
     const vendaRef =
-    db.collection('pagamentos')
-    .doc(String(payment.id));
+    db.collection(
+      'pagamentos'
+    )
+    .doc(
+      String(payment.id)
+    );
 
     const venda =
     await vendaRef.get();
@@ -267,48 +436,41 @@ async (req, res) => {
       const produto =
       produtoDoc.data();
 
-      const novoEstoque =
-      (produto.estoque || 0) - 1;
+      let estoque =
+      produto.estoque || 0;
+
+      estoque--;
 
       if (
-        novoEstoque <= 0
+        estoque <= 0
       ) {
 
         await produtoRef.delete();
+
+        await adminLog(
+
+`📦 PRODUTO REMOVIDO
+
+Motivo:
+Estoque zerado
+
+📦 ${produto.nome}`
+        );
 
       } else {
 
         await produtoRef.update({
 
-          estoque:
-          novoEstoque,
-
-          vendas:
-          FieldValue.increment(1)
+          estoque
         });
       }
+
+      await produtoRef.update({
+
+        vendas:
+        (produto.vendas || 0) + 1
+      });
     }
-
-    // =====================================
-    // HISTÓRICO
-    // =====================================
-
-    await db
-    .collection('historico')
-    .add({
-
-      user:
-      info.chatId,
-
-      produto:
-      info.produto,
-
-      valor:
-      info.valor,
-
-      createdAt:
-      Date.now()
-    });
 
     // =====================================
     // ENTREGA
@@ -319,34 +481,26 @@ async (req, res) => {
 
 `✅ PAGAMENTO APROVADO
 
-━━━━━━━━━━━━━━━━━━━
-
 📦 Produto:
 ${info.produto}
 
 💰 Valor:
 R$ ${info.valor}
 
-━━━━━━━━━━━━━━━━━━━
-
 🔓 LINK:
+
 ${info.link}
 
-📲 WhatsApp:
-${info.whatsapp}
-
-━━━━━━━━━━━━━━━━━━━
-
-🚀 Obrigado pela compra!`
+🚀 Obrigado pela compra`
     );
 
-    await bot.sendMessage(
-      MASTER,
+    await adminLog(
 
-`💸 NOVA VENDA
+`💰 PAGAMENTO APROVADO
 
 📦 ${info.produto}
-💰 R$ ${info.valor}`
+
+💵 ${info.valor}`
     );
 
     res.sendStatus(200);
@@ -354,7 +508,7 @@ ${info.whatsapp}
   } catch (err) {
 
     console.log(
-      "❌ WEBHOOK ERROR:",
+      "WEBHOOK ERROR:",
       err
     );
 
@@ -375,119 +529,34 @@ async (msg) => {
     const chatId =
     msg.chat.id;
 
-    const userId =
-    String(msg.from.id);
-
-    if (
-      isBlocked(userId)
-    ) {
-
-      return bot.sendMessage(
-        chatId,
-
-`⛔ Seus comandos estão bloqueados temporariamente.
-
-⏳ Aguarde 1 minuto.`
-      );
-    }
-
     await bot.sendPhoto(
       chatId,
       LOGO,
 {
   caption:
 
-`🚀 BEM-VINDO AO SELLFORGE ⚡
+`🚀 SELLFORGE MARKETPLACE
 
 ✅ PIX automático
-✅ Aprovação automática
 ✅ Entrega instantânea
-✅ Produtos VIP
-✅ Sistema inteligente
-✅ Segurança anti-spam
-
-👑 Desenvolvido por Faelzin
+✅ Estoque automático
+✅ Segurança premium
 
 📲 Suporte:
 ${SUPPORT}`
 }
     );
 
-    await bot.sendMessage(
-      chatId,
-
-`🚀 SELLFORGE MARKETPLACE
-
-━━━━━━━━━━━━━━━━━━━
-
-⚡ Plataforma automática Telegram.
-
-✅ Produtos digitais
-✅ PIX automático
-✅ Entrega instantânea
-✅ Estoque automático
-✅ Painel ADMIN secreto
-✅ Sistema anti-flood
-
-━━━━━━━━━━━━━━━━━━━
-
-👇 Escolha abaixo:`,
-
-{
-  reply_markup: {
-    inline_keyboard: [
-
-      [
-        {
-          text:
-          "📦 PRODUTOS",
-
-          callback_data:
-          "menu_produtos"
-        },
-
-        {
-          text:
-          "🛒 COMPRAS",
-
-          callback_data:
-          "menu_compras"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📡 STATUS",
-
-          callback_data:
-          "menu_status"
-        },
-
-        {
-          text:
-          "📲 SUPORTE",
-
-          url:
-`https://wa.me/${WHATSAPP}`
-        }
-      ]
-    ]
-  }
-}
-    );
+    await sendKeyboard(chatId);
 
   } catch (err) {
 
-    console.log(
-      "❌ START ERROR:",
-      err
-    );
+    console.log(err);
   }
 });
 
 // =========================================
-// ADMIN
+// STAFF
 // =========================================
 
 bot.onText(
@@ -498,45 +567,33 @@ async (msg) => {
   String(msg.from.id);
 
   if (
-    userId !== MASTER
+    userId !== MASTER &&
+    !ADMINS.includes(userId)
   ) {
 
-    if (
-      !spamControl[userId]
-    ) {
-
-      spamControl[userId] = {
-        adminTry: 1
-      };
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`❌ 1/2 não têm autorização!
-
-⚠️ Mais uma tentativa
-e seus acessos serão bloqueados.`
-      );
-    }
-
-    spamControl[userId].adminTry =
-    (spamControl[userId].adminTry || 1) + 1;
-
-    if (
-      spamControl[userId].adminTry >= 2
-    ) {
-
-      blockedUsers[userId] =
-      Date.now() + 60000;
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`⛔ Seus comandos foram bloqueados por 1 minuto.`
-      );
-    }
-
     return;
+  }
+
+  if (
+    isAdminBanned(userId)
+  ) {
+
+    return bot.sendMessage(
+      msg.chat.id,
+
+`⛔ Identificamos tentativas não autorizadas dentro painel ADMIN.`
+    );
+  }
+
+  if (
+    isAdminExpired(userId)
+  ) {
+
+    return bot.sendMessage(
+      msg.chat.id,
+
+`⛔ Cargo ADMIN expirado`
+    );
   }
 
   await bot.sendMessage(
@@ -565,14 +622,6 @@ e seus acessos serão bloqueados.`
 
           callback_data:
           "admin_listar"
-        },
-
-        {
-          text:
-          "📈 DASHBOARD",
-
-          callback_data:
-          "admin_dash"
         }
       ],
 
@@ -601,80 +650,32 @@ async (q) => {
 
   try {
 
+    if (!q.message)
+      return;
+
     const data =
     q.data;
 
     const userId =
     String(q.from.id);
 
-    if (
-      isBlocked(userId)
-    ) {
-
-      return bot.answerCallbackQuery(
-        q.id,
-{
-  text:
-  "⛔ Bloqueado temporariamente"
-}
-      );
-    }
-
-    if (
-      addSpam(userId)
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`⚠️ Evite spam.
-
-Caso continue mandando em massa,
-seus comandos serão bloqueados temporariamente.`
-      );
-    }
-
     await bot.answerCallbackQuery(
       q.id
     );
 
-    // =====================================
-    // STATUS
-    // =====================================
-
     if (
-      data === "menu_status"
+      isAdminBanned(userId)
     ) {
 
       return bot.sendMessage(
         q.message.chat.id,
 
-`📡 STATUS BOT
-
-🟢 BOT ONLINE
-🟢 FIREBASE ONLINE
-🟢 MERCADO PAGO ONLINE
-🟢 WEBHOOK ONLINE`
+`⛔ Identificamos tentativas não autorizadas dentro painel ADMIN.`
       );
     }
 
     // =====================================
-    // COMPRAS
-    // =====================================
-
-    if (
-      data === "menu_compras"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`🛒 Histórico disponível em breve.`
-      );
-    }
-
-    // =====================================
-    // PRODUTOS
+    // MENU PRODUTOS
     // =====================================
 
     if (
@@ -690,7 +691,7 @@ seus comandos serão bloqueados temporariamente.`
 
         return bot.sendMessage(
           q.message.chat.id,
-          "❌ Nenhum produto disponível"
+          "❌ Sem produtos"
         );
       }
 
@@ -701,21 +702,20 @@ seus comandos serão bloqueados temporariamente.`
         const p =
         doc.data();
 
-        buttons.push([
-          {
-            text:
-`${p.nome} | R$ ${p.preco} | Estoque: ${p.estoque}`,
+        buttons.push([{
 
-            callback_data:
+          text:
+`${p.nome} - R$ ${p.preco}`,
+
+          callback_data:
 `view_${doc.id}`
-          }
-        ]);
+        }]);
       });
 
       return bot.sendMessage(
         q.message.chat.id,
 
-`📦 LISTA DE PRODUTOS`,
+`📦 PRODUTOS`,
 
 {
   reply_markup: {
@@ -727,7 +727,7 @@ seus comandos serão bloqueados temporariamente.`
     }
 
     // =====================================
-    // VIEW PRODUTO
+    // VIEW
     // =====================================
 
     if (
@@ -768,61 +768,28 @@ seus comandos serão bloqueados temporariamente.`
 
 `📦 ${p.nome}
 
-💰 Valor:
-R$ ${p.preco}
+💰 R$ ${p.preco}
 
 📦 Estoque:
-${p.estoque || 0}
-
-📝 ${p.desc}
-
-⚠️ Compre somente
-com administrador oficial.`,
+${p.estoque}`,
 
   reply_markup: {
-    inline_keyboard: [
+    inline_keyboard: [[{
 
-      [
-        {
-          text:
-          "🛒 COMPRAR",
+      text:
+      "🛒 COMPRAR",
 
-          callback_data:
-          `buy_${doc.id}`
-        }
-      ],
+      callback_data:
+      `buy_${doc.id}`
 
-      [
-        {
-          text:
-          "❌ CANCELAR",
-
-          callback_data:
-          "cancel_buy"
-        }
-      ]
-    ]
+    }]]
   }
 }
       );
     }
 
     // =====================================
-    // CANCELAR
-    // =====================================
-
-    if (
-      data === "cancel_buy"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-        "❌ Compra cancelada."
-      );
-    }
-
-    // =====================================
-    // COMPRAR
+    // BUY
     // =====================================
 
     if (
@@ -847,7 +814,7 @@ com administrador oficial.`,
 
         return bot.sendMessage(
           q.message.chat.id,
-          "❌ Produto não encontrado"
+          "❌ Produto removido"
         );
       }
 
@@ -855,17 +822,12 @@ com administrador oficial.`,
       doc.data();
 
       if (
-        (p.estoque || 0) <= 0
+        p.estoque <= 0
       ) {
-
-        await db
-        .collection('produtos')
-        .doc(idProduto)
-        .delete();
 
         return bot.sendMessage(
           q.message.chat.id,
-          "❌ Produto sem estoque."
+          "❌ Produto sem estoque"
         );
       }
 
@@ -915,11 +877,11 @@ com administrador oficial.`,
         chatId:
         q.message.chat.id,
 
-        produtoId:
-        idProduto,
-
         produto:
         p.nome,
+
+        produtoId:
+        idProduto,
 
         valor:
         p.preco,
@@ -954,11 +916,9 @@ com administrador oficial.`,
 
 💰 R$ ${p.preco}
 
-📲 PIX COPIA E COLA:
+PIX:
 
-${copia}
-
-⏳ Aguardando pagamento automático.`
+${copia}`
 }
       );
     }
@@ -972,16 +932,42 @@ ${copia}
     ) {
 
       if (
-        userId !== MASTER
+        userId !== MASTER &&
+        !ADMINS.includes(userId)
       ) return;
+
+      if (
+        !adminCanAction(
+          userId,
+          "add"
+        )
+      ) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`⚠️ Limite diário atingido`
+        );
+      }
+
+      adminLimits[userId]
+      .add++;
 
       userState[userId] = {
         step: "imagem"
       };
 
+      await adminLog(
+
+`➕ ADMIN INICIOU ADD
+
+👤 ${userId}`
+      );
+
       return bot.sendMessage(
         q.message.chat.id,
-        "🖼 Envie link da imagem:"
+
+`📸 Envie imagem`
       );
     }
 
@@ -994,7 +980,8 @@ ${copia}
     ) {
 
       if (
-        userId !== MASTER
+        userId !== MASTER &&
+        !ADMINS.includes(userId)
       ) return;
 
       const snap =
@@ -1015,8 +1002,8 @@ ${copia}
 `🆔 ${doc.id}
 
 📦 ${p.nome}
-💰 R$ ${p.preco}
-📦 Estoque: ${p.estoque}
+💰 ${p.preco}
+📦 ${p.estoque}
 
 `;
       });
@@ -1028,42 +1015,7 @@ ${copia}
     }
 
     // =====================================
-    // DASHBOARD
-    // =====================================
-
-    if (
-      data === "admin_dash"
-    ) {
-
-      if (
-        userId !== MASTER
-      ) return;
-
-      const produtos =
-      await db
-      .collection('produtos')
-      .get();
-
-      const historico =
-      await db
-      .collection('historico')
-      .get();
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`📈 DASHBOARD
-
-📦 Produtos:
-${produtos.size}
-
-💸 Vendas:
-${historico.size}`
-      );
-    }
-
-    // =====================================
-    // LIMPAR
+    // ADMIN LIMPAR
     // =====================================
 
     if (
@@ -1071,42 +1023,76 @@ ${historico.size}`
     ) {
 
       if (
-        userId !== MASTER
-      ) return;
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      for (
-        const doc
-        of snap.docs
+        userId === MASTER
       ) {
 
+        const snap =
         await db
         .collection('produtos')
-        .doc(doc.id)
-        .delete();
+        .get();
+
+        for (
+          const doc
+          of snap.docs
+        ) {
+
+          await db
+          .collection('produtos')
+          .doc(doc.id)
+          .delete();
+        }
+
+        await adminLog(
+
+`🔥 MASTER LIMPOU PRODUTOS`
+        );
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "🗑 Produtos removidos"
+        );
       }
 
-      return bot.sendMessage(
-        q.message.chat.id,
-        "🗑 Todos produtos deletados"
-      );
+      if (
+        ADMINS.includes(userId)
+      ) {
+
+        bannedAdmins[userId] =
+        Date.now() + (
+          60 * 60 * 1000
+        );
+
+        await adminLog(
+
+`🚨 ADMIN BANIDO
+
+👤 ${userId}
+
+Motivo:
+Tentou limpar produtos`
+        );
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`⛔ Identificamos tentativas não autorizadas dentro painel ADMIN.
+
+🚫 ADMIN bloqueado por 1 hora.`
+        );
+      }
     }
 
   } catch (err) {
 
     console.log(
-      "❌ CALLBACK ERROR:",
+      "CALLBACK ERROR:",
       err
     );
   }
 });
 
 // =========================================
-// ADD PRODUTO
+// MENSAGENS
 // =========================================
 
 bot.on(
@@ -1118,14 +1104,95 @@ async (msg) => {
     if (!msg.text)
       return;
 
-    const id =
-    String(msg.from.id);
-
     const text =
     msg.text;
 
+    const id =
+    String(msg.from.id);
+
     const state =
     userState[id];
+
+    // =====================================
+    // TECLADO
+    // =====================================
+
+    if (
+      text === "📦 Produtos"
+    ) {
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      const buttons = [];
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        buttons.push([{
+
+          text:
+`${p.nome} - R$ ${p.preco}`,
+
+          callback_data:
+`view_${doc.id}`
+        }]);
+      });
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📦 PRODUTOS`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    if (
+      text === "📡 Status"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`🟢 ONLINE`
+      );
+    }
+
+    if (
+      text === "📲 Suporte"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`https://wa.me/${WHATSAPP}`
+      );
+    }
+
+    if (
+      text === "🛒 Compras"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`🛒 Em breve`
+      );
+    }
+
+    // =====================================
+    // ADD PRODUTO
+    // =====================================
 
     if (
       text.startsWith("/")
@@ -1133,10 +1200,6 @@ async (msg) => {
 
     if (!state)
       return;
-
-    // =====================================
-    // IMAGEM
-    // =====================================
 
     if (
       state.step ===
@@ -1151,13 +1214,9 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "📦 Nome produto:"
+        "📦 Nome produto"
       );
     }
-
-    // =====================================
-    // PRODUTO
-    // =====================================
 
     if (
       state.step ===
@@ -1172,13 +1231,9 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "💰 Valor:"
+        "💰 Valor"
       );
     }
-
-    // =====================================
-    // VALOR
-    // =====================================
 
     if (
       state.step ===
@@ -1191,38 +1246,13 @@ async (msg) => {
       );
 
       state.step =
-      "estoque";
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "📦 Estoque:"
-      );
-    }
-
-    // =====================================
-    // ESTOQUE
-    // =====================================
-
-    if (
-      state.step ===
-      "estoque"
-    ) {
-
-      state.estoque =
-      Number(text);
-
-      state.step =
       "descricao";
 
       return bot.sendMessage(
         msg.chat.id,
-        "📝 Descrição:"
+        "📝 Descrição"
       );
     }
-
-    // =====================================
-    // DESCRIÇÃO
-    // =====================================
 
     if (
       state.step ===
@@ -1237,13 +1267,9 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "📲 WhatsApp:"
+        "📲 WhatsApp"
       );
     }
-
-    // =====================================
-    // WHATSAPP
-    // =====================================
 
     if (
       state.step ===
@@ -1254,17 +1280,43 @@ async (msg) => {
       text;
 
       state.step =
+      "estoque";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "📦 Estoque"
+      );
+    }
+
+    if (
+      state.step ===
+      "estoque"
+    ) {
+
+      const estoque =
+      Number(text);
+
+      if (
+        estoque < 0
+      ) {
+
+        return bot.sendMessage(
+          msg.chat.id,
+          "❌ Estoque inválido"
+        );
+      }
+
+      state.estoque =
+      estoque;
+
+      state.step =
       "link";
 
       return bot.sendMessage(
         msg.chat.id,
-        "🔗 Link produto:"
+        "🔗 Link produto"
       );
     }
-
-    // =====================================
-    // LINK FINAL
-    // =====================================
 
     if (
       state.step ===
@@ -1281,9 +1333,6 @@ async (msg) => {
         preco:
         state.preco,
 
-        estoque:
-        state.estoque,
-
         desc:
         state.desc,
 
@@ -1293,14 +1342,26 @@ async (msg) => {
         whatsapp:
         state.whatsapp,
 
-        link:
-        text,
+        estoque:
+        state.estoque,
 
         vendas: 0,
+
+        link:
+        text,
 
         createdAt:
         Date.now()
       });
+
+      await adminLog(
+
+`➕ PRODUTO CRIADO
+
+📦 ${state.nome}
+
+👤 ${id}`
+      );
 
       userState[id] =
       null;
@@ -1308,51 +1369,78 @@ async (msg) => {
       return bot.sendMessage(
         msg.chat.id,
 
-`✅ PRODUTO ADICIONADO
-
-📦 ${state.nome}
-💰 R$ ${state.preco}
-📦 Estoque: ${state.estoque}`
+`✅ PRODUTO ADICIONADO`
       );
     }
 
   } catch (err) {
 
     console.log(
-      "❌ MESSAGE ERROR:",
+      "MESSAGE ERROR:",
       err
     );
   }
 });
 
 // =========================================
-// SERVER
+// BANIR ADMIN
 // =========================================
 
-const PORT =
-process.env.PORT || 3000;
+bot.onText(
+/\/banir_admin (.+)/,
+async (msg, match) => {
 
-app.listen(
-PORT,
-async () => {
+  const userId =
+  String(msg.from.id);
 
-  console.log(
-`🚀 ONLINE ${PORT}`
+  if (
+    userId !== MASTER
+  ) return;
+
+  const alvo =
+  match[1];
+
+  bannedAdmins[alvo] =
+  Date.now() + (
+    60 * 60 * 1000
   );
 
-  const webhook =
-`${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
+  bot.sendMessage(
+    msg.chat.id,
 
-  await bot.setWebHook(
-    webhook
-  );
-
-  console.log(
-    "✅ WEBHOOK SETADO"
-  );
-
-  console.log(
-    webhook
+`⛔ ADMIN BANIDO`
   );
 }
 );
+
+// =========================================
+// DESBANIR ADMIN
+// =========================================
+
+bot.onText(
+/\/desbanir_admin (.+)/,
+async (msg, match) => {
+
+  const userId =
+  String(msg.from.id);
+
+  if (
+    userId !== MASTER
+  ) return;
+
+  const alvo =
+  match[1];
+
+  delete bannedAdmins[alvo];
+
+  bot.sendMessage(
+    msg.chat.id,
+
+`✅ ADMIN DESBANIDO`
+  );
+}
+);
+
+// =========================================
+// SERVER
+// =========
