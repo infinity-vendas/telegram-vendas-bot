@@ -1,3 +1,8 @@
+// =========================================
+// SELLFORGE MARKETPLACE
+// BOT ALUGUEL + LOJAS INDIVIDUAIS
+// =========================================
+
 require('dotenv').config();
 
 const express = require('express');
@@ -17,117 +22,79 @@ const {
   getFirestore
 } = require('firebase-admin/firestore');
 
-// ========================================
+// =========================================
 // EXPRESS
-// ========================================
+// =========================================
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
-// ========================================
+// =========================================
 // CONFIG
-// ========================================
+// =========================================
 
 const MASTER = "6863505946";
-
-const BOT_USERNAME =
-"SellForge_bot";
 
 const LOGO =
 "https://i.postimg.cc/g2JJvqHN/logo.jpg";
 
-const SUPPORT =
-"@suporte_inifnity_clientes_oficial";
+const WHATSAPP =
+"551981528372";
 
-// ========================================
+const BOT_USERNAME =
+"SellForge_bot";
+
+// =========================================
 // PLANOS
-// ========================================
+// =========================================
 
 const PLANOS = {
 
-  "1": {
-    nome: "1 Dia",
-    preco: 0.97,
-    dias: 1
+  teste: {
+    nome: "TESTE 1 MINUTO",
+    valor: 0.01,
+    minutos: 1
   },
 
-  "2": {
-    nome: "2 Dias",
-    preco: 2.15,
-    dias: 2
-  },
-
-  "3": {
-    nome: "3 Dias",
-    preco: 2.80,
+  plano3: {
+    nome: "3 DIAS",
+    valor: 0.97,
     dias: 3
   },
 
-  "4": {
-    nome: "4 Dias",
-    preco: 4.60,
-    dias: 4
-  },
-
-  "5": {
-    nome: "5 Dias",
-    preco: 6.00,
-    dias: 5
-  },
-
-  "6": {
-    nome: "6 Dias",
-    preco: 8.00,
-    dias: 6
-  },
-
-  "7": {
-    nome: "7 Dias",
-    preco: 10.00,
+  plano7: {
+    nome: "7 DIAS",
+    valor: 1.99,
     dias: 7
   },
 
-  "8": {
-    nome: "8 Dias",
-    preco: 14.00,
-    dias: 8
+  plano14: {
+    nome: "14 DIAS",
+    valor: 2.60,
+    dias: 14
   },
 
-  "9": {
-    nome: "9 Dias",
-    preco: 16.00,
-    dias: 9
+  plano21: {
+    nome: "21 DIAS",
+    valor: 3.90,
+    dias: 21
   },
 
-  "10": {
-    nome: "10 Dias",
-    preco: 18.00,
-    dias: 10
-  },
-
-  "20": {
-    nome: "20 Dias",
-    preco: 30.00,
-    dias: 20
-  },
-
-  "30": {
-    nome: "30 Dias",
-    preco: 60.00,
+  plano30: {
+    nome: "30 DIAS",
+    valor: 5.00,
     dias: 30
   }
 };
 
-// ========================================
-// ESTADOS
-// ========================================
-
-const userState = {};
-
-// ========================================
+// =========================================
 // VALIDAÇÕES
-// ========================================
+// =========================================
 
 if (!process.env.BOT_TOKEN)
   throw new Error("BOT_TOKEN ausente");
@@ -135,15 +102,15 @@ if (!process.env.BOT_TOKEN)
 if (!process.env.MP_ACCESS_TOKEN)
   throw new Error("MP_ACCESS_TOKEN ausente");
 
-if (!process.env.FIREBASE_CONFIG)
-  throw new Error("FIREBASE_CONFIG ausente");
-
 if (!process.env.RENDER_EXTERNAL_URL)
   throw new Error("RENDER_EXTERNAL_URL ausente");
 
-// ========================================
+if (!process.env.FIREBASE_CONFIG)
+  throw new Error("FIREBASE_CONFIG ausente");
+
+// =========================================
 // FIREBASE
-// ========================================
+// =========================================
 
 const serviceAccount =
 JSON.parse(
@@ -158,13 +125,14 @@ initializeApp({
 const db =
 getFirestore();
 
-// ========================================
+console.log("🔥 Firebase conectado");
+
+// =========================================
 // MERCADO PAGO
-// ========================================
+// =========================================
 
 const mpClient =
 new MercadoPagoConfig({
-
   accessToken:
   process.env.MP_ACCESS_TOKEN
 });
@@ -172,9 +140,9 @@ new MercadoPagoConfig({
 const mpPayment =
 new Payment(mpClient);
 
-// ========================================
+// =========================================
 // TELEGRAM
-// ========================================
+// =========================================
 
 const bot =
 new TelegramBot(
@@ -207,9 +175,9 @@ async (req, res) => {
   }
 });
 
-// ========================================
+// =========================================
 // HOME
-// ========================================
+// =========================================
 
 app.get('/', (req, res) => {
 
@@ -218,37 +186,54 @@ app.get('/', (req, res) => {
   );
 });
 
-// ========================================
-// VERIFICAR PLANO
-// ========================================
+// =========================================
+// MEMORY
+// =========================================
 
-async function sellerActive(userId) {
+const userState = {};
+
+// =========================================
+// FUNÇÕES
+// =========================================
+
+async function getSeller(userId){
 
   const doc =
   await db
-  .collection('sellers')
+  .collection("vendedores")
   .doc(userId)
   .get();
 
-  if (!doc.exists)
-    return false;
+  if(!doc.exists)
+    return null;
 
-  const data =
-  doc.data();
-
-  if (
-    !data.expiraEm
-  ) return false;
-
-  return (
-    Date.now() <
-    data.expiraEm
-  );
+  return doc.data();
 }
 
-// ========================================
+async function hasPlan(userId){
+
+  const seller =
+  await getSeller(userId);
+
+  if(!seller)
+    return false;
+
+  if(!seller.expiraEm)
+    return false;
+
+  return Date.now() <
+  seller.expiraEm;
+}
+
+function createStoreLink(nome){
+
+  return
+`https://t.me/${BOT_USERNAME}?start=loja_${nome}`;
+}
+
+// =========================================
 // START
-// ========================================
+// =========================================
 
 bot.onText(
 /\/start(.*)/,
@@ -259,103 +244,71 @@ async (msg, match) => {
     const chatId =
     msg.chat.id;
 
-    const args =
-    match[1];
+    const userId =
+    String(msg.from.id);
 
-    // ====================================
-    // LOJA VENDEDOR
-    // ====================================
+    const param =
+    match[1]?.trim();
 
-    if (
-      args &&
-      args.includes("loja_")
-    ) {
+    // =====================================
+    // ABRIR LOJA
+    // =====================================
 
-      const sellerId =
-      args
-      .replace(" loja_", "")
-      .trim();
+    if(
+      param &&
+      param.startsWith("loja_")
+    ){
 
-      const ativo =
-      await sellerActive(
-        sellerId
+      const lojaNome =
+      param.replace(
+        "loja_",
+        ""
       );
 
-      if (!ativo) {
-
-        return bot.sendMessage(
-          chatId,
-
-`⛔ Loja indisponível.
-
-Plano expirado.`
-        );
-      }
-
-      const sellerDoc =
+      const snap =
       await db
-      .collection('sellers')
-      .doc(sellerId)
-      .get();
-
-      if (!sellerDoc.exists) {
-
-        return bot.sendMessage(
-          chatId,
-          "❌ Loja não encontrada"
-        );
-      }
-
-      const seller =
-      sellerDoc.data();
-
-      const produtos =
-      await db
-      .collection('produtos')
+      .collection("produtos")
       .where(
-        "sellerId",
+        "lojaNome",
         "==",
-        sellerId
+        lojaNome
       )
       .get();
 
-      if (
-        produtos.empty
-      ) {
+      if(snap.empty){
 
         return bot.sendMessage(
           chatId,
-
-`📦 Loja sem produtos`
+          "❌ Loja sem produtos"
         );
       }
 
       const buttons = [];
 
-      produtos.forEach(doc => {
+      snap.forEach(doc => {
 
         const p =
         doc.data();
 
         buttons.push([{
-
           text:
 `${p.nome} - R$ ${p.preco}`,
 
           callback_data:
 `buy_${doc.id}`
         }]);
+
       });
 
       return bot.sendMessage(
         chatId,
 
-`🏪 ${seller.loja}
+`🛒 LOJA ${lojaNome}
 
-📦 Produtos disponíveis:`,
+Escolha um produto abaixo 👇`,
 
 {
-  reply_markup: {
+  reply_markup:{
     inline_keyboard:
     buttons
   }
@@ -363,9 +316,9 @@ Plano expirado.`
       );
     }
 
-    // ====================================
+    // =====================================
     // MENU
-    // ====================================
+    // =====================================
 
     await bot.sendPhoto(
       chatId,
@@ -373,32 +326,57 @@ Plano expirado.`
 {
   caption:
 
-`🚀 SELLFORGE BOT
+`🚀 SELLFORGE MARKETPLACE
 
-💰 Alugue sua loja
-📦 Venda produtos
-⚡ PIX automático
-🏪 Sua própria loja
+━━━━━━━━━━━━━━━━━━━
 
-📲 Suporte:
-${SUPPORT}`
+✅ Loja automática
+✅ PIX automático
+✅ Entrega automática
+✅ Painel vendedor
+✅ Link personalizado
+
+━━━━━━━━━━━━━━━━━━━
+
+💰 PLANOS DISPONÍVEIS
+
+🧪 TESTE 1 MIN:
+R$ 0,01
+
+📦 3 DIAS:
+R$ 0,97
+
+📦 7 DIAS:
+R$ 1,99
+
+📦 14 DIAS:
+R$ 2,60
+
+📦 21 DIAS:
+R$ 3,90
+
+📦 30 DIAS:
+R$ 5,00
+
+━━━━━━━━━━━━━━━━━━━
+
+👇 Escolha uma opção`
 }
     );
 
     await bot.sendMessage(
       chatId,
 
-`👇 Escolha uma opção`,
+`📋 MENU PRINCIPAL`,
 
 {
-  reply_markup: {
-
-    inline_keyboard: [
+  reply_markup:{
+    inline_keyboard:[
 
       [
         {
           text:
-          "💰 ALUGAR BOT",
+          "💳 ALUGAR BOT",
 
           callback_data:
           "alugar_bot"
@@ -408,10 +386,30 @@ ${SUPPORT}`
       [
         {
           text:
-          "🏪 MINHA LOJA",
+          "♻️ RENOVAR PLANO",
 
           callback_data:
-          "minha_loja"
+          "renovar_plano"
+        }
+      ],
+
+      [
+        {
+          text:
+          "❌ CANCELAR PLANO",
+
+          callback_data:
+          "cancelar_plano"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 MEUS PRODUTOS",
+
+          callback_data:
+          "meus_produtos"
         }
       ],
 
@@ -429,15 +427,15 @@ ${SUPPORT}`
 }
     );
 
-  } catch (err) {
+  } catch(err){
 
     console.log(err);
   }
 });
 
-// ========================================
-// CALLBACK
-// ========================================
+// =========================================
+// CALLBACKS
+// =========================================
 
 bot.on(
 "callback_query",
@@ -455,75 +453,139 @@ async (q) => {
     const userId =
     String(q.from.id);
 
-    // ====================================
-    // ALUGAR BOT
-    // ====================================
+    // =====================================
+    // PLANOS
+    // =====================================
 
-    if (
-      data === "alugar_bot"
-    ) {
-
-      const buttons = [];
-
-      Object.keys(PLANOS)
-      .forEach(key => {
-
-        const p =
-        PLANOS[key];
-
-        buttons.push([{
-
-          text:
-`${p.nome} - R$ ${p.preco}`,
-
-          callback_data:
-`plan_${key}`
-        }]);
-      });
+    if(
+      data === "alugar_bot" ||
+      data === "renovar_plano"
+    ){
 
       return bot.sendMessage(
         q.message.chat.id,
 
-`💰 ESCOLHA UM PLANO`,
+`💳 ESCOLHA UM PLANO`,
 
 {
-  reply_markup: {
-    inline_keyboard:
-    buttons
+  reply_markup:{
+    inline_keyboard:[
+
+      [
+        {
+          text:
+          "🧪 TESTE 1MIN - R$0,01",
+
+          callback_data:
+          "plan_teste"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 3 DIAS - R$0,97",
+
+          callback_data:
+          "plan_plano3"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 7 DIAS - R$1,99",
+
+          callback_data:
+          "plan_plano7"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 14 DIAS - R$2,60",
+
+          callback_data:
+          "plan_plano14"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 21 DIAS - R$3,90",
+
+          callback_data:
+          "plan_plano21"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 30 DIAS - R$5,00",
+
+          callback_data:
+          "plan_plano30"
+        }
+      ]
+    ]
   }
 }
       );
     }
 
-    // ====================================
-    // GERAR PIX
-    // ====================================
+    // =====================================
+    // GERAR PIX PLANO
+    // =====================================
 
-    if (
-      data.startsWith(
-        "plan_"
-      )
-    ) {
+    if(
+      data.startsWith("plan_")
+    ){
 
-      const idPlano =
+      const planId =
       data.replace(
         "plan_",
         ""
       );
 
       const plano =
-      PLANOS[idPlano];
+      PLANOS[planId];
+
+      if(!plano)
+        return;
+
+      // TESTE 1 VEZ
+
+      if(planId === "teste"){
+
+        const testeDoc =
+        await db
+        .collection("teste")
+        .doc(userId)
+        .get();
+
+        if(testeDoc.exists){
+
+          return bot.sendMessage(
+            q.message.chat.id,
+
+`❌ Você já usou o plano teste`
+          );
+        }
+      }
 
       const payment =
       await mpPayment.create({
 
-        body: {
+        body:{
 
           transaction_amount:
-          plano.preco,
+          Number(plano.valor),
 
           description:
-`Plano ${plano.nome}`,
+          `Plano ${plano.nome}`,
 
           payment_method_id:
           "pix",
@@ -531,7 +593,7 @@ async (q) => {
           notification_url:
 `${process.env.RENDER_EXTERNAL_URL}/webhook/mp`,
 
-          payer: {
+          payer:{
             email:
 `cliente${Date.now()}@gmail.com`
           }
@@ -551,7 +613,7 @@ async (q) => {
       .qr_code;
 
       await db
-      .collection('payments')
+      .collection("pagamentos")
       .doc(
         String(payment.id)
       )
@@ -560,11 +622,261 @@ async (q) => {
         tipo:
         "plano",
 
-        sellerId:
+        planoId:
+        planId,
+
         userId,
 
-        plano:
-        idPlano,
+        chatId:
+        q.message.chat.id,
+
+        aprovado:
+        false,
+
+        createdAt:
+        Date.now()
+      });
+
+      return bot.sendPhoto(
+        q.message.chat.id,
+
+        Buffer.from(
+          qr,
+          "base64"
+        ),
+
+{
+  caption:
+
+`💳 PAGAMENTO DO PLANO
+
+━━━━━━━━━━━━━━━━━━━
+
+📦 ${plano.nome}
+
+💰 R$ ${plano.valor}
+
+━━━━━━━━━━━━━━━━━━━
+
+📋 PIX COPIA E COLA:
+
+${copia}
+
+━━━━━━━━━━━━━━━━━━━
+
+⏳ Aguardando pagamento...`
+}
+      );
+    }
+
+    // =====================================
+    // CANCELAR
+    // =====================================
+
+    if(
+      data === "cancelar_plano"
+    ){
+
+      await db
+      .collection("vendedores")
+      .doc(userId)
+      .delete();
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`❌ Plano cancelado`
+      );
+    }
+
+    // =====================================
+    // MEUS PRODUTOS
+    // =====================================
+
+    if(
+      data === "meus_produtos"
+    ){
+
+      const planoAtivo =
+      await hasPlan(userId);
+
+      if(!planoAtivo){
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`❌ Você precisa pagar um plano`
+        );
+      }
+
+      const snap =
+      await db
+      .collection("produtos")
+      .where(
+        "owner",
+        "==",
+        userId
+      )
+      .get();
+
+      if(snap.empty){
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`📦 Você não possui produtos`
+        );
+      }
+
+      let texto =
+"📦 SEUS PRODUTOS\n\n";
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        texto +=
+
+`🆔 ${doc.id}
+
+📦 ${p.nome}
+💰 R$ ${p.preco}
+
+`;
+      });
+
+      return bot.sendMessage(
+        q.message.chat.id,
+        texto
+      );
+    }
+
+    // =====================================
+    // ADD PRODUTO
+    // =====================================
+
+    if(
+      data === "add_produto"
+    ){
+
+      const planoAtivo =
+      await hasPlan(userId);
+
+      if(!planoAtivo){
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`❌ Você precisa pagar um plano antes de vender`
+        );
+      }
+
+      userState[userId] = {
+        step: "img"
+      };
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`🖼 ENVIE O LINK DA IMAGEM`
+      );
+    }
+
+    // =====================================
+    // BUY PRODUTO
+    // =====================================
+
+    if(
+      data.startsWith(
+        "buy_"
+      )
+    ){
+
+      const idProduto =
+      data.replace(
+        "buy_",
+        ""
+      );
+
+      const doc =
+      await db
+      .collection("produtos")
+      .doc(idProduto)
+      .get();
+
+      if(!doc.exists){
+
+        return bot.sendMessage(
+          q.message.chat.id,
+
+`❌ Produto não encontrado`
+        );
+      }
+
+      const p =
+      doc.data();
+
+      const payment =
+      await mpPayment.create({
+
+        body:{
+
+          transaction_amount:
+          Number(p.preco),
+
+          description:
+          p.nome,
+
+          payment_method_id:
+          "pix",
+
+          notification_url:
+`${process.env.RENDER_EXTERNAL_URL}/webhook/mp`,
+
+          payer:{
+            email:
+`cliente${Date.now()}@gmail.com`
+          }
+        }
+      });
+
+      const qr =
+      payment
+      .point_of_interaction
+      .transaction_data
+      .qr_code_base64;
+
+      const copia =
+      payment
+      .point_of_interaction
+      .transaction_data
+      .qr_code;
+
+      await db
+      .collection("pagamentos")
+      .doc(
+        String(payment.id)
+      )
+      .set({
+
+        tipo:
+        "produto",
+
+        chatId:
+        q.message.chat.id,
+
+        produto:
+        p.nome,
+
+        valor:
+        p.preco,
+
+        whatsapp:
+        p.whatsapp,
+
+        link:
+        p.link,
 
         aprovado:
         false
@@ -575,166 +887,38 @@ async (q) => {
 
         Buffer.from(
           qr,
-          'base64'
+          "base64"
         ),
 
 {
   caption:
 
-`💳 PAGAMENTO PIX
+`💰 PAGAMENTO PIX
 
-📦 ${plano.nome}
+📦 ${p.nome}
 
-💰 R$ ${plano.preco}
+💲 R$ ${p.preco}
 
-PIX:
+━━━━━━━━━━━━━━━━━━━
 
-${copia}`
+${copia}
+
+━━━━━━━━━━━━━━━━━━━
+
+⏳ Aguardando pagamento`
 }
       );
     }
 
-    // ====================================
-    // MINHA LOJA
-    // ====================================
+  } catch(err){
 
-    if (
-      data === "minha_loja"
-    ) {
-
-      const ativo =
-      await sellerActive(
-        userId
-      );
-
-      if (!ativo) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-
-`⛔ Seu plano expirou.
-
-Renove para continuar.`
-        );
-      }
-
-      const doc =
-      await db
-      .collection('sellers')
-      .doc(userId)
-      .get();
-
-      const seller =
-      doc.data();
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`🏪 SUA LOJA
-
-👤 ${seller.loja}
-
-🔗 LINK:
-
-https://t.me/${BOT_USERNAME}?start=loja_${userId}`
-      );
-    }
-
-    // ====================================
-    // ADD PRODUTO
-    // ====================================
-
-    if (
-      data === "add_produto"
-    ) {
-
-      const ativo =
-      await sellerActive(
-        userId
-      );
-
-      if (!ativo) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-
-`⛔ Compre um plano primeiro`
-        );
-      }
-
-      userState[userId] = {
-
-        step: "nome"
-      };
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`📦 Nome produto`
-      );
-    }
-
-    // ====================================
-    // COMPRAR PRODUTO
-    // ====================================
-
-    if (
-      data.startsWith(
-        "buy_"
-      )
-    ) {
-
-      const idProduto =
-      data.replace(
-        "buy_",
-        ""
-      );
-
-      const doc =
-      await db
-      .collection('produtos')
-      .doc(idProduto)
-      .get();
-
-      if (!doc.exists) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-
-`❌ Produto removido`
-        );
-      }
-
-      const p =
-      doc.data();
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`💳 PAGAMENTO
-
-📦 ${p.nome}
-
-💰 R$ ${p.preco}
-
-🔑 PIX:
-
-${p.pix}`
-      );
-    }
-
-  } catch (err) {
-
-    console.log(
-      "CALLBACK ERROR:",
-      err
-    );
+    console.log(err);
   }
 });
 
-// ========================================
-// MENSAGENS
-// ========================================
+// =========================================
+// ADD PRODUTOS
+// =========================================
 
 bot.on(
 "message",
@@ -742,74 +926,131 @@ async (msg) => {
 
   try {
 
-    if (!msg.text)
+    if(!msg.text)
       return;
 
-    const userId =
+    const id =
     String(msg.from.id);
 
     const text =
     msg.text;
 
     const state =
-    userState[userId];
+    userState[id];
 
-    if (
+    if(
       text.startsWith("/")
     ) return;
 
-    if (!state)
+    if(!state)
       return;
 
-    // ====================================
-    // NOME
-    // ====================================
+    // IMG
 
-    if (
-      state.step === "nome"
-    ) {
+    if(
+      state.step === "img"
+    ){
+
+      state.img = text;
+
+      state.step =
+      "loja";
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`🏪 NOME DA SUA LOJA
+
+Exemplo:
+minhaloja`
+      );
+    }
+
+    // LOJA
+
+    if(
+      state.step === "loja"
+    ){
+
+      state.loja =
+      text
+      .toLowerCase()
+      .replace(/\s/g,"");
+
+      state.step =
+      "vendedor";
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`👤 NOME VENDEDOR`
+      );
+    }
+
+    // VENDEDOR
+
+    if(
+      state.step === "vendedor"
+    ){
+
+      state.vendedor =
+      text;
+
+      state.step =
+      "produto";
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📦 NOME PRODUTO`
+      );
+    }
+
+    // PRODUTO
+
+    if(
+      state.step === "produto"
+    ){
 
       state.nome =
       text;
 
       state.step =
-      "preco";
+      "valor";
 
       return bot.sendMessage(
         msg.chat.id,
-        "💰 Valor"
+
+`💰 VALOR`
       );
     }
 
-    // ====================================
-    // PREÇO
-    // ====================================
+    // VALOR
 
-    if (
-      state.step === "preco"
-    ) {
+    if(
+      state.step === "valor"
+    ){
 
       state.preco =
       Number(
-        text.replace(",", ".")
+        text.replace(",",".")
       );
 
       state.step =
-      "desc";
+      "descricao";
 
       return bot.sendMessage(
         msg.chat.id,
-        "📝 Descrição"
+
+`📝 DESCRIÇÃO`
       );
     }
 
-    // ====================================
     // DESC
-    // ====================================
 
-    if (
-      state.step === "desc"
-    ) {
+    if(
+      state.step === "descricao"
+    ){
 
       state.desc =
       text;
@@ -819,56 +1060,66 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "🔑 Chave PIX"
+
+`💳 CHAVE PIX`
       );
     }
 
-    // ====================================
     // PIX
-    // ====================================
 
-    if (
+    if(
       state.step === "pix"
-    ) {
+    ){
 
       state.pix =
       text;
 
       state.step =
-      "img";
+      "whatsapp";
 
       return bot.sendMessage(
         msg.chat.id,
-        "🖼 Link imagem"
+
+`📲 WHATSAPP`
       );
     }
 
-    // ====================================
-    // IMG
-    // ====================================
+    // WHATSAPP
 
-    if (
-      state.step === "img"
-    ) {
+    if(
+      state.step === "whatsapp"
+    ){
 
-      const sellerDoc =
+      state.whatsapp =
+      text;
+
+      state.step =
+      "link";
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`🔗 LINK ENTREGA`
+      );
+    }
+
+    // LINK
+
+    if(
+      state.step === "link"
+    ){
+
       await db
-      .collection('sellers')
-      .doc(userId)
-      .get();
-
-      const seller =
-      sellerDoc.data();
-
-      await db
-      .collection('produtos')
+      .collection("produtos")
       .add({
 
-        sellerId:
-        userId,
+        owner:id,
 
-        loja:
-        seller.loja,
+        lojaNome:
+        state.loja,
+
+        vendedor:
+        state.vendedor,
 
         nome:
         state.nome,
@@ -882,35 +1133,62 @@ async (msg) => {
         pix:
         state.pix,
 
-        img:
+        whatsapp:
+        state.whatsapp,
+
+        link:
         text,
+
+        img:
+        state.img,
 
         createdAt:
         Date.now()
       });
 
-      userState[userId] =
+      const lojaLink =
+`https://t.me/${BOT_USERNAME}?start=loja_${state.loja}`;
+
+      userState[id] =
       null;
 
       return bot.sendMessage(
         msg.chat.id,
 
-`✅ PRODUTO ADICIONADO`
+`✅ PRODUTO ADICIONADO
+
+━━━━━━━━━━━━━━━━━━━
+
+🏪 Loja:
+${state.loja}
+
+📦 Produto:
+${state.nome}
+
+💰 Valor:
+R$ ${state.preco}
+
+━━━━━━━━━━━━━━━━━━━
+
+🔗 LINK DA SUA LOJA:
+
+${lojaLink}
+
+━━━━━━━━━━━━━━━━━━━
+
+📢 Compartilhe sua loja`
       );
     }
 
-  } catch (err) {
+  } catch(err){
 
-    console.log(
-      "MESSAGE ERROR:",
-      err
-    );
+    console.log(err);
   }
 });
 
-// ========================================
+// =========================================
 // WEBHOOK MP
-// ========================================
+// =========================================
 
 app.post(
 '/webhook/mp',
@@ -921,134 +1199,170 @@ async (req, res) => {
     const data =
     req.body;
 
-    if (
+    if(
       data.type !== "payment"
-    ) {
+    ){
 
       return res.sendStatus(200);
     }
 
     const payment =
     await mpPayment.get({
-
       id:
       data.data.id
     });
 
-    if (
+    if(
       payment.status !==
       "approved"
-    ) {
+    ){
 
       return res.sendStatus(200);
     }
 
-    const payDoc =
-    await db
-    .collection('payments')
+    const vendaRef =
+    db
+    .collection("pagamentos")
     .doc(
       String(payment.id)
-    )
-    .get();
+    );
 
-    if (!payDoc.exists)
+    const vendaDoc =
+    await vendaRef.get();
+
+    if(!vendaDoc.exists)
       return res.sendStatus(200);
 
-    const info =
-    payDoc.data();
+    const venda =
+    vendaDoc.data();
 
-    if (
-      info.aprovado
-    ) {
-
+    if(venda.aprovado)
       return res.sendStatus(200);
-    }
 
-    const plano =
-    PLANOS[
-      info.plano
-    ];
-
-    await db
-    .collection('payments')
-    .doc(
-      String(payment.id)
-    )
-    .update({
-
-      aprovado: true
+    await vendaRef.update({
+      aprovado:true
     });
 
-    const expiraEm =
-    Date.now() + (
+    // =====================================
+    // PLANO
+    // =====================================
 
-      plano.dias *
-      24 *
-      60 *
-      60 *
-      1000
-    );
+    if(
+      venda.tipo === "plano"
+    ){
 
-    const sellerRef =
-    db
-    .collection('sellers')
-    .doc(
-      info.sellerId
-    );
+      const plano =
+      PLANOS[venda.planoId];
 
-    const sellerDoc =
-    await sellerRef.get();
+      let expiraEm =
+      Date.now();
 
-    if (!sellerDoc.exists) {
+      if(plano.minutos){
 
-      await sellerRef.set({
+        expiraEm +=
+        plano.minutos *
+        60 *
+        1000;
 
-        loja:
-`Loja_${info.sellerId}`,
+      } else {
 
-        ativo: true,
+        expiraEm +=
+        plano.dias *
+        24 *
+        60 *
+        60 *
+        1000;
+      }
 
-        expiraEm
+      await db
+      .collection("vendedores")
+      .doc(venda.userId)
+      .set({
+
+        userId:
+        venda.userId,
+
+        plano:
+        plano.nome,
+
+        expiraEm,
+
+        createdAt:
+        Date.now()
       });
 
-    } else {
+      if(
+        venda.planoId ===
+        "teste"
+      ){
 
-      await sellerRef.update({
+        await db
+        .collection("teste")
+        .doc(venda.userId)
+        .set({
+          usado:true
+        });
+      }
 
-        ativo: true,
-
-        expiraEm
-      });
-    }
-
-    await bot.sendMessage(
-      info.sellerId,
+      await bot.sendMessage(
+        venda.chatId,
 
 `✅ PLANO ATIVADO
 
-🚀 Agora você pode vender.
+━━━━━━━━━━━━━━━━━━━
 
-🏪 Sua loja:
+📦 ${plano.nome}
 
-https://t.me/${BOT_USERNAME}?start=loja_${info.sellerId}`
-    );
+⏳ Expira automaticamente
+
+━━━━━━━━━━━━━━━━━━━
+
+🚀 Agora você já pode vender`
+      );
+    }
+
+    // =====================================
+    // PRODUTO
+    // =====================================
+
+    if(
+      venda.tipo === "produto"
+    ){
+
+      await bot.sendMessage(
+        venda.chatId,
+
+`✅ PAGAMENTO APROVADO
+
+━━━━━━━━━━━━━━━━━━━
+
+📦 ${venda.produto}
+
+💰 R$ ${venda.valor}
+
+📲 ${venda.whatsapp}
+
+━━━━━━━━━━━━━━━━━━━
+
+🔓 LINK:
+
+${venda.link}`
+      );
+    }
 
     res.sendStatus(200);
 
-  } catch (err) {
+  } catch(err){
 
-    console.log(
-      "WEBHOOK ERROR:",
-      err
-    );
+    console.log(err);
 
     res.sendStatus(500);
   }
 });
 
-// ========================================
+// =========================================
 // SERVER
-// ========================================
+// =========================================
 
 const PORT =
 process.env.PORT || 3000;
@@ -1071,5 +1385,8 @@ async () => {
   console.log(
     "✅ WEBHOOK SETADO"
   );
-}
-);
+
+  console.log(
+    webhook
+  );
+});
