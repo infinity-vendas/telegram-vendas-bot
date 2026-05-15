@@ -210,7 +210,7 @@ async (req, res) => {
     });
 
     // =====================================
-    // DIMINUIR ESTOQUE
+    // ESTOQUE
     // =====================================
 
     const produtoRef =
@@ -220,9 +220,11 @@ async (req, res) => {
     const produtoDoc =
     await produtoRef.get();
 
+    let estoqueAtual = 0;
+
     if (produtoDoc.exists) {
 
-      const estoqueAtual =
+      estoqueAtual =
       produtoDoc.data().estoque || 0;
 
       if (estoqueAtual > 0) {
@@ -253,7 +255,7 @@ ${info.produto}
 R$ ${info.valor}
 
 📦 Estoque restante:
-${Math.max((produtoDoc.data().estoque || 1) - 1, 0)}
+${Math.max(estoqueAtual - 1, 0)}
 
 📲 WhatsApp:
 ${info.whatsapp}
@@ -347,7 +349,7 @@ via Mercado Pago
     );
 
     // =====================================
-    // MENU INLINE
+    // MENU
     // =====================================
 
     await bot.sendMessage(
@@ -357,6 +359,31 @@ via Mercado Pago
 
 {
   reply_markup: {
+
+    // =====================================
+    // BOTÕES FLUTUANTES
+    // =====================================
+
+    keyboard: [
+
+      [
+        "📦 Produtos",
+        "📲 Suporte"
+      ],
+
+      [
+        "ℹ️ Informações"
+      ]
+
+    ],
+
+    resize_keyboard: true,
+    one_time_keyboard: false,
+
+    // =====================================
+    // INLINE KEYBOARD
+    // =====================================
+
     inline_keyboard: [
 
       [
@@ -408,7 +435,7 @@ via Mercado Pago
 });
 
 // =========================================
-// PAINEL ADMIN
+// PAINEL ADMIN SECRETO
 // =========================================
 
 bot.onText(
@@ -467,6 +494,119 @@ async (msg) => {
   }
 }
     );
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// BOTÕES FLUTUANTES
+// =========================================
+
+bot.on(
+"message",
+async (msg) => {
+
+  try {
+
+    if (!msg.text)
+      return;
+
+    // =====================================
+    // PRODUTOS
+    // =====================================
+
+    if (
+      msg.text ===
+      "📦 Produtos"
+    ) {
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      if (snap.empty) {
+
+        return bot.sendMessage(
+          msg.chat.id,
+          "❌ Nenhum produto cadastrado"
+        );
+      }
+
+      const buttons = [];
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        if (p.estoque > 0) {
+
+          buttons.push([
+            {
+              text:
+`${p.nome} | R$ ${p.preco}`,
+
+              callback_data:
+`view_${doc.id}`
+            }
+          ]);
+        }
+      });
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📦 LISTA DE PRODUTOS`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    // =====================================
+    // SUPORTE
+    // =====================================
+
+    if (
+      msg.text ===
+      "📲 Suporte"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📲 SUPORTE
+
+WhatsApp:
+${WHATSAPP}`
+      );
+    }
+
+    // =====================================
+    // INFO
+    // =====================================
+
+    if (
+      msg.text ===
+      "ℹ️ Informações"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`ℹ️ Sistema ONLINE
+
+🚀 MAX FULL`
+      );
+    }
 
   } catch (err) {
 
@@ -580,7 +720,7 @@ Selecione um produto abaixo 👇`,
     }
 
     // =====================================
-    // VER PRODUTO
+    // VIEW PRODUTO
     // =====================================
 
     if (
@@ -678,10 +818,7 @@ ${p.desc}`,
       return bot.sendMessage(
         q.message.chat.id,
 
-`🖼 ENVIE O LINK DA IMAGEM
-
-Exemplo:
-https://site.com/img.jpg`
+`🖼 ENVIE O LINK DA IMAGEM`
       );
     }
 
@@ -803,10 +940,6 @@ https://site.com/img.jpg`
       const p =
       doc.data();
 
-      // =====================================
-      // ESTOQUE
-      // =====================================
-
       if (
         p.estoque <= 0
       ) {
@@ -816,10 +949,6 @@ https://site.com/img.jpg`
           "❌ Produto sem estoque"
         );
       }
-
-      // =====================================
-      // PIX
-      // =====================================
 
       const payment =
       await mpPayment.create({
@@ -888,10 +1017,6 @@ https://site.com/img.jpg`
         createdAt:
         Date.now()
       });
-
-      // =====================================
-      // ENVIA PIX
-      // =====================================
 
       await bot.sendPhoto(
         q.message.chat.id,
@@ -963,10 +1088,6 @@ async (msg) => {
     if (!state)
       return;
 
-    // =====================================
-    // IMAGEM
-    // =====================================
-
     if (
       state.step ===
       "imagem"
@@ -984,10 +1105,6 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // PRODUTO
-    // =====================================
-
     if (
       state.step ===
       "produto"
@@ -1004,10 +1121,6 @@ async (msg) => {
         "💰 Valor:"
       );
     }
-
-    // =====================================
-    // VALOR
-    // =====================================
 
     if (
       state.step ===
@@ -1028,10 +1141,6 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // DESCRIÇÃO
-    // =====================================
-
     if (
       state.step ===
       "descricao"
@@ -1048,10 +1157,6 @@ async (msg) => {
         "📦 Quantidade em estoque:"
       );
     }
-
-    // =====================================
-    // ESTOQUE
-    // =====================================
 
     if (
       state.step ===
@@ -1070,10 +1175,6 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // WHATSAPP
-    // =====================================
-
     if (
       state.step ===
       "whatsapp"
@@ -1090,10 +1191,6 @@ async (msg) => {
         "🔗 Link produto:"
       );
     }
-
-    // =====================================
-    // LINK
-    // =====================================
 
     if (
       state.step ===
