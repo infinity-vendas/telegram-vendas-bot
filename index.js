@@ -33,6 +33,13 @@ app.use(express.json({
 // CONFIG
 // =========================================
 
+const MASTER =
+"6863505946";
+
+const ADMINS = [
+  "8510878195"
+];
+
 const WHATSAPP =
 "551981528372";
 
@@ -110,25 +117,24 @@ const SECRET_PATH =
 `/bot${process.env.BOT_TOKEN}`;
 
 app.post(
-  SECRET_PATH,
-  async (req, res) => {
+SECRET_PATH,
+async (req, res) => {
 
-    try {
+  try {
 
-      await bot.processUpdate(
-        req.body
-      );
+    await bot.processUpdate(
+      req.body
+    );
 
-      res.sendStatus(200);
+    res.sendStatus(200);
 
-    } catch (err) {
+  } catch (err) {
 
-      console.log(err);
+    console.log(err);
 
-      res.sendStatus(500);
-    }
+    res.sendStatus(500);
   }
-);
+});
 
 // =========================================
 // HOME
@@ -139,6 +145,86 @@ app.get('/', (req, res) => {
   res.send(
     "🚀 BOT ONLINE"
   );
+});
+
+// =========================================
+// PAINEL ADMIN SECRETO
+// =========================================
+
+bot.onText(
+/\/staff_dono/,
+async (msg) => {
+
+  try {
+
+    const userId =
+    String(msg.from.id);
+
+    if (
+      userId !== MASTER &&
+      !ADMINS.includes(userId)
+    ) {
+
+      return;
+    }
+
+    await bot.sendMessage(
+      msg.chat.id,
+
+`🔐 PAINEL ADMIN SECRETO
+
+━━━━━━━━━━━━━━━━━━━
+
+✅ Painel ativo
+✅ Sistema online
+✅ Controle total
+
+━━━━━━━━━━━━━━━━━━━
+
+Escolha uma opção abaixo 👇`,
+
+{
+  reply_markup: {
+    inline_keyboard: [
+
+      [
+        {
+          text:
+          "➕ ADD PRODUTO",
+
+          callback_data:
+          "admin_add"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📦 LISTAR PRODUTOS",
+
+          callback_data:
+          "admin_listar"
+        }
+      ],
+
+      [
+        {
+          text:
+          "🗑 LIMPAR PRODUTOS",
+
+          callback_data:
+          "admin_limpar"
+        }
+      ]
+    ]
+  }
+}
+    );
+
+  } catch (err) {
+
+    console.log(err);
+  }
 });
 
 // =========================================
@@ -328,6 +414,10 @@ via Mercado Pago
 }
     );
 
+    // =====================================
+    // INLINE KEYBOARD
+    // =====================================
+
     await bot.sendMessage(
       chatId,
 
@@ -393,6 +483,9 @@ async (q) => {
 
     const data =
     q.data;
+
+    const userId =
+    String(q.from.id);
 
     // =====================================
     // INFO
@@ -586,6 +679,119 @@ ${p.desc}`,
     }]]
   }
 }
+      );
+    }
+
+    // =====================================
+    // ADMIN ADD
+    // =====================================
+
+    if (
+      data === "admin_add"
+    ) {
+
+      if (
+        userId !== MASTER &&
+        !ADMINS.includes(userId)
+      ) return;
+
+      userState[userId] = {
+        step: "imagem"
+      };
+
+      return bot.sendMessage(
+        q.message.chat.id,
+
+`🖼 ENVIE O LINK DA IMAGEM
+
+Exemplo:
+https://site.com/img.jpg`
+      );
+    }
+
+    // =====================================
+    // ADMIN LISTAR
+    // =====================================
+
+    if (
+      data === "admin_listar"
+    ) {
+
+      if (
+        userId !== MASTER &&
+        !ADMINS.includes(userId)
+      ) return;
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      if (snap.empty) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "❌ Nenhum produto"
+        );
+      }
+
+      let texto =
+"📦 PRODUTOS\n\n";
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        texto +=
+
+`🆔 ${doc.id}
+
+📦 ${p.nome}
+💰 R$ ${p.preco}
+📦 Estoque: ${p.estoque}
+
+`;
+      });
+
+      return bot.sendMessage(
+        q.message.chat.id,
+        texto
+      );
+    }
+
+    // =====================================
+    // ADMIN LIMPAR
+    // =====================================
+
+    if (
+      data === "admin_limpar"
+    ) {
+
+      if (
+        userId !== MASTER &&
+        !ADMINS.includes(userId)
+      ) return;
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      for (
+        const doc
+        of snap.docs
+      ) {
+
+        await db
+        .collection('produtos')
+        .doc(doc.id)
+        .delete();
+      }
+
+      return bot.sendMessage(
+        q.message.chat.id,
+        "🗑 Todos produtos deletados"
       );
     }
 
