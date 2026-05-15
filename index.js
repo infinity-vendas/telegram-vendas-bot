@@ -33,12 +33,6 @@ app.use(express.json({
 // CONFIG
 // =========================================
 
-const MASTER = "6863505946";
-
-const ADMINS = [
-  "8510878195"
-];
-
 const WHATSAPP =
 "551981528372";
 
@@ -208,6 +202,37 @@ async (req, res) => {
     });
 
     // =====================================
+    // ESTOQUE
+    // =====================================
+
+    const produtoRef =
+    db.collection('produtos')
+    .doc(info.produtoId);
+
+    const produtoDoc =
+    await produtoRef.get();
+
+    let estoqueRestante = 0;
+
+    if (produtoDoc.exists) {
+
+      const estoqueAtual =
+      produtoDoc.data().estoque || 0;
+
+      estoqueRestante =
+      estoqueAtual - 1;
+
+      if (estoqueRestante < 0)
+        estoqueRestante = 0;
+
+      await produtoRef.update({
+
+        estoque:
+        estoqueRestante
+      });
+    }
+
+    // =====================================
     // ENTREGA AUTOMÁTICA
     // =====================================
 
@@ -224,6 +249,9 @@ ${info.produto}
 💰 Valor:
 R$ ${info.valor}
 
+📦 Estoque restante:
+${estoqueRestante}
+
 📲 WhatsApp:
 ${info.whatsapp}
 
@@ -235,7 +263,9 @@ ${info.link}
 
 ━━━━━━━━━━━━━━━━━━━
 
-🚀 Obrigado pela compra!`
+🚀 Obrigado pela compra!
+
+💙 Obrigado pela referência , volte sempre !`
     );
 
     res.sendStatus(200);
@@ -264,9 +294,6 @@ async (msg) => {
     const chatId =
     msg.chat.id;
 
-    const userId =
-    String(msg.from.id);
-
     await bot.sendPhoto(
       chatId,
       LOGO,
@@ -284,6 +311,7 @@ INFINITY CLIENTES
 ✅ PIX automático
 ✅ Aprovação automática
 ✅ Entrega automática
+✅ Sistema de estoque
 ✅ Suporte rápido
 
 ━━━━━━━━━━━━━━━━━━━
@@ -343,59 +371,6 @@ via Mercado Pago
 }
     );
 
-    // =====================================
-    // ADMIN
-    // =====================================
-
-    if (
-      userId === MASTER ||
-      ADMINS.includes(userId)
-    ) {
-
-      await bot.sendMessage(
-        chatId,
-
-`🔐 PAINEL ADMIN`,
-
-{
-  reply_markup: {
-    inline_keyboard: [
-
-      [
-        {
-          text:
-          "➕ ADD PRODUTO",
-
-          callback_data:
-          "admin_add"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📦 LISTAR",
-
-          callback_data:
-          "admin_listar"
-        }
-      ],
-
-      [
-        {
-          text:
-          "🗑 LIMPAR",
-
-          callback_data:
-          "admin_limpar"
-        }
-      ]
-    ]
-  }
-}
-      );
-    }
-
   } catch (err) {
 
     console.log(err);
@@ -418,9 +393,6 @@ async (q) => {
 
     const data =
     q.data;
-
-    const userId =
-    String(q.from.id);
 
     // =====================================
     // INFO
@@ -477,15 +449,20 @@ ${WHATSAPP}`
         const p =
         doc.data();
 
-        buttons.push([
-          {
-            text:
-`📦 ${p.nome} - R$ ${p.preco}`,
+        if (
+          (p.estoque || 0) > 0
+        ) {
 
-            callback_data:
+          buttons.push([
+            {
+              text:
+`📦 ${p.nome} - R$ ${p.preco} | ${p.estoque} UND`,
+
+              callback_data:
 `view_${doc.id}`
-          }
-        ]);
+            }
+          ]);
+        }
       });
 
       return bot.sendMessage(
@@ -537,6 +514,16 @@ Selecione um produto abaixo 👇`,
       const p =
       doc.data();
 
+      if (
+        (p.estoque || 0) <= 0
+      ) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "❌ Produto sem estoque"
+        );
+      }
+
       if (p.img) {
 
         return bot.sendPhoto(
@@ -551,6 +538,9 @@ Selecione um produto abaixo 👇`,
 💰 Valor:
 R$ ${p.preco}
 
+📦 Estoque:
+${p.estoque}
+
 📝 Descrição:
 ${p.desc}`,
 
@@ -577,6 +567,9 @@ ${p.desc}`,
 💰 Valor:
 R$ ${p.preco}
 
+📦 Estoque:
+${p.estoque}
+
 📝 Descrição:
 ${p.desc}`,
 
@@ -593,117 +586,6 @@ ${p.desc}`,
     }]]
   }
 }
-      );
-    }
-
-    // =====================================
-    // ADMIN ADD
-    // =====================================
-
-    if (
-      data === "admin_add"
-    ) {
-
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
-
-      userState[userId] = {
-        step: "imagem"
-      };
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`🖼 ENVIE O LINK DA IMAGEM
-
-Exemplo:
-https://site.com/img.jpg`
-      );
-    }
-
-    // =====================================
-    // ADMIN LISTAR
-    // =====================================
-
-    if (
-      data === "admin_listar"
-    ) {
-
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhum produto"
-        );
-      }
-
-      let texto =
-"📦 PRODUTOS\n\n";
-
-      snap.forEach(doc => {
-
-        const p =
-        doc.data();
-
-        texto +=
-
-`🆔 ${doc.id}
-
-📦 ${p.nome}
-💰 R$ ${p.preco}
-
-`;
-      });
-
-      return bot.sendMessage(
-        q.message.chat.id,
-        texto
-      );
-    }
-
-    // =====================================
-    // ADMIN LIMPAR
-    // =====================================
-
-    if (
-      data === "admin_limpar"
-    ) {
-
-      if (
-        userId !== MASTER
-      ) return;
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      for (
-        const doc
-        of snap.docs
-      ) {
-
-        await db
-        .collection('produtos')
-        .doc(doc.id)
-        .delete();
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-        "🗑 Todos produtos deletados"
       );
     }
 
@@ -739,6 +621,16 @@ https://site.com/img.jpg`
 
       const p =
       doc.data();
+
+      if (
+        (p.estoque || 0) <= 0
+      ) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "❌ Produto sem estoque"
+        );
+      }
 
       // =====================================
       // GERAR PIX
@@ -786,6 +678,9 @@ https://site.com/img.jpg`
         String(payment.id)
       )
       .set({
+
+        produtoId:
+        doc.id,
 
         chatId:
         q.message.chat.id,
@@ -962,6 +857,27 @@ async (msg) => {
       text;
 
       state.step =
+      "estoque";
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "📦 Quantidade em estoque:"
+      );
+    }
+
+    // =====================================
+    // ESTOQUE
+    // =====================================
+
+    if (
+      state.step ===
+      "estoque"
+    ) {
+
+      state.estoque =
+      Number(text);
+
+      state.step =
       "whatsapp";
 
       return bot.sendMessage(
@@ -1013,6 +929,9 @@ async (msg) => {
         desc:
         state.desc,
 
+        estoque:
+        state.estoque,
+
         img:
         state.img,
 
@@ -1034,7 +953,8 @@ async (msg) => {
 `✅ PRODUTO ADICIONADO!
 
 📦 ${state.nome}
-💰 R$ ${state.preco}`
+💰 R$ ${state.preco}
+📦 Estoque: ${state.estoque}`
       );
     }
 
