@@ -164,7 +164,6 @@ async (msg) => {
       userId !== MASTER &&
       !ADMINS.includes(userId)
     ) {
-
       return;
     }
 
@@ -415,7 +414,7 @@ via Mercado Pago
     );
 
     // =====================================
-    // INLINE KEYBOARD
+    // TECLADO FLUTUANTE
     // =====================================
 
     await bot.sendMessage(
@@ -425,38 +424,22 @@ via Mercado Pago
 
 {
   reply_markup: {
-    inline_keyboard: [
+
+    keyboard: [
 
       [
-        {
-          text:
-          "📦 PRODUTOS",
-
-          callback_data:
-          "menu_produtos"
-        }
+        "📦 PRODUTOS"
       ],
 
       [
-        {
-          text:
-          "ℹ️ INFORMAÇÕES",
-
-          callback_data:
-          "menu_info"
-        }
-      ],
-
-      [
-        {
-          text:
-          "📲 SUPORTE",
-
-          url:
-`https://wa.me/${WHATSAPP}`
-        }
+        "ℹ️ INFORMAÇÕES",
+        "📲 SUPORTE"
       ]
-    ]
+    ],
+
+    resize_keyboard: true,
+    one_time_keyboard: false,
+    is_persistent: true
   }
 }
     );
@@ -468,58 +451,27 @@ via Mercado Pago
 });
 
 // =========================================
-// CALLBACKS
+// TECLADO FLUTUANTE
 // =========================================
 
 bot.on(
-"callback_query",
-async (q) => {
+"message",
+async (msg) => {
 
   try {
 
-    await bot.answerCallbackQuery(
-      q.id
-    );
+    if (!msg.text)
+      return;
 
-    const data =
-    q.data;
-
-    const userId =
-    String(q.from.id);
-
-    // =====================================
-    // INFO
-    // =====================================
-
-    if (
-      data === "menu_info"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`ℹ️ INFORMAÇÕES
-
-🚀 Sistema:
-MAX FULL
-
-⚡ Status:
-ONLINE
-
-👤 Desenvolvedor:
-Faelzin
-
-📲 Suporte:
-${WHATSAPP}`
-      );
-    }
+    const text =
+    msg.text;
 
     // =====================================
     // PRODUTOS
     // =====================================
 
     if (
-      data === "menu_produtos"
+      text === "📦 PRODUTOS"
     ) {
 
       const snap =
@@ -530,7 +482,7 @@ ${WHATSAPP}`
       if (snap.empty) {
 
         return bot.sendMessage(
-          q.message.chat.id,
+          msg.chat.id,
           "❌ Nenhum produto cadastrado"
         );
       }
@@ -559,11 +511,9 @@ ${WHATSAPP}`
       });
 
       return bot.sendMessage(
-        q.message.chat.id,
+        msg.chat.id,
 
-`📦 LISTA DE PRODUTOS
-
-Selecione um produto abaixo 👇`,
+`📦 LISTA DE PRODUTOS`,
 
 {
   reply_markup: {
@@ -573,6 +523,76 @@ Selecione um produto abaixo 👇`,
 }
       );
     }
+
+    // =====================================
+    // INFO
+    // =====================================
+
+    if (
+      text === "ℹ️ INFORMAÇÕES"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`ℹ️ INFORMAÇÕES
+
+🚀 Sistema:
+MAX FULL
+
+⚡ Status:
+ONLINE
+
+👤 Desenvolvedor:
+Faelzin
+
+📲 Suporte:
+${WHATSAPP}`
+      );
+    }
+
+    // =====================================
+    // SUPORTE
+    // =====================================
+
+    if (
+      text === "📲 SUPORTE"
+    ) {
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📲 SUPORTE OFICIAL
+
+https://wa.me/${WHATSAPP}`
+      );
+    }
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// CALLBACKS
+// =========================================
+
+bot.on(
+"callback_query",
+async (q) => {
+
+  try {
+
+    await bot.answerCallbackQuery(
+      q.id
+    );
+
+    const data =
+    q.data;
+
+    const userId =
+    String(q.from.id);
 
     // =====================================
     // VER PRODUTO
@@ -617,11 +637,9 @@ Selecione um produto abaixo 👇`,
         );
       }
 
-      if (p.img) {
-
-        return bot.sendPhoto(
-          q.message.chat.id,
-          p.img,
+      return bot.sendPhoto(
+        q.message.chat.id,
+        p.img,
 
 {
   caption:
@@ -637,36 +655,6 @@ ${p.estoque}
 📝 Descrição:
 ${p.desc}`,
 
-  reply_markup: {
-    inline_keyboard: [[{
-
-      text:
-      "🛒 COMPRAR AGORA",
-
-      callback_data:
-      `buy_${doc.id}`
-
-    }]]
-  }
-}
-        );
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`📦 ${p.nome}
-
-💰 Valor:
-R$ ${p.preco}
-
-📦 Estoque:
-${p.estoque}
-
-📝 Descrição:
-${p.desc}`,
-
-{
   reply_markup: {
     inline_keyboard: [[{
 
@@ -702,10 +690,7 @@ ${p.desc}`,
       return bot.sendMessage(
         q.message.chat.id,
 
-`🖼 ENVIE O LINK DA IMAGEM
-
-Exemplo:
-https://site.com/img.jpg`
+`🖼 ENVIE O LINK DA IMAGEM`
       );
     }
 
@@ -717,26 +702,13 @@ https://site.com/img.jpg`
       data === "admin_listar"
     ) {
 
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
+      let texto =
+"📦 PRODUTOS\n\n";
 
       const snap =
       await db
       .collection('produtos')
       .get();
-
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhum produto"
-        );
-      }
-
-      let texto =
-"📦 PRODUTOS\n\n";
 
       snap.forEach(doc => {
 
@@ -767,11 +739,6 @@ https://site.com/img.jpg`
     if (
       data === "admin_limpar"
     ) {
-
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
 
       const snap =
       await db
@@ -817,30 +784,8 @@ https://site.com/img.jpg`
       .doc(idProduto)
       .get();
 
-      if (!doc.exists) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Produto não encontrado"
-        );
-      }
-
       const p =
       doc.data();
-
-      if (
-        (p.estoque || 0) <= 0
-      ) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Produto sem estoque"
-        );
-      }
-
-      // =====================================
-      // GERAR PIX
-      // =====================================
 
       const payment =
       await mpPayment.create({
@@ -910,10 +855,6 @@ https://site.com/img.jpg`
         Date.now()
       });
 
-      // =====================================
-      // ENVIA PIX
-      // =====================================
-
       await bot.sendPhoto(
         q.message.chat.id,
 
@@ -942,17 +883,13 @@ ${copia}
 ⏳ Aguardando pagamento...
 
 ⚡ Aprovação automática.`
-
 }
       );
     }
 
   } catch (err) {
 
-    console.log(
-      "❌ CALLBACK ERROR:",
-      err
-    );
+    console.log(err);
   }
 });
 
@@ -985,10 +922,6 @@ async (msg) => {
     if (!state)
       return;
 
-    // =====================================
-    // IMAGEM
-    // =====================================
-
     if (
       state.step ===
       "imagem"
@@ -1006,10 +939,6 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // PRODUTO
-    // =====================================
-
     if (
       state.step ===
       "produto"
@@ -1026,10 +955,6 @@ async (msg) => {
         "💰 Valor:"
       );
     }
-
-    // =====================================
-    // VALOR
-    // =====================================
 
     if (
       state.step ===
@@ -1050,10 +975,6 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // DESCRIÇÃO
-    // =====================================
-
     if (
       state.step ===
       "descricao"
@@ -1070,10 +991,6 @@ async (msg) => {
         "📦 Quantidade em estoque:"
       );
     }
-
-    // =====================================
-    // ESTOQUE
-    // =====================================
 
     if (
       state.step ===
@@ -1092,10 +1009,6 @@ async (msg) => {
       );
     }
 
-    // =====================================
-    // WHATSAPP
-    // =====================================
-
     if (
       state.step ===
       "whatsapp"
@@ -1112,10 +1025,6 @@ async (msg) => {
         "🔗 Link produto:"
       );
     }
-
-    // =====================================
-    // LINK
-    // =====================================
 
     if (
       state.step ===
@@ -1156,6 +1065,7 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
+
 `✅ PRODUTO ADICIONADO!
 
 📦 ${state.nome}
