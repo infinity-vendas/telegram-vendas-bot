@@ -1,6 +1,6 @@
 // =========================================
-// SELLFORGE BOT FULL FINAL
-// PIX AUTOMÁTICO + FIREBASE + STATS
+// SELLFORGE BOT V2
+// CATEGORIAS + COOLDOWN 1H
 // =========================================
 
 require('dotenv').config();
@@ -58,6 +58,7 @@ const userState = {};
 const userCooldown = {};
 const userDaily = {};
 const pixPending = {};
+const categoryCooldown = {};
 
 // =========================================
 // LIMITES
@@ -65,7 +66,9 @@ const pixPending = {};
 
 const COMMAND_LIMIT = 80;
 const PIX_LIMIT = 7;
-const PRODUCT_LIMIT = 30;
+
+const CATEGORY_COOLDOWN =
+1000 * 60 * 60; // 1 hora
 
 // =========================================
 // FUNÇÕES
@@ -87,12 +90,8 @@ function initUser(userId) {
     userDaily[userId] = {
 
       date: today,
-
       commands: 0,
-
-      pix: 0,
-
-      produtos: 0
+      pix: 0
     };
   }
 
@@ -103,12 +102,8 @@ function initUser(userId) {
     userDaily[userId] = {
 
       date: today,
-
       commands: 0,
-
-      pix: 0,
-
-      produtos: 0
+      pix: 0
     };
   }
 }
@@ -135,6 +130,7 @@ throw new Error("FIREBASE_CONFIG ausente");
 
 const mpClient =
 new MercadoPagoConfig({
+
   accessToken:
   process.env.MP_ACCESS_TOKEN
 });
@@ -152,6 +148,7 @@ JSON.parse(
 );
 
 initializeApp({
+
   credential:
   cert(serviceAccount)
 });
@@ -164,7 +161,51 @@ console.log(
 );
 
 // =========================================
-// REGISTRAR USUÁRIO
+// TELEGRAM
+// =========================================
+
+const bot =
+new TelegramBot(
+  process.env.BOT_TOKEN,
+{
+  webHook: true
+}
+);
+
+const SECRET_PATH =
+`/bot${process.env.BOT_TOKEN}`;
+
+app.post(
+SECRET_PATH,
+async (req, res) => {
+
+  try {
+
+    await bot.processUpdate(
+      req.body
+    );
+
+    res.sendStatus(200);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.sendStatus(500);
+  }
+});
+
+// =========================================
+// HOME
+// =========================================
+
+app.get('/', (req, res) => {
+
+  res.send("🚀 BOT ONLINE");
+});
+
+// =========================================
+// REGISTRAR USER
 // =========================================
 
 async function registrarUsuario(user) {
@@ -214,85 +255,29 @@ async function registrarUsuario(user) {
 }
 
 // =========================================
-// TELEGRAM
-// =========================================
-
-const bot =
-new TelegramBot(
-  process.env.BOT_TOKEN,
-{
-  webHook: true
-}
-);
-
-const SECRET_PATH =
-`/bot${process.env.BOT_TOKEN}`;
-
-app.post(
-SECRET_PATH,
-async (req, res) => {
-
-  try {
-
-    await bot.processUpdate(
-      req.body
-    );
-
-    res.sendStatus(200);
-
-  } catch (err) {
-
-    console.log(err);
-
-    res.sendStatus(500);
-  }
-});
-
-// =========================================
-// HOME
-// =========================================
-
-app.get('/', (req, res) => {
-
-  res.send(
-    "🚀 BOT ONLINE"
-  );
-});
-
-// =========================================
-// PAINEL ADMIN
+// ADMIN
 // =========================================
 
 bot.onText(
 /\/staff_dono/,
 async (msg) => {
 
-  try {
+  const userId =
+  String(msg.from.id);
 
-    const userId =
-    String(msg.from.id);
+  if (
+    userId !== MASTER &&
+    !ADMINS.includes(userId)
+  ) return;
 
-    if (
-      userId !== MASTER &&
-      !ADMINS.includes(userId)
-    ) {
-      return;
-    }
+  await bot.sendMessage(
+    msg.chat.id,
 
-    await bot.sendMessage(
-      msg.chat.id,
-
-`🔐 PAINEL ADMIN
-
-━━━━━━━━━━━━━━━━━━━
-
-✅ Sistema online
-✅ Controle total
-
-━━━━━━━━━━━━━━━━━━━`,
+`🔐 PAINEL ADMIN`,
 
 {
   reply_markup: {
+
     inline_keyboard: [
 
       [
@@ -308,78 +293,51 @@ async (msg) => {
       [
         {
           text:
-          "📦 LISTAR PRODUTOS",
+          "📦 LISTAR",
 
           callback_data:
           "admin_listar"
-        }
-      ],
-
-      [
-        {
-          text:
-          "❌ DELETAR ID",
-
-          callback_data:
-          "admin_delete"
-        }
-      ],
-
-      [
-        {
-          text:
-          "🗑 LIMPAR",
-
-          callback_data:
-          "admin_limpar"
         }
       ]
     ]
   }
 }
-    );
-
-  } catch (err) {
-
-    console.log(err);
-  }
+  );
 });
 
 // =========================================
-// STATS SECRETO
+// STATS
 // =========================================
 
 bot.onText(
 /\/stats/,
 async (msg) => {
 
-  try {
+  const userId =
+  String(msg.from.id);
 
-    const userId =
-    String(msg.from.id);
+  if (
+    userId !== MASTER &&
+    !ADMINS.includes(userId)
+  ) return;
 
-    if (
-      userId !== MASTER &&
-      !ADMINS.includes(userId)
-    ) return;
+  const usuarios =
+  await db.collection(
+    'usuarios'
+  ).get();
 
-    const usuarios =
-    await db.collection(
-      'usuarios'
-    ).get();
+  const produtos =
+  await db.collection(
+    'produtos'
+  ).get();
 
-    const produtos =
-    await db.collection(
-      'produtos'
-    ).get();
+  const pagamentos =
+  await db.collection(
+    'pagamentos'
+  ).get();
 
-    const pagamentos =
-    await db.collection(
-      'pagamentos'
-    ).get();
-
-    await bot.sendMessage(
-      msg.chat.id,
+  await bot.sendMessage(
+    msg.chat.id,
 
 `📊 ESTATÍSTICAS
 
@@ -393,17 +351,8 @@ ${produtos.size}
 ${pagamentos.size}
 
 ⚡ Limite comandos:
-${COMMAND_LIMIT}
-
-💳 PIX limite:
-${PIX_LIMIT}`
-
-    );
-
-  } catch (err) {
-
-    console.log(err);
-  }
+${COMMAND_LIMIT}`
+  );
 });
 
 // =========================================
@@ -422,11 +371,13 @@ async (req, res) => {
     if (
       data.type !== "payment"
     ) {
+
       return res.sendStatus(200);
     }
 
     const payment =
     await mpPayment.get({
+
       id:
       data.data.id
     });
@@ -435,6 +386,7 @@ async (req, res) => {
       payment.status !==
       "approved"
     ) {
+
       return res.sendStatus(200);
     }
 
@@ -470,20 +422,19 @@ async (req, res) => {
     const produtoDoc =
     await produtoRef.get();
 
-    let estoqueRestante = 0;
-
     if (produtoDoc.exists) {
 
-      estoqueRestante =
-      (produtoDoc.data().estoque || 0) - 1;
+      let estoque =
+      produtoDoc.data().estoque || 0;
 
-      if (estoqueRestante < 0)
-        estoqueRestante = 0;
+      estoque--;
+
+      if (estoque < 0)
+        estoque = 0;
 
       await produtoRef.update({
 
-        estoque:
-        estoqueRestante
+        estoque
       });
     }
 
@@ -494,28 +445,13 @@ async (req, res) => {
     await bot.sendMessage(
       info.chatId,
 
-`✅ PAGAMENTO APROVADO!
+`✅ PAGAMENTO APROVADO
 
-━━━━━━━━━━━━━━━━━━━
-
-📦 Produto:
-${info.produto}
-
-💰 Valor:
-R$ ${info.valor}
-
-📦 Estoque:
-${estoqueRestante}
-
-━━━━━━━━━━━━━━━━━━━
+📦 ${info.produto}
 
 🔓 LINK:
 
-${info.link}
-
-━━━━━━━━━━━━━━━━━━━
-
-🚀 Obrigado pela compra!`
+${info.link}`
     );
 
     res.sendStatus(200);
@@ -536,35 +472,26 @@ bot.onText(
 /\/start/,
 async (msg) => {
 
-  try {
+  await registrarUsuario(
+    msg.from
+  );
 
-    await registrarUsuario(
-      msg.from
-    );
-
-    await bot.sendPhoto(
-      msg.chat.id,
-      LOGO,
+  await bot.sendPhoto(
+    msg.chat.id,
+    LOGO,
 
 {
   caption:
 
-`🚀 BEM-VINDO(A)
-
-━━━━━━━━━━━━━━━━━━━
+`🚀 BEM-VINDO
 
 ✅ PIX automático
-✅ Entrega automática
-✅ Sistema protegido
-
-━━━━━━━━━━━━━━━━━━━
-
-👇 Escolha abaixo`
+✅ Entrega automática`
 }
-    );
+  );
 
-    await bot.sendMessage(
-      msg.chat.id,
+  await bot.sendMessage(
+    msg.chat.id,
 
 `📋 MENU`,
 
@@ -587,12 +514,7 @@ async (msg) => {
     is_persistent: true
   }
 }
-    );
-
-  } catch (err) {
-
-    console.log(err);
-  }
+  );
 });
 
 // =========================================
@@ -634,7 +556,7 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "⚠️ Limite diário atingido"
+        "⚠️ Limite diário"
       );
     }
 
@@ -649,73 +571,77 @@ async (msg) => {
       text === "📦 PRODUTOS"
     ) {
 
-      userDaily[id].produtos++;
+      const ultimo =
+      categoryCooldown[id];
 
       if (
-        userDaily[id].produtos >
-        PRODUCT_LIMIT
+        ultimo &&
+        Date.now() - ultimo <
+        CATEGORY_COOLDOWN
       ) {
 
         return bot.sendMessage(
           msg.chat.id,
-          "⚠️ Limite produtos atingido"
+
+`⚠️ Você já visualizou produtos recentemente.
+
+⏳ Aguarde 1 hora.`
         );
       }
 
-      const snap =
-      await db
-      .collection('produtos')
-      .limit(50)
-      .get();
+      return bot.sendMessage(
+        msg.chat.id,
 
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          msg.chat.id,
-          "❌ Nenhum produto"
-        );
-      }
-
-      for (
-        const item
-        of snap.docs
-      ) {
-
-        const p =
-        item.data();
-
-        await bot.sendPhoto(
-          msg.chat.id,
-          p.img,
+`📂 ESCOLHA CATEGORIA`,
 
 {
-  caption:
-
-`📦 ${p.nome}
-
-💰 R$ ${p.preco}
-
-📦 Estoque:
-${p.estoque}
-
-📝 ${p.desc}`,
-
   reply_markup: {
-    inline_keyboard: [[{
 
-      text:
-      "🛒 COMPRAR",
+    inline_keyboard: [
 
-      callback_data:
-      `buy_${item.id}`
+      [
+        {
+          text:
+          "🎮 FREE FIRE",
 
-    }]]
+          callback_data:
+          "cat_FREE FIRE"
+        }
+      ],
+
+      [
+        {
+          text:
+          "💎 VIP",
+
+          callback_data:
+          "cat_VIP"
+        }
+      ],
+
+      [
+        {
+          text:
+          "📱 CONTAS",
+
+          callback_data:
+          "cat_CONTAS"
+        }
+      ],
+
+      [
+        {
+          text:
+          "🛠 FERRAMENTAS",
+
+          callback_data:
+          "cat_FERRAMENTAS"
+        }
+      ]
+    ]
   }
 }
-        );
-      }
-
-      return;
+      );
     }
 
     // =====================================
@@ -728,8 +654,7 @@ ${p.estoque}
 
       return bot.sendMessage(
         msg.chat.id,
-
-`🚀 Sistema online`
+        "🚀 Sistema online"
       );
     }
 
@@ -749,7 +674,7 @@ ${p.estoque}
     }
 
     // =====================================
-    // SISTEMA ADMIN
+    // ADD PRODUTO
     // =====================================
 
     const state =
@@ -758,51 +683,13 @@ ${p.estoque}
     if (!state)
       return;
 
-    // DELETE ID
-
     if (
-      state.step ===
-      "delete_id"
-    ) {
-
-      const ref =
-      db.collection('produtos')
-      .doc(text);
-
-      const doc =
-      await ref.get();
-
-      if (!doc.exists) {
-
-        userState[id] = null;
-
-        return bot.sendMessage(
-          msg.chat.id,
-          "❌ Produto não encontrado"
-        );
-      }
-
-      await ref.delete();
-
-      userState[id] = null;
-
-      return bot.sendMessage(
-        msg.chat.id,
-        "✅ Produto deletado"
-      );
-    }
-
-    // ADD PRODUTO
-
-    if (
-      state.step ===
-      "imagem"
+      state.step === "imagem"
     ) {
 
       state.img = text;
 
-      state.step =
-      "produto";
+      state.step = "produto";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -811,14 +698,12 @@ ${p.estoque}
     }
 
     if (
-      state.step ===
-      "produto"
+      state.step === "produto"
     ) {
 
       state.nome = text;
 
-      state.step =
-      "valor";
+      state.step = "valor";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -827,17 +712,13 @@ ${p.estoque}
     }
 
     if (
-      state.step ===
-      "valor"
+      state.step === "valor"
     ) {
 
       state.preco =
-      Number(
-        text.replace(",", ".")
-      );
+      Number(text);
 
-      state.step =
-      "descricao";
+      state.step = "descricao";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -846,14 +727,12 @@ ${p.estoque}
     }
 
     if (
-      state.step ===
-      "descricao"
+      state.step === "descricao"
     ) {
 
       state.desc = text;
 
-      state.step =
-      "estoque";
+      state.step = "estoque";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -862,15 +741,13 @@ ${p.estoque}
     }
 
     if (
-      state.step ===
-      "estoque"
+      state.step === "estoque"
     ) {
 
       state.estoque =
       Number(text);
 
-      state.step =
-      "whatsapp";
+      state.step = "whatsapp";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -879,15 +756,12 @@ ${p.estoque}
     }
 
     if (
-      state.step ===
-      "whatsapp"
+      state.step === "whatsapp"
     ) {
 
-      state.whatsapp =
-      text;
+      state.whatsapp = text;
 
-      state.step =
-      "link";
+      state.step = "link";
 
       return bot.sendMessage(
         msg.chat.id,
@@ -896,8 +770,27 @@ ${p.estoque}
     }
 
     if (
-      state.step ===
-      "link"
+      state.step === "link"
+    ) {
+
+      state.link = text;
+
+      state.step = "categoria";
+
+      return bot.sendMessage(
+        msg.chat.id,
+
+`📂 Categoria:
+
+FREE FIRE
+VIP
+CONTAS
+FERRAMENTAS`
+      );
+    }
+
+    if (
+      state.step === "categoria"
     ) {
 
       await db
@@ -923,7 +816,10 @@ ${p.estoque}
         state.whatsapp,
 
         link:
-        text,
+        state.link,
+
+        categoria:
+        text.toUpperCase(),
 
         createdAt:
         Date.now()
@@ -933,7 +829,7 @@ ${p.estoque}
 
       return bot.sendMessage(
         msg.chat.id,
-        "✅ Produto adicionado"
+        "✅ PRODUTO ADICIONADO"
       );
     }
 
@@ -972,6 +868,7 @@ async (q) => {
     ) {
 
       userState[userId] = {
+
         step: "imagem"
       };
 
@@ -982,7 +879,7 @@ async (q) => {
     }
 
     // =====================================
-    // ADMIN LISTAR
+    // LISTAR
     // =====================================
 
     if (
@@ -992,7 +889,66 @@ async (q) => {
       const snap =
       await db
       .collection('produtos')
+      .limit(30)
       .get();
+
+      let txt =
+      "📦 PRODUTOS\n\n";
+
+      snap.forEach(doc => {
+
+        const p =
+        doc.data();
+
+        txt +=
+`🆔 ${doc.id}
+📦 ${p.nome}
+📂 ${p.categoria}
+
+`;
+      });
+
+      return bot.sendMessage(
+        q.message.chat.id,
+        txt
+      );
+    }
+
+    // =====================================
+    // CATEGORIAS
+    // =====================================
+
+    if (
+      data.startsWith("cat_")
+    ) {
+
+      categoryCooldown[userId] =
+      Date.now();
+
+      const categoria =
+      data.replace(
+        "cat_",
+        ""
+      );
+
+      const snap =
+      await db
+      .collection('produtos')
+      .where(
+        "categoria",
+        "==",
+        categoria
+      )
+      .limit(10)
+      .get();
+
+      if (snap.empty) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "❌ Nenhum produto"
+        );
+      }
 
       for (
         const item
@@ -1009,14 +965,27 @@ async (q) => {
 {
   caption:
 
-`🆔 ${item.id}
-
-📦 ${p.nome}
+`📦 ${p.nome}
 
 💰 R$ ${p.preco}
 
 📦 Estoque:
-${p.estoque}`
+${p.estoque}
+
+📝 ${p.desc}`,
+
+  reply_markup: {
+
+    inline_keyboard: [[{
+
+      text:
+      "🛒 COMPRAR",
+
+      callback_data:
+      `buy_${item.id}`
+
+    }]]
+  }
 }
         );
       }
@@ -1025,77 +994,12 @@ ${p.estoque}`
     }
 
     // =====================================
-    // DELETE ID
-    // =====================================
-
-    if (
-      data === "admin_delete"
-    ) {
-
-      userState[userId] = {
-        step: "delete_id"
-      };
-
-      return bot.sendMessage(
-        q.message.chat.id,
-        "🗑 Envie ID:"
-      );
-    }
-
-    // =====================================
-    // LIMPAR PRODUTOS
-    // =====================================
-
-    if (
-      data === "admin_limpar"
-    ) {
-
-      const snap =
-      await db
-      .collection('produtos')
-      .get();
-
-      for (
-        const doc
-        of snap.docs
-      ) {
-
-        await db
-        .collection('produtos')
-        .doc(doc.id)
-        .delete();
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-        "🗑 Produtos removidos"
-      );
-    }
-
-    // =====================================
     // COMPRAR
     // =====================================
 
     if (
-      data.startsWith(
-        "buy_"
-      )
+      data.startsWith("buy_")
     ) {
-
-      initUser(userId);
-
-      userDaily[userId].pix++;
-
-      if (
-        userDaily[userId].pix >
-        PIX_LIMIT
-      ) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "⚠️ Limite PIX atingido"
-        );
-      }
 
       if (
         pixPending[userId]
@@ -1216,21 +1120,15 @@ ${p.estoque}`
 
 `💰 PAGAMENTO PIX
 
-━━━━━━━━━━━━━━━━━━━
-
 📦 ${p.nome}
 
 💲 R$ ${p.preco}
-
-━━━━━━━━━━━━━━━━━━━
 
 📋 PIX COPIA E COLA:
 
 ${copia}
 
-━━━━━━━━━━━━━━━━━━━
-
-⏳ Aguardando pagamento`
+⏳ Aguardando pagamento...`
 }
       );
     }
@@ -1265,10 +1163,6 @@ async () => {
 
   console.log(
     "✅ WEBHOOK SETADO"
-  );
-
-  console.log(
-    webhook
   );
 }
 );
