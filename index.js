@@ -113,24 +113,24 @@ const SECRET_PATH =
 `/bot${process.env.BOT_TOKEN}`;
 
 app.post(
-  SECRET_PATH,
-  async (req, res) => {
+SECRET_PATH,
+async (req, res) => {
 
-    try {
+  try {
 
-      await bot.processUpdate(
-        req.body
-      );
+    await bot.processUpdate(
+      req.body
+    );
 
-      res.sendStatus(200);
+    res.sendStatus(200);
 
-    } catch (err) {
+  } catch (err) {
 
-      console.log(err);
+    console.log(err);
 
-      res.sendStatus(500);
-    }
+    res.sendStatus(500);
   }
+}
 );
 
 // =========================================
@@ -140,7 +140,7 @@ app.post(
 app.get('/', (req, res) => {
 
   res.send(
-    "🚀 BOT ONLINE V2"
+    "🚀 SELLFORGE V3 ONLINE"
   );
 });
 
@@ -163,6 +163,7 @@ async function getCategoriasButtons() {
     doc.data();
 
     buttons.push([{
+
       text:
       `📂 ${c.nome}`,
 
@@ -190,6 +191,7 @@ async (req, res) => {
     if (
       data.type !== "payment"
     ) {
+
       return res.sendStatus(200);
     }
 
@@ -203,6 +205,7 @@ async (req, res) => {
       payment.status !==
       "approved"
     ) {
+
       return res.sendStatus(200);
     }
 
@@ -350,9 +353,6 @@ async (msg) => {
     const chatId =
     msg.chat.id;
 
-    const userId =
-    String(msg.from.id);
-
     await bot.sendPhoto(
       chatId,
       LOGO,
@@ -366,66 +366,72 @@ async (msg) => {
 
 ✅ PIX automático
 ✅ Entrega automática
-✅ Marketplace organizado
+✅ Marketplace profissional
 ✅ Categorias
 ✅ Estoque automático
 
 ━━━━━━━━━━━━━━━━━━━
 
-👇 Escolha abaixo`
+💙 SELLFORGE V3`
 }
     );
 
     await bot.sendMessage(
       chatId,
 
-`📋 MENU PRINCIPAL`,
+`💙 MENU SELLFORGE`,
 
 {
   reply_markup: {
-    inline_keyboard: [
 
-      [{
-        text:
-        "📦 PRODUTOS",
+    keyboard: [
 
-        callback_data:
-        "menu_produtos"
-      }],
+      ["📦 PRODUTOS"],
 
-      [{
-        text:
-        "ℹ️ INFO",
+      ["ℹ️ INFORMAÇÕES"],
 
-        callback_data:
-        "menu_info"
-      }],
+      ["📲 SUPORTE"]
 
-      [{
-        text:
-        "📲 SUPORTE",
+    ],
 
-        url:
-`https://wa.me/${WHATSAPP}`
-      }]
-    ]
+    resize_keyboard: true,
+
+    persistent: true
   }
 }
     );
 
-    // =====================================
-    // ADMIN
-    // =====================================
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// ADMIN SECRETO
+// =========================================
+
+bot.onText(
+/\/admin_sellforge/,
+async (msg) => {
+
+  try {
+
+    const userId =
+    String(msg.from.id);
 
     if (
-      userId === MASTER ||
-      ADMINS.includes(userId)
+      userId !== MASTER &&
+      !ADMINS.includes(userId)
     ) {
 
-      await bot.sendMessage(
-        chatId,
+      return;
+    }
 
-`🔐 PAINEL ADMIN`,
+    await bot.sendMessage(
+      msg.chat.id,
+
+`🔐 PAINEL ADMIN SELLFORGE`,
 
 {
   reply_markup: {
@@ -481,6 +487,102 @@ async (msg) => {
     ]
   }
 }
+    );
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// MENU KEYBOARD
+// =========================================
+
+bot.on(
+"message",
+async (msg) => {
+
+  try {
+
+    if (!msg.text)
+      return;
+
+    const text =
+    msg.text;
+
+    const chatId =
+    msg.chat.id;
+
+    // =====================================
+    // PRODUTOS
+    // =====================================
+
+    if (
+      text === "📦 PRODUTOS"
+    ) {
+
+      const buttons =
+      await getCategoriasButtons();
+
+      if (
+        buttons.length <= 0
+      ) {
+
+        return bot.sendMessage(
+          chatId,
+          "❌ Nenhuma categoria"
+        );
+      }
+
+      return bot.sendMessage(
+        chatId,
+
+`📂 CATEGORIAS`,
+
+{
+  reply_markup: {
+    inline_keyboard:
+    buttons
+  }
+}
+      );
+    }
+
+    // =====================================
+    // INFO
+    // =====================================
+
+    if (
+      text === "ℹ️ INFORMAÇÕES"
+    ) {
+
+      return bot.sendMessage(
+        chatId,
+
+`🚀 SELLFORGE V3
+
+✅ PIX automático
+✅ Entrega automática
+✅ Marketplace profissional
+✅ Sistema premium`
+      );
+    }
+
+    // =====================================
+    // SUPORTE
+    // =====================================
+
+    if (
+      text === "📲 SUPORTE"
+    ) {
+
+      return bot.sendMessage(
+        chatId,
+
+`📲 SUPORTE
+
+https://wa.me/${WHATSAPP}`
       );
     }
 
@@ -509,58 +611,6 @@ async (q) => {
 
     const userId =
     String(q.from.id);
-
-    // =====================================
-    // INFO
-    // =====================================
-
-    if (
-      data === "menu_info"
-    ) {
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`🚀 BOT ONLINE V2
-
-💙 Sistema profissional`
-      );
-    }
-
-    // =====================================
-    // MENU PRODUTOS
-    // =====================================
-
-    if (
-      data === "menu_produtos"
-    ) {
-
-      const buttons =
-      await getCategoriasButtons();
-
-      if (
-        buttons.length <= 0
-      ) {
-
-        return bot.sendMessage(
-          q.message.chat.id,
-          "❌ Nenhuma categoria"
-        );
-      }
-
-      return bot.sendMessage(
-        q.message.chat.id,
-
-`📂 CATEGORIAS`,
-
-{
-  reply_markup: {
-    inline_keyboard:
-    buttons
-  }
-}
-      );
-    }
 
     // =====================================
     // CATEGORIAS
@@ -595,7 +645,7 @@ async (q) => {
         return bot.sendMessage(
           q.message.chat.id,
 
-`🖼 ENVIE O LINK DA IMAGEM`
+`🖼 ENVIE LINK DA IMAGEM`
         );
       }
 
@@ -633,11 +683,9 @@ async (q) => {
           p.estoque <= 0
         ) continue;
 
-        if (p.img) {
-
-          await bot.sendPhoto(
-            q.message.chat.id,
-            p.img,
+        await bot.sendPhoto(
+          q.message.chat.id,
+          p.img,
 
 {
   caption:
@@ -663,9 +711,7 @@ ${p.estoque}
     }]]
   }
 }
-          );
-
-        }
+        );
       }
 
       return;
@@ -679,11 +725,6 @@ ${p.estoque}
       data === "admin_categoria"
     ) {
 
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
-
       userState[userId] = {
         step:
         "criar_categoria"
@@ -692,7 +733,7 @@ ${p.estoque}
       return bot.sendMessage(
         q.message.chat.id,
 
-`📂 Nome da categoria`
+`📂 Nome categoria`
       );
     }
 
@@ -703,11 +744,6 @@ ${p.estoque}
     if (
       data === "admin_add"
     ) {
-
-      if (
-        userId !== MASTER &&
-        !ADMINS.includes(userId)
-      ) return;
 
       const buttons =
       await getCategoriasButtons();
@@ -779,7 +815,7 @@ ${p.estoque}
 
 📦 ${p.nome}
 💰 R$ ${p.preco}
-📦 ${p.estoque}
+📦 Estoque: ${p.estoque}
 
 `;
       });
@@ -864,7 +900,7 @@ ${p.estoque}
       return bot.sendMessage(
         q.message.chat.id,
 
-`🗑 Tudo deletado`
+`🗑 Produtos deletados`
       );
     }
 
@@ -1042,7 +1078,7 @@ ${copia}
 });
 
 // =========================================
-// MESSAGE
+// STATES
 // =========================================
 
 bot.on(
@@ -1342,7 +1378,8 @@ async (msg) => {
 `✅ PRODUTO ADICIONADO
 
 📦 ${state.nome}
-💰 R$ ${state.preco}`
+💰 R$ ${state.preco}
+📦 Estoque: ${state.estoque}`
       );
     }
 
@@ -1375,7 +1412,11 @@ async () => {
   );
 
   console.log(
-    "✅ WEBHOOK"
+    "✅ WEBHOOK SETADO"
+  );
+
+  console.log(
+    webhook
   );
 }
 );
