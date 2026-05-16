@@ -1,5 +1,5 @@
 // =========================================
-// SELLFORGE BOT FULL ANTIGO + NOVO
+// SELLFORGE BOT FULL FINAL
 // =========================================
 
 require('dotenv').config();
@@ -363,7 +363,7 @@ async (msg) => {
 });
 
 // =========================================
-// STATS SECRETO
+// STATS
 // =========================================
 
 bot.onText(
@@ -402,6 +402,8 @@ async (msg) => {
 
     let usuariosHoje = 0;
 
+    let aprovados = 0;
+
     usuariosSnap.forEach(doc => {
 
       const u =
@@ -414,8 +416,6 @@ async (msg) => {
         usuariosHoje++;
       }
     });
-
-    let aprovados = 0;
 
     pagamentosSnap.forEach(doc => {
 
@@ -501,12 +501,8 @@ async (req, res) => {
     }
 
     const vendaRef =
-    db.collection(
-      'pagamentos'
-    )
-    .doc(
-      String(payment.id)
-    );
+    db.collection('pagamentos')
+    .doc(String(payment.id));
 
     const venda =
     await vendaRef.get();
@@ -564,26 +560,16 @@ async (req, res) => {
 
 `✅ PAGAMENTO APROVADO!
 
-━━━━━━━━━━━━━━━━━━━
+📦 ${info.produto}
 
-📦 Produto:
-${info.produto}
-
-💰 Valor:
-R$ ${info.valor}
+💰 R$ ${info.valor}
 
 📦 Estoque:
 ${estoqueRestante}
 
-━━━━━━━━━━━━━━━━━━━
-
 🔓 LINK:
 
-${info.link}
-
-━━━━━━━━━━━━━━━━━━━
-
-🚀 Obrigado pela compra!`
+${info.link}`
     );
 
     res.sendStatus(200);
@@ -660,165 +646,6 @@ INFINITY CLIENTES
   }
 }
     );
-
-  } catch (err) {
-
-    console.log(err);
-  }
-});
-
-// =========================================
-// MESSAGE
-// =========================================
-
-bot.on(
-"message",
-async (msg) => {
-
-  try {
-
-    if (!msg.text)
-      return;
-
-    const id =
-    String(msg.from.id);
-
-    initUser(id);
-
-    if (userCooldown[id]) {
-      return;
-    }
-
-    userCooldown[id] = true;
-
-    setTimeout(() => {
-
-      delete userCooldown[id];
-
-    }, 3000);
-
-    userDaily[id].commands++;
-
-    if (
-      userDaily[id].commands >
-      COMMAND_LIMIT
-    ) {
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`⚠️ LIMITE DIÁRIO ATINGIDO`
-      );
-    }
-
-    const text =
-    msg.text;
-
-    // =====================================
-    // PRODUTOS
-    // =====================================
-
-    if (
-      text === "📦 PRODUTOS"
-    ) {
-
-      userDaily[id].produtos++;
-
-      if (
-        userDaily[id].produtos >
-        PRODUCT_LIMIT
-      ) {
-
-        return bot.sendMessage(
-          msg.chat.id,
-
-`⚠️ Limite produtos atingido`
-        );
-      }
-
-      await bot.sendMessage(
-        msg.chat.id,
-        "⏳ Carregando produtos..."
-      );
-
-      const snap =
-      await db
-      .collection('produtos')
-      .limit(50)
-      .get();
-
-      if (snap.empty) {
-
-        return bot.sendMessage(
-          msg.chat.id,
-          "❌ Nenhum produto"
-        );
-      }
-
-      const buttons = [];
-
-      snap.forEach(doc => {
-
-        const p =
-        doc.data();
-
-        if (
-          (p.estoque || 0) > 0
-        ) {
-
-          buttons.push([{
-            text:
-`📦 ${p.nome} | R$ ${p.preco}`,
-
-            callback_data:
-`view_${doc.id}`
-          }]);
-        }
-      });
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`📦 LISTA DE PRODUTOS`,
-
-{
-  reply_markup: {
-    inline_keyboard:
-    buttons
-  }
-}
-      );
-    }
-
-    // =====================================
-    // INFO
-    // =====================================
-
-    if (
-      text === "ℹ️ INFORMAÇÕES"
-    ) {
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`🚀 Sistema online`
-      );
-    }
-
-    // =====================================
-    // SUPORTE
-    // =====================================
-
-    if (
-      text === "📲 SUPORTE"
-    ) {
-
-      return bot.sendMessage(
-        msg.chat.id,
-
-`https://wa.me/${WHATSAPP}`
-      );
-    }
 
   } catch (err) {
 
