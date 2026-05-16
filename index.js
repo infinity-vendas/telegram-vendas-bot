@@ -1,6 +1,6 @@
 // =========================================
 // SELLFORGE BOT FULL FINAL
-// MERCADO PAGO FUNCIONANDO
+// PIX AUTOMÁTICO + FIREBASE + STATS
 // =========================================
 
 require('dotenv').config();
@@ -38,8 +38,7 @@ app.use(express.json({
 // CONFIG
 // =========================================
 
-const MASTER =
-"6863505946";
+const MASTER = "6863505946";
 
 const ADMINS = [
   "8510878195"
@@ -119,16 +118,16 @@ function initUser(userId) {
 // =========================================
 
 if (!process.env.BOT_TOKEN)
-  throw new Error("BOT_TOKEN ausente");
+throw new Error("BOT_TOKEN ausente");
 
 if (!process.env.MP_ACCESS_TOKEN)
-  throw new Error("MP_ACCESS_TOKEN ausente");
+throw new Error("MP_ACCESS_TOKEN ausente");
 
 if (!process.env.RENDER_EXTERNAL_URL)
-  throw new Error("RENDER_EXTERNAL_URL ausente");
+throw new Error("RENDER_EXTERNAL_URL ausente");
 
 if (!process.env.FIREBASE_CONFIG)
-  throw new Error("FIREBASE_CONFIG ausente");
+throw new Error("FIREBASE_CONFIG ausente");
 
 // =========================================
 // MERCADO PAGO
@@ -165,53 +164,7 @@ console.log(
 );
 
 // =========================================
-// TELEGRAM
-// =========================================
-
-const bot =
-new TelegramBot(
-  process.env.BOT_TOKEN,
-{
-  webHook: true
-}
-);
-
-const SECRET_PATH =
-`/bot${process.env.BOT_TOKEN}`;
-
-app.post(
-SECRET_PATH,
-async (req, res) => {
-
-  try {
-
-    await bot.processUpdate(
-      req.body
-    );
-
-    res.sendStatus(200);
-
-  } catch (err) {
-
-    console.log(err);
-
-    res.sendStatus(500);
-  }
-});
-
-// =========================================
-// HOME
-// =========================================
-
-app.get('/', (req, res) => {
-
-  res.send(
-    "🚀 BOT ONLINE"
-  );
-});
-
-// =========================================
-// REGISTRAR USER
+// REGISTRAR USUÁRIO
 // =========================================
 
 async function registrarUsuario(user) {
@@ -261,25 +214,82 @@ async function registrarUsuario(user) {
 }
 
 // =========================================
-// ADMIN
+// TELEGRAM
+// =========================================
+
+const bot =
+new TelegramBot(
+  process.env.BOT_TOKEN,
+{
+  webHook: true
+}
+);
+
+const SECRET_PATH =
+`/bot${process.env.BOT_TOKEN}`;
+
+app.post(
+SECRET_PATH,
+async (req, res) => {
+
+  try {
+
+    await bot.processUpdate(
+      req.body
+    );
+
+    res.sendStatus(200);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.sendStatus(500);
+  }
+});
+
+// =========================================
+// HOME
+// =========================================
+
+app.get('/', (req, res) => {
+
+  res.send(
+    "🚀 BOT ONLINE"
+  );
+});
+
+// =========================================
+// PAINEL ADMIN
 // =========================================
 
 bot.onText(
 /\/staff_dono/,
 async (msg) => {
 
-  const userId =
-  String(msg.from.id);
+  try {
 
-  if (
-    userId !== MASTER &&
-    !ADMINS.includes(userId)
-  ) return;
+    const userId =
+    String(msg.from.id);
 
-  await bot.sendMessage(
-    msg.chat.id,
+    if (
+      userId !== MASTER &&
+      !ADMINS.includes(userId)
+    ) {
+      return;
+    }
 
-`🔐 PAINEL ADMIN`,
+    await bot.sendMessage(
+      msg.chat.id,
+
+`🔐 PAINEL ADMIN
+
+━━━━━━━━━━━━━━━━━━━
+
+✅ Sistema online
+✅ Controle total
+
+━━━━━━━━━━━━━━━━━━━`,
 
 {
   reply_markup: {
@@ -327,42 +337,49 @@ async (msg) => {
     ]
   }
 }
-  );
+    );
+
+  } catch (err) {
+
+    console.log(err);
+  }
 });
 
 // =========================================
-// STATS
+// STATS SECRETO
 // =========================================
 
 bot.onText(
 /\/stats/,
 async (msg) => {
 
-  const userId =
-  String(msg.from.id);
+  try {
 
-  if (
-    userId !== MASTER &&
-    !ADMINS.includes(userId)
-  ) return;
+    const userId =
+    String(msg.from.id);
 
-  const usuarios =
-  await db.collection(
-    'usuarios'
-  ).get();
+    if (
+      userId !== MASTER &&
+      !ADMINS.includes(userId)
+    ) return;
 
-  const produtos =
-  await db.collection(
-    'produtos'
-  ).get();
+    const usuarios =
+    await db.collection(
+      'usuarios'
+    ).get();
 
-  const pagamentos =
-  await db.collection(
-    'pagamentos'
-  ).get();
+    const produtos =
+    await db.collection(
+      'produtos'
+    ).get();
 
-  await bot.sendMessage(
-    msg.chat.id,
+    const pagamentos =
+    await db.collection(
+      'pagamentos'
+    ).get();
+
+    await bot.sendMessage(
+      msg.chat.id,
 
 `📊 ESTATÍSTICAS
 
@@ -376,8 +393,17 @@ ${produtos.size}
 ${pagamentos.size}
 
 ⚡ Limite comandos:
-${COMMAND_LIMIT}`
-  );
+${COMMAND_LIMIT}
+
+💳 PIX limite:
+${PIX_LIMIT}`
+
+    );
+
+  } catch (err) {
+
+    console.log(err);
+  }
 });
 
 // =========================================
@@ -468,12 +494,28 @@ async (req, res) => {
     await bot.sendMessage(
       info.chatId,
 
-`✅ PAGAMENTO APROVADO
+`✅ PAGAMENTO APROVADO!
 
-📦 ${info.produto}
+━━━━━━━━━━━━━━━━━━━
+
+📦 Produto:
+${info.produto}
+
+💰 Valor:
+R$ ${info.valor}
+
+📦 Estoque:
+${estoqueRestante}
+
+━━━━━━━━━━━━━━━━━━━
 
 🔓 LINK:
-${info.link}`
+
+${info.link}
+
+━━━━━━━━━━━━━━━━━━━
+
+🚀 Obrigado pela compra!`
     );
 
     res.sendStatus(200);
@@ -494,26 +536,35 @@ bot.onText(
 /\/start/,
 async (msg) => {
 
-  await registrarUsuario(
-    msg.from
-  );
+  try {
 
-  await bot.sendPhoto(
-    msg.chat.id,
-    LOGO,
+    await registrarUsuario(
+      msg.from
+    );
+
+    await bot.sendPhoto(
+      msg.chat.id,
+      LOGO,
 
 {
   caption:
 
-`🚀 BEM-VINDO
+`🚀 BEM-VINDO(A)
+
+━━━━━━━━━━━━━━━━━━━
 
 ✅ PIX automático
-✅ Entrega automática`
-}
-  );
+✅ Entrega automática
+✅ Sistema protegido
 
-  await bot.sendMessage(
-    msg.chat.id,
+━━━━━━━━━━━━━━━━━━━
+
+👇 Escolha abaixo`
+}
+    );
+
+    await bot.sendMessage(
+      msg.chat.id,
 
 `📋 MENU`,
 
@@ -536,7 +587,12 @@ async (msg) => {
     is_persistent: true
   }
 }
-  );
+    );
+
+  } catch (err) {
+
+    console.log(err);
+  }
 });
 
 // =========================================
@@ -578,7 +634,7 @@ async (msg) => {
 
       return bot.sendMessage(
         msg.chat.id,
-        "⚠️ Limite diário"
+        "⚠️ Limite diário atingido"
       );
     }
 
@@ -592,6 +648,19 @@ async (msg) => {
     if (
       text === "📦 PRODUTOS"
     ) {
+
+      userDaily[id].produtos++;
+
+      if (
+        userDaily[id].produtos >
+        PRODUCT_LIMIT
+      ) {
+
+        return bot.sendMessage(
+          msg.chat.id,
+          "⚠️ Limite produtos atingido"
+        );
+      }
 
       const snap =
       await db
@@ -659,7 +728,8 @@ ${p.estoque}
 
       return bot.sendMessage(
         msg.chat.id,
-        "🚀 Sistema online"
+
+`🚀 Sistema online`
       );
     }
 
@@ -679,7 +749,7 @@ ${p.estoque}
     }
 
     // =====================================
-    // ADD PRODUTO
+    // SISTEMA ADMIN
     // =====================================
 
     const state =
@@ -687,6 +757,42 @@ ${p.estoque}
 
     if (!state)
       return;
+
+    // DELETE ID
+
+    if (
+      state.step ===
+      "delete_id"
+    ) {
+
+      const ref =
+      db.collection('produtos')
+      .doc(text);
+
+      const doc =
+      await ref.get();
+
+      if (!doc.exists) {
+
+        userState[id] = null;
+
+        return bot.sendMessage(
+          msg.chat.id,
+          "❌ Produto não encontrado"
+        );
+      }
+
+      await ref.delete();
+
+      userState[id] = null;
+
+      return bot.sendMessage(
+        msg.chat.id,
+        "✅ Produto deletado"
+      );
+    }
+
+    // ADD PRODUTO
 
     if (
       state.step ===
@@ -726,7 +832,9 @@ ${p.estoque}
     ) {
 
       state.preco =
-      Number(text);
+      Number(
+        text.replace(",", ".")
+      );
 
       state.step =
       "descricao";
@@ -825,8 +933,7 @@ ${p.estoque}
 
       return bot.sendMessage(
         msg.chat.id,
-
-`✅ PRODUTO ADICIONADO`
+        "✅ Produto adicionado"
       );
     }
 
@@ -908,7 +1015,8 @@ async (q) => {
 
 💰 R$ ${p.preco}
 
-📦 ${p.estoque}`
+📦 Estoque:
+${p.estoque}`
 }
         );
       }
@@ -930,7 +1038,37 @@ async (q) => {
 
       return bot.sendMessage(
         q.message.chat.id,
-        "🗑 Envie ID"
+        "🗑 Envie ID:"
+      );
+    }
+
+    // =====================================
+    // LIMPAR PRODUTOS
+    // =====================================
+
+    if (
+      data === "admin_limpar"
+    ) {
+
+      const snap =
+      await db
+      .collection('produtos')
+      .get();
+
+      for (
+        const doc
+        of snap.docs
+      ) {
+
+        await db
+        .collection('produtos')
+        .doc(doc.id)
+        .delete();
+      }
+
+      return bot.sendMessage(
+        q.message.chat.id,
+        "🗑 Produtos removidos"
       );
     }
 
@@ -943,6 +1081,21 @@ async (q) => {
         "buy_"
       )
     ) {
+
+      initUser(userId);
+
+      userDaily[userId].pix++;
+
+      if (
+        userDaily[userId].pix >
+        PIX_LIMIT
+      ) {
+
+        return bot.sendMessage(
+          q.message.chat.id,
+          "⚠️ Limite PIX atingido"
+        );
+      }
 
       if (
         pixPending[userId]
@@ -1063,10 +1216,59 @@ async (q) => {
 
 `💰 PAGAMENTO PIX
 
+━━━━━━━━━━━━━━━━━━━
+
 📦 ${p.nome}
 
 💲 R$ ${p.preco}
 
-📋 PIX:
+━━━━━━━━━━━━━━━━━━━
 
-${c
+📋 PIX COPIA E COLA:
+
+${copia}
+
+━━━━━━━━━━━━━━━━━━━
+
+⏳ Aguardando pagamento`
+}
+      );
+    }
+
+  } catch (err) {
+
+    console.log(err);
+  }
+});
+
+// =========================================
+// SERVER
+// =========================================
+
+const PORT =
+process.env.PORT || 3000;
+
+app.listen(
+PORT,
+async () => {
+
+  console.log(
+`🚀 ONLINE ${PORT}`
+  );
+
+  const webhook =
+`${process.env.RENDER_EXTERNAL_URL}${SECRET_PATH}`;
+
+  await bot.setWebHook(
+    webhook
+  );
+
+  console.log(
+    "✅ WEBHOOK SETADO"
+  );
+
+  console.log(
+    webhook
+  );
+}
+);
